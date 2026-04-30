@@ -41,14 +41,6 @@ flowchart TB
     Poller --> Solana
 ```
 
-**Modals and overlays:** market picker (`m`), positions (`p`), open orders (`o`), top positions (`T`), config (`c`), activity ledger (`L`), and **y** / **n** confirmations.
-
-**Order mode:** `t` cycles Market → Limit → Stop (trigger). `e` edits limit or stop price; `s` edits size.
-
-In lists, use **↑** / **↓** and **Enter** where shown. **Esc** backs out of modals.
-
-**Size presets:** `0.01` through `500.0` (default step `0.1`). See `ORDER_SIZE_PRESETS` in `src/spline/constants.rs`.
-
 ## Requirements
 
 - **Rust** toolchain (2021 edition; see `rust-version` in `Cargo.toml`).
@@ -65,9 +57,6 @@ In lists, use **↑** / **↓** and **Enter** where shown. **Esc** backs out of 
 | `PHX_WALLET_PATH` or `KEYPAIR_PATH` | No | Keypair file (default `~/.config/solana/id.json`) |
 | `RUST_LOG` | No | e.g. `info` or `cinder=debug,phoenix_rise=warn` |
 | `CINDER_LOG_DIR` | No | Directory for transaction error logs (default `~/.config/phoenix-cinder/logs`) |
-
-`dotenvy` loads a **`.env`** in the working directory when present.
-Use `.env.example` as a template and never commit wallet keypairs or private RPC credentials.
 
 ## Trading safety
 
