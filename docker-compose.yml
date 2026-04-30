@@ -9,7 +9,8 @@
 # `compose run` automatically allocates -it for the user's terminal.
 #
 # Optional overrides via your shell environment (or your local .env):
-#   RPC_URL        (required) Solana JSON-RPC HTTP endpoint
+#   RPC_URL        (optional) Solana JSON-RPC HTTP; forwarded when set; else the
+#                  binary uses SOLANA_RPC_URL or its built-in default (see config).
 #   RPC_WS_URL     (optional) WebSocket endpoint; derived from RPC_URL if unset
 #   RUST_LOG       (optional) tracing filter, e.g. "phoenix_sdk=warn,info"
 # ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ services:
     # bypassing the binary's "derive from RPC_URL" fallback and causing it
     # to silently hang trying to open a WSS to nowhere.
     environment:
-      - RPC_URL=${RPC_URL:?Set RPC_URL to a Solana RPC endpoint}
+      - RPC_URL
       - RUST_LOG=${RUST_LOG:-phoenix_sdk=warn,info}
       - CINDER_TRACING_STDERR=1
       - RPC_WS_URL
