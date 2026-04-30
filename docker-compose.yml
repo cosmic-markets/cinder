@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# Cinder is a TUI; `docker compose up` only streams log bytes and does NOT
+# allocate an interactive PTY connecting your shell to the container, so the
+# binary starts but your terminal stays blank. Use `compose run` instead:
+#
+#     docker compose build                        # one-time / after changes
+#     docker compose run --rm cinder
+#
+# `compose run` automatically allocates -it for the user's terminal.
+#
+# Optional overrides via your shell environment (or your local .env):
+#   RPC_URL        (required) Solana JSON-RPC HTTP endpoint
+#   RPC_WS_URL     (optional) WebSocket endpoint; derived from RPC_URL if unset
+#   RUST_LOG       (optional) tracing filter, e.g. "phoenix_sdk=warn,info"
+# ---------------------------------------------------------------------------
+services:
+  cinder:
+    build:
+      context: .
+    image: cinder:latest
+    pull_policy: never
+    # Crossterm needs a real TTY; without these, terminal setup fails with
+    # "No such device or address (os error 6)" and the binary exits.
+    stdin_open: true
+    tty: true
+    # The bare-key form forwards a host variable only when it is actually
+    # set; unset host vars are NOT injected as empty strings. This matters
+    # because `env::var("RPC_WS_URL")` returns `Ok("")` for an empty value,
+    # bypassing the binary's "derive from RPC_URL" fallback and causing it
+    # to silently hang trying to open a WSS to nowhere.
+    environment:
+      - RPC_URL=${RPC_URL:?Set RPC_URL to a Solana RPC endpoint}
+      - RUST_LOG=${RUST_LOG:-phoenix_sdk=warn,info}
+      - CINDER_TRACING_STDERR=1
+      - RPC_WS_URL
+    # Interactive TUI: don't auto-restart when the user quits.
+    restart: "no"

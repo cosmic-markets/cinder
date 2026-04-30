@@ -1,0 +1,12 @@
+/target
+.env
+.env.*
+!.env.example
+error_logs.txt
+phoenix.json
+id.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.log

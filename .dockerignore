@@ -1,0 +1,13 @@
+target/
+.git/
+*.md
+db/chart.py
+db/sample_data.sql
+.env
+.env.*
+phoenix.json
+id.json
+*.key
+*.pem
+*.p12
+*.pfx
