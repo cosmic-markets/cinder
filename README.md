@@ -167,8 +167,6 @@ docker compose build               # one-time (or after Cargo/source changes)
 docker compose run --rm cinder     # interactive TUI run
 ```
 
-**Do not use `docker compose up` for this service.** Compose's `up` only streams log bytes; it does not allocate an interactive PTY connecting your shell to the container, so the binary starts inside the container but your terminal stays blank. `compose run` (or `docker run -it`) does allocate one and is the correct command for a TUI.
-
 Set **`RPC_URL`** in your shell env (or a local **`.env`**). Optional overrides: **`RPC_WS_URL`** (derived from **`RPC_URL`** when unset — note that the Compose service uses the bare-key form `RPC_WS_URL` so an unset value is *not* injected as an empty string, which would make the binary hang on a malformed WSS URL), and **`RUST_LOG`**.
 
 For signing, mount a Solana keypair via the CLI. The binary defaults `PHX_WALLET_PATH` to `~/.config/solana/id.json`, which inside the distroless `nonroot` image resolves to `/home/nonroot/.config/solana/id.json`:
@@ -187,12 +185,6 @@ docker compose run --rm \
   -e PHX_WALLET_PATH=/wallet/id.json \
   cinder
 ```
-
-The Compose file enables a pseudo-TTY (`stdin_open` / `tty`) so Ratatui can allocate the screen; omitting that makes the binary exit with `No such device or address (os error 6)`. **`CINDER_TRACING_STDERR=1`** sends tracing to stderr so RPC/network errors appear inline (the local default keeps tracing silent so it does not draw over the UI).
-
-First **`docker compose build`** can sit on **`Building`** without output while Rust compiles — that is normal (cold build is ~70s on a fast machine, much longer on slower ones). Use **`docker compose build --progress=plain`** to watch each stage.
-
-On Windows, use **[Windows Terminal](https://aka.ms/terminal)** and a moderately large pane; **`cmd.exe`** in the legacy conhost can render poorly.
 
 ## Contributing and security
 
