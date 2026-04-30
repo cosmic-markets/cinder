@@ -45,30 +45,6 @@ flowchart TB
 
 **Order mode:** `t` cycles Market → Limit → Stop (trigger). `e` edits limit or stop price; `s` edits size.
 
-## Keyboard (normal mode)
-
-| Key | Action |
-|-----|--------|
-| `q` | Quit (asks for confirmation) |
-| **Ctrl+C** | Exit immediately |
-| `m` | Market selector |
-| `p` | Positions |
-| `o` | Orders |
-| `T` | Top positions (protocol-wide, by notional) |
-| `c` | Config / RPC / options |
-| `L` | Ledger (recent tx signatures) |
-| `Tab` | Toggle long / short |
-| `Enter` | Confirm place order (after wallet loaded) |
-| `t` | Cycle order kind (market / limit / stop) |
-| `e` | Edit limit or stop price |
-| `s` | Edit size |
-| `+` `=` **↑** | Larger size preset |
-| `-` **↓** | Smaller size preset |
-| `x` | Close position (confirm) |
-| `d` | Deposit USDC (confirm) |
-| `D` | Withdraw USDC (confirm) |
-| `w` | Connect wallet path or disconnect |
-
 In lists, use **↑** / **↓** and **Enter** where shown. **Esc** backs out of modals.
 
 **Size presets:** `0.01` through `500.0` (default step `0.1`). See `ORDER_SIZE_PRESETS` in `src/spline/constants.rs`.
@@ -102,26 +78,6 @@ Cinder can sign real Solana transactions. The release defaults favor safety:
 - Deposit and withdrawal amounts must be finite, positive, and within the release safety limit.
 - A confirmation timeout means the transaction status is unknown, not failed. Check the displayed signature before retrying.
 - Raw transaction errors are written to `cinder-error.log` under the Cinder log directory rather than the current working directory.
-
-## Repository layout
-
-| Path | Role |
-|------|------|
-| `Cargo.toml` | Cinder manifest; `phoenix-eternal-types` is a **path** dependency |
-| `crates/phoenix-eternal-types/` | Vendored read-only on-chain layouts (GTI, ATB, PDAs, etc.); sourced from [skynetcap/phx-types](https://github.com/skynetcap/phx-types) |
-| `src/main.rs` | Binary entry: `.env`, tracing, `cinder::run()` |
-| `src/app.rs` | HTTP markets, WS stats, spawns TUI |
-| `src/spline/` | TUI: config, parse, poller, render, state, tx, `gti`, `top_positions`, `i18n`, … |
-
-## Stack (high level)
-
-| Crate / area | Role |
-|--------------|------|
-| **phoenix-rise** | Phoenix HTTP / WS client, transaction helpers, account deserialization used in `parse.rs` |
-| **phoenix-eternal-types** (local) | PDA helpers, Global Trader Index and Active Trader Buffer tree views, discriminants |
-| **ratatui** / **crossterm** | Terminal UI and input |
-| **solana-*** | RPC, pub/sub, signing, transactions (see `Cargo.toml` for versions) |
-| **tokio**, **tracing**, **chrono** | Async runtime, logs, clock |
 
 ## Build and run
 
