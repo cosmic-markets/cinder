@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use phoenix_rise::PhoenixHttpClient;
 
 use super::super::config::{
-    default_wallet_path, load_keypair_from_path, parse_keypair_text, save_user_config, SplineConfig,
+    default_wallet_path, resolve_wallet_modal_input, save_user_config, SplineConfig,
 };
 use super::super::format::{fmt_size, truncate_balance};
 use super::super::i18n::strings;
@@ -544,18 +544,7 @@ pub(super) fn handle_editing_wallet_path(
     match code {
         KeyCode::Enter => {
             let input = state.trading.wallet_path_buffer.trim().to_string();
-            // Resolve order: a leading `[` is unambiguously an inline JSON
-            // byte array; an existing file on disk is loaded; otherwise
-            // treat the buffer as an inline base58 keypair string. This
-            // lets the same input field accept paths, JSON arrays, and
-            // base58 strings without an extra mode toggle.
-            let result = if input.starts_with('[') {
-                parse_keypair_text(&input)
-            } else if std::path::Path::new(&input).is_file() {
-                load_keypair_from_path(&input)
-            } else {
-                parse_keypair_text(&input)
-            };
+            let result = resolve_wallet_modal_input(&input);
             match result {
                 Ok(kp) => {
                     let handles =

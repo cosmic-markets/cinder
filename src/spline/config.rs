@@ -103,6 +103,53 @@ pub fn default_wallet_path() -> String {
         .unwrap_or_else(|| "id.json".to_string())
 }
 
+/// True when `s` should be read as a filesystem path rather than parsed as
+/// inline base58. Solana keypair base58 never contains `/` or `\`; without this,
+/// a missing file (e.g. unset Docker volume) falls through to base58 decoding
+/// and can panic on `/`.
+fn looks_like_filesystem_path(s: &str) -> bool {
+    if s.starts_with('/') {
+        return true;
+    }
+    if s.starts_with("./") || s.starts_with("../") {
+        return true;
+    }
+    if s.contains('/') {
+        return true;
+    }
+    if s.contains('\\') {
+        return true;
+    }
+    let mut chars = s.chars();
+    let Some(letter) = chars.next() else {
+        return false;
+    };
+    let Some(':') = chars.next() else {
+        return false;
+    };
+    if !letter.is_ascii_alphabetic() {
+        return false;
+    }
+    matches!(chars.next(), Some('/' | '\\'))
+}
+
+/// Resolves the "Load wallet" field: JSON `[…]` bytes, path to a keypair file
+/// on disk, or a base58 secret when the string does not look like a path.
+pub fn resolve_wallet_modal_input(input: &str) -> Result<Keypair, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("input is empty".to_string());
+    }
+    if trimmed.starts_with('[') {
+        return parse_keypair_text(trimmed);
+    }
+    let path = std::path::Path::new(trimmed);
+    if path.is_file() || looks_like_filesystem_path(trimmed) {
+        return load_keypair_from_path(trimmed);
+    }
+    parse_keypair_text(trimmed)
+}
+
 /// Parses a `Keypair` from raw text — accepts either a JSON byte array
 /// (`[1,2,3,…]`, the Solana CLI format) or a base58-encoded 64-byte
 /// keypair string. The error string is suitable for the TUI modal.
@@ -343,7 +390,31 @@ pub fn build_spline_config(
 
 #[cfg(test)]
 mod tests {
+    use solana_signer::Signer;
+
     use super::*;
+
+    #[test]
+    fn resolve_wallet_modal_input_treats_unix_paths_as_paths_not_base58() {
+        let err = resolve_wallet_modal_input("/home/nonroot/.config/solana/id.json").unwrap_err();
+        assert!(
+            err.contains("not found") || err.contains("file not found"),
+            "unexpected err: {err}"
+        );
+    }
+
+    #[test]
+    fn resolve_wallet_modal_input_reads_json_keypair_file() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("cinder-test-keypair.json");
+        let kp = Keypair::new();
+        let bytes = kp.to_bytes();
+        let json: Vec<u8> = bytes.to_vec();
+        std::fs::write(&path, serde_json::to_string(&json).unwrap()).unwrap();
+        let loaded = resolve_wallet_modal_input(path.to_str().unwrap()).unwrap();
+        assert_eq!(loaded.pubkey(), kp.pubkey());
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn language_round_trips_through_code() {
