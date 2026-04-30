@@ -1,6 +1,0 @@
-Cinder
-Copyright (c) 2026 Cosmic Markets
-
-This repository contains the Cinder terminal trading client under the MIT
-License. It also includes the vendored `phoenix-eternal-types` crate under the
-Apache License, Version 2.0; see `crates/phoenix-eternal-types/LICENSE`.

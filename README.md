@@ -6,6 +6,8 @@
 ![ratatui](https://img.shields.io/badge/ratatui-TUI-00ADD8?logo=terminal)
 ![Solana](https://img.shields.io/badge/Solana-RPC%20%2B%20WSS-9945FF?logo=solana)
 
+![Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet](assets/cinder-tui.png)
+
 ## Features
 
 - **Markets** — Loads Active / PostOnly markets from the Phoenix HTTP API; background refresh about every 60s.
