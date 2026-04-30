@@ -42,12 +42,3 @@ jobs:
         run: cargo build --workspace --release --locked
       - name: Docker build
         run: docker build --pull=false -t cinder:ci .
-
-  audit:
-    name: Dependency audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}

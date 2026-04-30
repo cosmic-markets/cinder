@@ -1,18 +1,3 @@
-```text
-⠀⠀⠀⠀⠀⠀⢱⣆⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠈⣿⣷⡀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⢸⣿⣿⣷⣧⠀⠀⠀
-⠀⠀⠀⠀⡀⢠⣿⡟⣿⣿⣿⡇⠀⠀
-⠀⠀⠀⠀⣳⣼⣿⡏⢸⣿⣿⣿⢀⠀
-⠀⠀⠀⣰⣿⣿⡿⠁⢸⣿⣿⡟⣼⡆
-⢰⢀⣾⣿⣿⠟⠀⠀⣾⢿⣿⣿⣿⣿
-⢸⣿⣿⣿⡏⠀⠀⠀⠃⠸⣿⣿⣿⡿
-⢳⣿⣿⣿⠀⠀⠀⠀⠀⠀⢹⣿⡿⡁
-⠀⠹⣿⣿⡄⠀⠀⠀⠀⠀⢠⣿⡞⠁
-⠀⠀⠈⠛⢿⣄⠀⠀⠀⣠⠞⠋⠀⠀
-⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀
-```
-
 # Cinder
 
 **Cinder** is a Rust terminal UI for [Phoenix](https://phoenix.trade) perpetuals on Solana: live charts, a merged on-chain **spline** + optional **CLOB** order book, market and wallet flows, and signed transactions from the shell.
