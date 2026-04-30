@@ -41,24 +41,6 @@ flowchart TB
     Poller --> Solana
 ```
 
-At startup, `app::run` wires HTTP market discovery, WS stats, and the ratatui loop. The poller drives chart/book state, modal input, async balance and context tasks, and Solana subscriptions.
-
-## TUI layout
-
-```text
-┌──────────────────── Chart ────────────────────┬── Order book ──┐
-│  price history (last 150 ticks)               │  top asks      │
-│  trade markers                                │  spread        │
-│                                               │  top bids      │
-├───────────────────────────────────────────────┴────────────────┤
-│  Trading panel  │ side | size | wallet | position | balances   │
-├────────────────────────────────────────────────────────────────┤
-│  Actions bar    │ hotkeys                                      │
-├────────────────────────────────────────────────────────────────┤
-│  Status strip   │ time / last status / transaction detail      │
-└────────────────────────────────────────────────────────────────┘
-```
-
 **Modals and overlays:** market picker (`m`), positions (`p`), open orders (`o`), top positions (`T`), config (`c`), activity ledger (`L`), and **y** / **n** confirmations.
 
 **Order mode:** `t` cycles Market → Limit → Stop (trigger). `e` edits limit or stop price; `s` edits size.
