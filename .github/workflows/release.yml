@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: cinder
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            archive: cinder-linux-x86_64.tar.gz
+            binary_suffix: ""
+          - name: macos-x86_64
+            os: macos-13
+            archive: cinder-macos-x86_64.tar.gz
+            binary_suffix: ""
+          - name: windows-x86_64
+            os: windows-latest
+            archive: cinder-windows-x86_64.tar.gz
+            binary_suffix: ".exe"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --locked --bin ${{ env.BINARY_NAME }}
+
+      - name: Package release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_dir="package/${BINARY_NAME}-${{ matrix.name }}"
+          mkdir -p "${package_dir}" dist
+
+          cp "target/release/${BINARY_NAME}${{ matrix.binary_suffix }}" "${package_dir}/"
+          cp README.md LICENSE "${package_dir}/"
+
+          tar -czf "dist/${{ matrix.archive }}" -C package "${BINARY_NAME}-${{ matrix.name }}"
+
+          cd dist
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
+          fi
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: |
+            dist/${{ matrix.archive }}
+            dist/${{ matrix.archive }}.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
