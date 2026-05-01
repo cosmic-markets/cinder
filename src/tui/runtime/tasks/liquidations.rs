@@ -161,13 +161,8 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
                 let tx_clone = tx.clone();
                 let dedup_clone = Arc::clone(&dedup);
                 tokio::spawn(async move {
-                    backfill_recent_liquidations(
-                        rpc_clone,
-                        configs_clone,
-                        tx_clone,
-                        dedup_clone,
-                    )
-                    .await;
+                    backfill_recent_liquidations(rpc_clone, configs_clone, tx_clone, dedup_clone)
+                        .await;
                 });
             }
 
@@ -451,7 +446,10 @@ fn parse_position_side_log(line: &str) -> Option<(Pubkey, u32, TradingSide)> {
     const ASSET_MARKER: &str = "on asset ";
     let asset_start = after.find(ASSET_MARKER)? + ASSET_MARKER.len();
     let colon = after[asset_start..].find(':')?;
-    let asset_id: u32 = after[asset_start..asset_start + colon].trim().parse().ok()?;
+    let asset_id: u32 = after[asset_start..asset_start + colon]
+        .trim()
+        .parse()
+        .ok()?;
     let side_str = after[asset_start + colon + 1..].trim();
     let side = if side_str.starts_with("Long") {
         TradingSide::Long
@@ -641,13 +639,19 @@ mod tests {
 
     #[test]
     fn parse_position_side_log_extracts_trader_asset_and_side() {
-        let bytes = (0u8..32).map(|b| b.to_string()).collect::<Vec<_>>().join(", ");
+        let bytes = (0u8..32)
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         let line = format!(
             "Program log: Position side for trader [{}] on asset 7: Short",
             bytes
         );
         let (trader, asset_id, side) = parse_position_side_log(&line).expect("parses");
-        assert_eq!(trader, Pubkey::from(std::array::from_fn::<u8, 32, _>(|i| i as u8)));
+        assert_eq!(
+            trader,
+            Pubkey::from(std::array::from_fn::<u8, 32, _>(|i| i as u8))
+        );
         assert_eq!(asset_id, 7);
         assert_eq!(side, TradingSide::Short);
     }
@@ -655,7 +659,10 @@ mod tests {
     #[test]
     fn parse_position_side_log_rejects_unrelated_lines() {
         assert!(parse_position_side_log("Program log: instruction Liquidate").is_none());
-        assert!(parse_position_side_log("Program log: Position side for trader [1, 2] on asset 0: Long").is_none());
+        assert!(parse_position_side_log(
+            "Program log: Position side for trader [1, 2] on asset 0: Long"
+        )
+        .is_none());
     }
 
     #[test]

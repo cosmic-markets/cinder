@@ -172,16 +172,12 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(market_str).style(Style::default().fg(FIRE_ORANGE)),
                 Cell::from(Span::styled(
                     side_label,
-                    Style::default()
-                        .fg(side_color)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(side_color).add_modifier(Modifier::BOLD),
                 )),
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(size_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(price_str).alignment(Alignment::Right)),
-                Cell::from(
-                    Line::from(e.liquidated_trader.clone()).alignment(Alignment::Right),
-                ),
+                Cell::from(Line::from(e.liquidated_trader.clone()).alignment(Alignment::Right)),
             ])
             .style(row_style)
         })
