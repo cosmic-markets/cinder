@@ -110,7 +110,11 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             let size_str = fmt_size(e.size, e.size_decimals.min(6));
             let mark_str = format!("${}", fmt_price(e.mark_price, e.price_decimals));
             let notional_str = format!("${}", fmt_compact(e.notional));
-            let status_label = if e.position_closed { "CLOSED" } else { "PARTIAL" };
+            let status_label = if e.position_closed {
+                "CLOSED"
+            } else {
+                "PARTIAL"
+            };
             let status_color = if e.position_closed {
                 Color::LightRed
             } else {
@@ -130,14 +134,15 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(cursor_str),
                 Cell::from(time_str).style(Style::default().fg(Color::DarkGray)),
                 Cell::from(market_str).style(Style::default().fg(FIRE_ORANGE)),
-                Cell::from(e.liquidated_trader.clone())
-                    .style(Style::default().fg(Color::Cyan)),
+                Cell::from(e.liquidated_trader.clone()).style(Style::default().fg(Color::Cyan)),
                 Cell::from(Line::from(size_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(mark_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
                 Cell::from(Span::styled(
                     status_label,
-                    Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(status_color)
+                        .add_modifier(Modifier::BOLD),
                 )),
             ])
             .style(row_style)

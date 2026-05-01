@@ -1,12 +1,11 @@
 //! Live liquidation feed task.
 //!
-//! Subscribes (via `logsSubscribe`, filtered by the Phoenix Eternal program
-//! id) to confirmed transactions touching the program. For each tx whose log
-//! lines hint at a `Liquidate` instruction, we fetch the full transaction,
-//! flatten the inner instructions, and parse `MarketEvent::Liquidation`s out
-//! of the self-CPI event stream. Each liquidation is converted to display
-//! units against the locally-cached `SplineConfig` map and shipped to the TUI
-//! through `liquidation_tx`.
+//! Subscribes (via `logsSubscribe`) to confirmed transactions mentioning
+//! Phoenix's current sole liquidator. For each transaction, we fetch the full
+//! transaction, flatten the inner instructions, and parse
+//! `MarketEvent::Liquidation`s out of the self-CPI event stream. Each
+//! liquidation is converted to display units against the locally-cached
+//! `SplineConfig` map and shipped to the TUI through `liquidation_tx`.
 
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -30,13 +29,17 @@ use solana_rpc_client_types::config::{
 use solana_signature::Signature;
 use solana_transaction_status_client_types::option_serializer::OptionSerializer;
 use solana_transaction_status_client_types::{
-    EncodedTransaction, UiInnerInstructions, UiInstruction, UiMessage, UiTransactionEncoding,
+    EncodedTransaction, UiInnerInstructions, UiInstruction, UiLoadedAddresses, UiMessage,
+    UiTransactionEncoding,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Semaphore;
 use tracing::warn;
 
 use super::super::super::config::SplineConfig;
+use super::super::super::constants::QUOTE_LOT_DECIMALS;
 use super::super::super::format::pubkey_trader_prefix;
+use super::super::super::math::{base_lots_to_units, ticks_to_price};
 use super::super::super::state::LiquidationEntry;
 use super::{WSS_RETRY_CAP, WSS_RETRY_INIT};
 
@@ -45,9 +48,18 @@ use super::{WSS_RETRY_CAP, WSS_RETRY_INIT};
 /// commitment-level transitions).
 const SIGNATURE_DEDUP_CAP: usize = 256;
 
+/// Phoenix's current sole liquidator. Subscribing to this account is far
+/// quieter than subscribing to every transaction mentioning the Phoenix Eternal
+/// program.
+const PHOENIX_SOLE_LIQUIDATOR: &str = "BP7sV1VFnbPMPyJX1tZNbXHbZkyLNFEaBWJhyMvkbxKz";
+
 /// Cap on a single `get_transaction` RPC. Liquidation latency is tolerable;
 /// hanging on a stalled RPC is not.
 const GET_TX_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// Bound concurrent transaction fetches so a burst of liquidation-like logs
+/// cannot create an unbounded pile of RPC requests.
+const MAX_CONCURRENT_GET_TX: usize = 8;
 
 /// Spawn the long-running liquidation subscription. Reconnects on its own with
 /// exponential backoff capped at [`WSS_RETRY_CAP`]. The task lives for the
@@ -65,10 +77,9 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
         // dynamically-added markets won't appear until the next process
         // restart — the alternative (a watch channel) is far more plumbing
         // than this informational feature warrants.
-        let configs_by_asset: HashMap<u32, SplineConfig> = configs
-            .values()
-            .map(|c| (c.asset_id, c.clone()))
-            .collect();
+        let configs_by_asset: Arc<HashMap<u32, SplineConfig>> =
+            Arc::new(configs.values().map(|c| (c.asset_id, c.clone())).collect());
+        let get_tx_permits = Arc::new(Semaphore::new(MAX_CONCURRENT_GET_TX));
 
         let rpc = Arc::new(RpcClient::new_with_commitment(
             rpc_url,
@@ -93,7 +104,7 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
             backoff = WSS_RETRY_INIT;
 
             let filter =
-                RpcTransactionLogsFilter::Mentions(vec![PHOENIX_ETERNAL_PROGRAM_ID.to_string()]);
+                RpcTransactionLogsFilter::Mentions(vec![PHOENIX_SOLE_LIQUIDATOR.to_string()]);
             let cfg = RpcTransactionLogsConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
             };
@@ -109,11 +120,7 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
             };
 
             while let Some(notif) = stream.next().await {
-                let logs = &notif.value.logs;
                 if notif.value.err.is_some() {
-                    continue;
-                }
-                if !logs_hint_at_liquidation(logs) {
                     continue;
                 }
 
@@ -122,10 +129,14 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
                     continue;
                 }
 
+                let Ok(permit) = Arc::clone(&get_tx_permits).acquire_owned().await else {
+                    continue;
+                };
                 let rpc_clone = Arc::clone(&rpc);
-                let configs_clone = configs_by_asset.clone();
+                let configs_clone = Arc::clone(&configs_by_asset);
                 let tx_clone = tx.clone();
                 tokio::spawn(async move {
+                    let _permit = permit;
                     fetch_and_emit(rpc_clone, signature, configs_clone, tx_clone).await;
                 });
             }
@@ -133,25 +144,6 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
             unsub().await;
             tokio::time::sleep(WSS_RETRY_INIT).await;
         }
-    })
-}
-
-/// Cheap pre-filter: skip transactions whose log lines don't mention
-/// "liquidat" (case-insensitive). Phoenix's instruction-name logs include the
-/// instruction name, so a liquidation tx will always have a matching line.
-/// This keeps us from issuing a `getTransaction` RPC for every order place /
-/// cancel notification.
-fn logs_hint_at_liquidation(logs: &[String]) -> bool {
-    logs.iter().any(|line| {
-        // Walk bytes lower-cased on the fly to skip the allocation a `to_lowercase`
-        // would force.
-        let bytes = line.as_bytes();
-        if bytes.len() < "liquidat".len() {
-            return false;
-        }
-        bytes
-            .windows("liquidat".len())
-            .any(|w| w.eq_ignore_ascii_case(b"liquidat"))
     })
 }
 
@@ -175,7 +167,7 @@ fn remember_signature(
 async fn fetch_and_emit(
     rpc: Arc<RpcClient>,
     signature: String,
-    configs_by_asset: HashMap<u32, SplineConfig>,
+    configs_by_asset: Arc<HashMap<u32, SplineConfig>>,
     tx: UnboundedSender<LiquidationEntry>,
 ) {
     let Ok(sig) = Signature::from_str(&signature) else {
@@ -207,20 +199,19 @@ async fn fetch_and_emit(
         _ => return,
     };
 
-    let account_keys = match extract_account_keys(&response.transaction.transaction) {
-        Some(keys) => keys,
-        None => return,
-    };
+    let account_keys =
+        match extract_account_keys(&response.transaction.transaction, &meta.loaded_addresses) {
+            Some(keys) => keys,
+            None => return,
+        };
 
     let parsed_ixs = match flatten_inner_instructions(&inner_ixs, &account_keys) {
         Some(p) => p,
         None => return,
     };
 
-    let events = parse_events_from_inner_instructions_with_context(
-        &PHOENIX_ETERNAL_PROGRAM_ID,
-        &parsed_ixs,
-    );
+    let events =
+        parse_events_from_inner_instructions_with_context(&PHOENIX_ETERNAL_PROGRAM_ID, &parsed_ixs);
 
     // Build a quick `liquidated_trader` resolver: walk the event stream and
     // collect each Liquidation, then convert + emit.
@@ -230,7 +221,7 @@ async fn fetch_and_emit(
             let received_at = block_time
                 .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
                 .unwrap_or_else(Utc::now);
-            let entry = build_entry(&e, received_at, &configs_by_asset);
+            let entry = build_entry(&e, received_at, configs_by_asset.as_ref());
             if tx.send(entry).is_err() {
                 return;
             }
@@ -257,10 +248,16 @@ fn build_entry(
                 mark_price,
             )
         }
-        None => (String::new(), 4, 4, e.base_lots_filled.as_inner() as f64, 0.0),
+        None => (
+            String::new(),
+            4,
+            4,
+            e.base_lots_filled.as_inner() as f64,
+            0.0,
+        ),
     };
 
-    let notional = size * mark_price;
+    let notional = quote_lots_to_usd(e.quote_lots_filled.as_inner());
 
     LiquidationEntry {
         received_at,
@@ -276,25 +273,15 @@ fn build_entry(
     }
 }
 
-/// `lots / 10^bld`. `bld` may be negative for assets where one lot is greater
-/// than one display unit, so we use `powi(i32)` with the integer exponent.
-fn base_lots_to_units(lots: u64, bld: i8) -> f64 {
-    let divisor = 10_f64.powi(bld as i32);
-    if divisor == 0.0 {
-        0.0
-    } else {
-        lots as f64 / divisor
-    }
+fn quote_lots_to_usd(quote_lots: u64) -> f64 {
+    quote_lots as f64 / 10_f64.powi(QUOTE_LOT_DECIMALS)
 }
 
-/// `ticks * tick_size * 10^bld / 10^6` — the inverse of the price encoding
-/// used everywhere else in the repo (quote lot decimals are a fixed 6).
-fn ticks_to_price(ticks: u64, tick_size: u64, bld: i8) -> f64 {
-    ticks as f64 * tick_size as f64 * 10_f64.powi(bld as i32) / 1_000_000.0
-}
-
-fn extract_account_keys(encoded: &EncodedTransaction) -> Option<Vec<Pubkey>> {
-    match encoded {
+fn extract_account_keys(
+    encoded: &EncodedTransaction,
+    loaded_addresses: &OptionSerializer<UiLoadedAddresses>,
+) -> Option<Vec<Pubkey>> {
+    let mut keys: Vec<Pubkey> = match encoded {
         EncodedTransaction::Json(ui_tx) => match &ui_tx.message {
             UiMessage::Raw(raw) => raw
                 .account_keys
@@ -308,7 +295,20 @@ fn extract_account_keys(encoded: &EncodedTransaction) -> Option<Vec<Pubkey>> {
                 .collect(),
         },
         _ => None,
+    }?;
+
+    if let OptionSerializer::Some(loaded) = loaded_addresses {
+        keys.extend(
+            loaded
+                .writable
+                .iter()
+                .chain(loaded.readonly.iter())
+                .map(|s| Pubkey::from_str(s).ok())
+                .collect::<Option<Vec<_>>>()?,
+        );
     }
+
+    Some(keys)
 }
 
 fn flatten_inner_instructions(
@@ -327,4 +327,78 @@ fn flatten_inner_instructions(
         }
     }
     Some(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use phoenix_eternal_types::{BaseLots, LiquidationEvent, QuoteLots, Ticks};
+    use solana_message::MessageHeader;
+    use solana_transaction_status_client_types::{UiRawMessage, UiTransaction};
+
+    #[test]
+    fn extract_account_keys_appends_loaded_addresses_for_v0_transactions() {
+        let static_key = Pubkey::from([1u8; 32]);
+        let writable_loaded_key = Pubkey::from([2u8; 32]);
+        let readonly_loaded_key = Pubkey::from([3u8; 32]);
+        let encoded = EncodedTransaction::Json(UiTransaction {
+            signatures: vec![],
+            message: UiMessage::Raw(UiRawMessage {
+                header: MessageHeader {
+                    num_required_signatures: 0,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 0,
+                },
+                account_keys: vec![static_key.to_string()],
+                recent_blockhash: String::new(),
+                instructions: vec![],
+                address_table_lookups: None,
+            }),
+        });
+        let loaded = OptionSerializer::Some(UiLoadedAddresses {
+            writable: vec![writable_loaded_key.to_string()],
+            readonly: vec![readonly_loaded_key.to_string()],
+        });
+
+        let keys = extract_account_keys(&encoded, &loaded).expect("valid pubkeys");
+
+        assert_eq!(
+            keys,
+            vec![static_key, writable_loaded_key, readonly_loaded_key]
+        );
+    }
+
+    #[test]
+    fn build_entry_uses_executed_quote_lots_for_notional() {
+        let mut configs = HashMap::new();
+        configs.insert(
+            7,
+            SplineConfig {
+                tick_size: 1,
+                base_lot_decimals: 0,
+                spline_collection: String::new(),
+                market_pubkey: String::new(),
+                symbol: "SOL".to_string(),
+                asset_id: 7,
+                price_decimals: 2,
+                size_decimals: 0,
+            },
+        );
+        let event = LiquidationEvent {
+            liquidator: Pubkey::from([1u8; 32]),
+            liquidated_trader: Pubkey::from([2u8; 32]),
+            asset_id: 7,
+            liquidation_size: BaseLots::new(3),
+            mark_price: Ticks::new(2_000_000),
+            base_lots_filled: BaseLots::new(3),
+            quote_lots_filled: QuoteLots::new(7_500_000),
+            position_closed: false,
+        };
+
+        let entry = build_entry(&event, Utc::now(), &configs);
+
+        assert_eq!(entry.size, 3.0);
+        assert_eq!(entry.mark_price, 2.0);
+        assert_eq!(entry.notional, 7.5);
+    }
 }
