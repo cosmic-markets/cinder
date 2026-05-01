@@ -97,10 +97,7 @@ fn build_frame(time: f32) -> Vec<Line<'static>> {
     lines
 }
 
-fn draw_frame(
-    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-    time: f32,
-) -> std::io::Result<()> {
+fn draw_frame(terminal: &mut Terminal<CrosstermBackend<Stdout>>, time: f32) -> std::io::Result<()> {
     let lines = build_frame(time);
     terminal.draw(|f| {
         let area = f.area();
