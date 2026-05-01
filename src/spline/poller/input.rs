@@ -79,6 +79,8 @@ pub(super) fn handle_orders_view_key(code: KeyCode, state: &mut TuiState) -> Key
                 let price_ticks = o.price_ticks;
                 let order_sequence_number = o.order_sequence_number;
                 let is_stop_loss = o.is_stop_loss;
+                let conditional_order_index = o.conditional_order_index;
+                let conditional_trigger_direction = o.conditional_trigger_direction;
                 state.trading.input_mode = InputMode::Confirming(PendingAction::CancelOrder {
                     symbol: symbol.clone(),
                     side,
@@ -87,6 +89,8 @@ pub(super) fn handle_orders_view_key(code: KeyCode, state: &mut TuiState) -> Key
                     price_ticks,
                     order_sequence_number,
                     is_stop_loss,
+                    conditional_order_index,
+                    conditional_trigger_direction,
                 });
                 {
                     let s = strings();
@@ -532,6 +536,7 @@ pub(super) fn handle_editing_wallet_path(
     code: KeyCode,
     state: &mut TuiState,
     cfg: &SplineConfig,
+    configs: &std::collections::HashMap<String, SplineConfig>,
     channels: &Channels,
     ws_url: &str,
     http: Arc<PhoenixHttpClient>,
@@ -547,8 +552,9 @@ pub(super) fn handle_editing_wallet_path(
             let result = resolve_wallet_modal_input(&input);
             match result {
                 Ok(kp) => {
-                    let handles =
-                        connect_wallet_with_keypair(state, kp, cfg, channels, ws_url, http);
+                    let handles = connect_wallet_with_keypair(
+                        state, kp, cfg, configs, channels, ws_url, http,
+                    );
                     *wallet_wss_handle = Some(handles.wallet_wss);
                     *balance_fetch_handle = Some(handles.initial_balance);
                     *trader_orders_handle = Some(handles.trader_orders);

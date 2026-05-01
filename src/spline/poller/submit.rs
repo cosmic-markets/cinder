@@ -137,6 +137,8 @@ pub(super) fn execute_confirmed_action(
         price_ticks,
         order_sequence_number,
         is_stop_loss,
+        conditional_order_index,
+        conditional_trigger_direction,
     } = action
     {
         {
@@ -163,6 +165,8 @@ pub(super) fn execute_confirmed_action(
                 } else {
                     None
                 },
+                conditional_order_index: *conditional_order_index,
+                conditional_trigger_direction: *conditional_trigger_direction,
             }],
             format!("1 order on {}", symbol),
             tx_status.clone(),
@@ -195,6 +199,8 @@ pub(super) fn execute_confirmed_action(
                 } else {
                     None
                 },
+                conditional_order_index: o.conditional_order_index,
+                conditional_trigger_direction: o.conditional_trigger_direction,
             })
             .collect();
         submit_cancel_orders(

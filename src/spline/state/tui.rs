@@ -521,6 +521,8 @@ mod tests {
             initial_size: 1.0,
             reduce_only: false,
             is_stop_loss: false,
+            conditional_order_index: None,
+            conditional_trigger_direction: None,
         }];
         s.sync_order_chart_markers("SOL");
         assert_eq!(s.order_chart_markers.len(), 1);

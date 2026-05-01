@@ -2,6 +2,7 @@
 //! and stop-loss cancels per asset, staggering submission so a stack of
 //! cancels lands without exceeding the per-tx instruction limit.
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +27,8 @@ pub struct CancelOrderEntry {
     pub order_sequence_number: u64,
     pub is_stop_loss: bool,
     pub stop_direction: Option<phoenix_rise::Direction>,
+    pub conditional_order_index: Option<u8>,
+    pub conditional_trigger_direction: Option<phoenix_rise::Direction>,
 }
 
 /// One IX per symbol fits at most this many orders; mirrors
@@ -52,7 +55,10 @@ pub fn submit_cancel_orders(
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
-        use phoenix_rise::ix::{create_cancel_stop_loss_ix, CancelStopLossParams};
+        use phoenix_rise::ix::{
+            create_cancel_conditional_order_ix, create_cancel_stop_loss_ix,
+            CancelConditionalOrderParams, CancelStopLossParams,
+        };
         use phoenix_rise::{CancelId, PhoenixTxBuilder};
 
         let s = strings();
@@ -72,9 +78,15 @@ pub fn submit_cancel_orders(
 
         let builder = PhoenixTxBuilder::new(&ctx.metadata);
 
-        // Split stop cancels out — they don't batch via cancel_orders_by_id.
+        // Split conditional rows first: position conditional orders live in the
+        // trader conditional-orders account and cancel by account index +
+        // trigger direction. Legacy stop-loss rows still route through
+        // `cancel_stop_loss`; plain limits batch through `cancel_orders_by_id`.
+        let (conditional_entries, remaining_entries): (Vec<_>, Vec<_>) = entries
+            .into_iter()
+            .partition(|e| e.conditional_order_index.is_some());
         let (stop_entries, limit_entries): (Vec<_>, Vec<_>) =
-            entries.into_iter().partition(|e| e.is_stop_loss);
+            remaining_entries.into_iter().partition(|e| e.is_stop_loss);
 
         // Group limit cancels by symbol: each symbol becomes (at most ceil(n/100))
         // cancel-orders IXs.
@@ -88,6 +100,68 @@ pub fn submit_cancel_orders(
         }
 
         let mut all_ixs: Vec<(solana_instruction::Instruction, String)> = Vec::new();
+
+        for e in conditional_entries.into_iter() {
+            let Some(order_index) = e.conditional_order_index else {
+                continue;
+            };
+            let Some(direction) = e.conditional_trigger_direction else {
+                continue;
+            };
+            let Some(market) = ctx.metadata.get_market(&e.symbol) else {
+                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    title: format!(
+                        "Build error (cancel conditional {}): unknown market",
+                        e.symbol
+                    ),
+                    detail: String::new(),
+                });
+                continue;
+            };
+            let orderbook = match solana_pubkey::Pubkey::from_str(&market.market_pubkey) {
+                Ok(pk) => pk,
+                Err(err) => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("Build error (cancel conditional {}): {}", e.symbol, err),
+                        detail: String::new(),
+                    });
+                    continue;
+                }
+            };
+            let params = match CancelConditionalOrderParams::builder()
+                .trader_account(ctx.trader_pda_v2)
+                .position_authority(ctx.authority_v2)
+                .orderbook(orderbook)
+                .conditional_order_index(order_index)
+                .disable_first(matches!(direction, phoenix_rise::Direction::GreaterThan))
+                .disable_second(matches!(direction, phoenix_rise::Direction::LessThan))
+                .build()
+            {
+                Ok(p) => p,
+                Err(err) => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("Build error (cancel conditional {}): {}", e.symbol, err),
+                        detail: String::new(),
+                    });
+                    continue;
+                }
+            };
+            let ix: solana_instruction::Instruction =
+                match create_cancel_conditional_order_ix(params) {
+                    Ok(i) => i.into(),
+                    Err(err) => {
+                        let _ = tx_status.send(TxStatusMsg::SetStatus {
+                            title: format!(
+                                "IX build error (cancel conditional {}): {}",
+                                e.symbol, err
+                            ),
+                            detail: String::new(),
+                        });
+                        continue;
+                    }
+                };
+            all_ixs.push((ix, format!("{} {} STP", s.tx_cancel_label, e.symbol)));
+        }
 
         // One `cancel_stop_loss` IX per (symbol, direction). Pending stops are
         // keyed on the (trader_account, asset_id, direction) triple so we never

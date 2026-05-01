@@ -202,6 +202,7 @@ fn handle_key_press(
             key.code,
             state,
             cfg,
+            configs,
             channels,
             ws_url,
             http,

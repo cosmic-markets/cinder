@@ -23,4 +23,8 @@ pub struct OrderInfo {
     pub initial_size: f64,
     pub reduce_only: bool,
     pub is_stop_loss: bool,
+    /// Position conditional-order rows are keyed by their conditional account
+    /// index plus the active trigger direction, not by Phoenix CLOB CancelId.
+    pub conditional_order_index: Option<u8>,
+    pub conditional_trigger_direction: Option<phoenix_rise::Direction>,
 }

@@ -54,6 +54,8 @@ mod tests {
             initial_size: 1.0,
             reduce_only: false,
             is_stop_loss: false,
+            conditional_order_index: None,
+            conditional_trigger_direction: None,
         }
     }
 

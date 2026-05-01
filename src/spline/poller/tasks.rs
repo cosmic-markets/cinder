@@ -1,20 +1,29 @@
 //! Background task spawners: blockhash refresh, wallet WSS, balance fetch,
 //! trader orders WS, and the Phoenix L2 book RPC subscription.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
+use phoenix_rise::accounts::{
+    ConditionalOrderCollection, ConditionalOrderTrigger, StopLossDirection, StopLossOrderKind,
+    StopLossTradeSide,
+};
 use phoenix_rise::types::{
     TraderStatePayload, TraderStateRowChangeKind, TraderStateStopLossTrigger,
 };
-use phoenix_rise::{PhoenixHttpClient, PhoenixWSClient, Trader, TraderKey};
+use phoenix_rise::{
+    get_conditional_orders_address, Direction, PhoenixHttpClient, PhoenixWSClient, Trader,
+    TraderKey,
+};
 use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_types::config::RpcAccountInfoConfig;
 use solana_signer::Signer;
 use tokio::sync::mpsc::UnboundedSender;
@@ -366,6 +375,190 @@ pub(super) fn trading_side_from_str(s: &str) -> TradingSide {
     }
 }
 
+fn trigger_side_to_trading_side(side: StopLossTradeSide) -> TradingSide {
+    match side {
+        StopLossTradeSide::Bid => TradingSide::Long,
+        StopLossTradeSide::Ask => TradingSide::Short,
+    }
+}
+
+fn trigger_direction_to_phoenix(direction: StopLossDirection) -> Direction {
+    match direction {
+        StopLossDirection::GreaterThan => Direction::GreaterThan,
+        StopLossDirection::LessThan => Direction::LessThan,
+    }
+}
+
+fn conditional_order_type(kind: StopLossOrderKind) -> String {
+    match kind {
+        StopLossOrderKind::IOC => "Market".to_string(),
+        StopLossOrderKind::Limit => "Limit".to_string(),
+    }
+}
+
+fn push_conditional_trigger_row(
+    rows: &mut Vec<OrderInfo>,
+    symbol: &str,
+    order_index: u8,
+    order_sequence_number: u64,
+    size_lots: u64,
+    trigger: &ConditionalOrderTrigger,
+) {
+    if !trigger.is_active {
+        return;
+    }
+
+    rows.push(OrderInfo {
+        symbol: symbol.to_string(),
+        order_sequence_number,
+        side: trigger_side_to_trading_side(trigger.trade_side),
+        order_type: conditional_order_type(trigger.order_kind),
+        price_usd: 0.0,
+        price_ticks: trigger.trigger_price,
+        size_remaining: size_lots as f64,
+        initial_size: size_lots as f64,
+        reduce_only: true,
+        is_stop_loss: true,
+        conditional_order_index: Some(order_index),
+        conditional_trigger_direction: Some(trigger_direction_to_phoenix(
+            trigger.execution_direction,
+        )),
+    });
+}
+
+fn conditional_order_rows(
+    collection: &ConditionalOrderCollection,
+    asset_symbols: &HashMap<u32, String>,
+) -> Vec<OrderInfo> {
+    let mut rows = Vec::new();
+    for (order_index, order) in collection.active_orders() {
+        let Some(symbol) = asset_symbols.get(&order.asset_id) else {
+            continue;
+        };
+        let size_lots = order.fillable_size.max(order.max_size);
+        let base_sequence = 1_000_000_000 + u64::from(order_index) * 2;
+        push_conditional_trigger_row(
+            &mut rows,
+            symbol,
+            order_index,
+            base_sequence,
+            size_lots,
+            &order.greater_trigger_order,
+        );
+        push_conditional_trigger_row(
+            &mut rows,
+            symbol,
+            order_index,
+            base_sequence + 1,
+            size_lots,
+            &order.less_trigger_order,
+        );
+    }
+    rows
+}
+
+async fn fetch_conditional_order_rows(
+    rpc: &RpcClient,
+    address: &Pubkey,
+    asset_symbols: &HashMap<u32, String>,
+) -> Vec<OrderInfo> {
+    let response = match rpc
+        .get_account_with_commitment(address, rpc.commitment())
+        .await
+    {
+        Ok(response) => response,
+        Err(err) => {
+            warn!(error = %err, "failed to fetch conditional-orders account");
+            return Vec::new();
+        }
+    };
+    let Some(account) = response.value.filter(|account| !account.data.is_empty()) else {
+        return Vec::new();
+    };
+
+    match ConditionalOrderCollection::try_from_account_bytes(&account.data) {
+        Ok(collection) => conditional_order_rows(&collection, asset_symbols),
+        Err(err) => {
+            warn!(error = %err, "failed to decode conditional-orders account");
+            Vec::new()
+        }
+    }
+}
+
+fn build_order_rows(
+    trader: &Trader,
+    stop_triggers: &HashMap<(String, String), TraderStateStopLossTrigger>,
+    conditional_orders: &[OrderInfo],
+) -> Vec<OrderInfo> {
+    let mut orders: Vec<OrderInfo> = trader
+        .all_orders()
+        .iter()
+        .map(|o| OrderInfo {
+            symbol: o.symbol.clone(),
+            order_sequence_number: o.order_sequence_number,
+            side: trading_side_from_str(&o.side),
+            order_type: o.order_type.clone(),
+            price_usd: o.price_usd.to_string().parse::<f64>().unwrap_or(0.0),
+            // `price_ticks` is i64 in the SDK but always non-negative for live orders;
+            // clamp at 0 just in case to keep the cast safe.
+            price_ticks: o.price_ticks.max(0) as u64,
+            // UI size is filled in by the main loop using `configs`; raw lots are
+            // carried in the `f64` as a fallback so the modal still shows magnitude.
+            size_remaining: o.size_remaining_lots as f64,
+            initial_size: o.initial_size_lots as f64,
+            reduce_only: o.reduce_only,
+            is_stop_loss: o.is_stop_loss,
+            conditional_order_index: None,
+            conditional_trigger_direction: None,
+        })
+        .collect();
+
+    // Append synthetic rows for pending stop-loss triggers. These carry no size
+    // (size is determined at fire-time from the opposing position) and no USD
+    // price — the main loop converts `price_ticks` via the per-symbol config.
+    for ((symbol, stop_id), sl) in stop_triggers {
+        let trigger_ticks: u64 = sl.trigger.trigger_price_ticks.parse().unwrap_or(0);
+        let osn: u64 = stop_id
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse()
+            .unwrap_or(0);
+        let side = match sl.trigger.side {
+            phoenix_rise::types::Side::Bid => TradingSide::Long,
+            phoenix_rise::types::Side::Ask => TradingSide::Short,
+        };
+        orders.push(OrderInfo {
+            symbol: symbol.clone(),
+            order_sequence_number: osn,
+            side,
+            order_type: sl.trigger.kind.clone(),
+            price_usd: 0.0,
+            price_ticks: trigger_ticks,
+            size_remaining: 0.0,
+            initial_size: 0.0,
+            reduce_only: true,
+            is_stop_loss: true,
+            conditional_order_index: None,
+            conditional_trigger_direction: None,
+        });
+    }
+
+    for conditional in conditional_orders {
+        let duplicate = orders.iter().any(|order| {
+            order.is_stop_loss
+                && order.symbol == conditional.symbol
+                && order.side == conditional.side
+                && order.price_ticks == conditional.price_ticks
+        });
+        if !duplicate {
+            orders.push(conditional.clone());
+        }
+    }
+
+    orders
+}
+
 /// Spawn a persistent `PhoenixWSClient` subscription to the wallet's trader
 /// state. Each update is applied to a local `Trader`, then `all_orders()` is
 /// flattened into `Vec<OrderInfo>` and pushed to the main loop, which owns the
@@ -376,6 +569,7 @@ pub(super) fn trading_side_from_str(s: &str) -> TradingSide {
 pub(super) fn spawn_trader_orders_ws(
     kp: Arc<Keypair>,
     orders_tx: UnboundedSender<Vec<OrderInfo>>,
+    conditional_asset_symbols: HashMap<u32, String>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
@@ -409,6 +603,11 @@ pub(super) fn spawn_trader_orders_ws(
             backoff = WSS_RETRY_INIT;
 
             let key = TraderKey::new(authority);
+            let conditional_orders_address = get_conditional_orders_address(&key.pda());
+            let conditional_rpc = RpcClient::new_with_commitment(
+                rpc_http_url_from_env(),
+                CommitmentConfig::processed(),
+            );
             let mut trader = Trader::new(key);
             // Stop-loss triggers live on `TraderStatePositionRow`, not in
             // `subaccount.orders`, so the SDK's `Trader::all_orders()` never
@@ -420,112 +619,86 @@ pub(super) fn spawn_trader_orders_ws(
             // triggers wholesale (matching `TraderStatePositionRow` semantics,
             // where the triggers field is always the full current set), and
             // closed positions drop their symbol entirely.
-            let mut stop_triggers: std::collections::HashMap<
-                (String, String),
-                TraderStateStopLossTrigger,
-            > = std::collections::HashMap::new();
+            let mut stop_triggers: HashMap<(String, String), TraderStateStopLossTrigger> =
+                HashMap::new();
+            let mut conditional_orders = fetch_conditional_order_rows(
+                &conditional_rpc,
+                &conditional_orders_address,
+                &conditional_asset_symbols,
+            )
+            .await;
+            let mut conditional_interval = tokio::time::interval(Duration::from_millis(1500));
+            conditional_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-            while let Some(msg) = rx.recv().await {
-                trader.apply_update(&msg);
+            loop {
+                tokio::select! {
+                    msg = rx.recv() => {
+                        let Some(msg) = msg else {
+                            break;
+                        };
+                        trader.apply_update(&msg);
 
-                match &msg.content {
-                    TraderStatePayload::Snapshot(s) => {
-                        stop_triggers.clear();
-                        for sub in &s.subaccounts {
-                            for pos in &sub.positions {
-                                for sl in &pos.position.stop_loss_triggers {
-                                    stop_triggers.insert(
-                                        (pos.symbol.clone(), sl.stop_loss_id.clone()),
-                                        sl.clone(),
-                                    );
+                        match &msg.content {
+                            TraderStatePayload::Snapshot(s) => {
+                                stop_triggers.clear();
+                                for sub in &s.subaccounts {
+                                    for pos in &sub.positions {
+                                        for sl in &pos.position.stop_loss_triggers {
+                                            stop_triggers.insert(
+                                                (pos.symbol.clone(), sl.stop_loss_id.clone()),
+                                                sl.clone(),
+                                            );
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                    TraderStatePayload::Delta(d) => {
-                        for sub in &d.deltas {
-                            for pos_delta in &sub.positions {
-                                match pos_delta.change {
-                                    TraderStateRowChangeKind::Closed => {
-                                        stop_triggers
-                                            .retain(|(sym, _), _| sym != &pos_delta.symbol);
-                                    }
-                                    TraderStateRowChangeKind::Updated => {
-                                        stop_triggers
-                                            .retain(|(sym, _), _| sym != &pos_delta.symbol);
-                                        if let Some(row) = &pos_delta.position {
-                                            for sl in &row.stop_loss_triggers {
-                                                stop_triggers.insert(
-                                                    (
-                                                        pos_delta.symbol.clone(),
-                                                        sl.stop_loss_id.clone(),
-                                                    ),
-                                                    sl.clone(),
-                                                );
+                            TraderStatePayload::Delta(d) => {
+                                for sub in &d.deltas {
+                                    for pos_delta in &sub.positions {
+                                        match pos_delta.change {
+                                            TraderStateRowChangeKind::Closed => {
+                                                stop_triggers
+                                                    .retain(|(sym, _), _| sym != &pos_delta.symbol);
+                                            }
+                                            TraderStateRowChangeKind::Updated => {
+                                                stop_triggers
+                                                    .retain(|(sym, _), _| sym != &pos_delta.symbol);
+                                                if let Some(row) = &pos_delta.position {
+                                                    for sl in &row.stop_loss_triggers {
+                                                        stop_triggers.insert(
+                                                            (
+                                                                pos_delta.symbol.clone(),
+                                                                sl.stop_loss_id.clone(),
+                                                            ),
+                                                            sl.clone(),
+                                                        );
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+
+                        if orders_tx.send(build_order_rows(&trader, &stop_triggers, &conditional_orders)).is_err() {
+                            // Receiver dropped (poller shutting down).
+                            drop(handle);
+                            return;
+                        }
                     }
-                }
-
-                let mut orders: Vec<OrderInfo> = trader
-                    .all_orders()
-                    .iter()
-                    .map(|o| OrderInfo {
-                        symbol: o.symbol.clone(),
-                        order_sequence_number: o.order_sequence_number,
-                        side: trading_side_from_str(&o.side),
-                        order_type: o.order_type.clone(),
-                        price_usd: o.price_usd.to_string().parse::<f64>().unwrap_or(0.0),
-                        // `price_ticks` is i64 in the SDK but always non-negative for live orders;
-                        // clamp at 0 just in case to keep the cast safe.
-                        price_ticks: o.price_ticks.max(0) as u64,
-                        // UI size is filled in by the main loop using `configs`; raw lots are
-                        // carried in the `f64` as a fallback so the modal still shows magnitude.
-                        size_remaining: o.size_remaining_lots as f64,
-                        initial_size: o.initial_size_lots as f64,
-                        reduce_only: o.reduce_only,
-                        is_stop_loss: o.is_stop_loss,
-                    })
-                    .collect();
-
-                // Append synthetic rows for pending stop-loss triggers. These
-                // carry no size (size is determined at fire-time from the
-                // opposing position) and no USD price — the main loop converts
-                // `price_ticks` via the per-symbol `SplineConfig`.
-                for ((symbol, stop_id), sl) in &stop_triggers {
-                    let trigger_ticks: u64 = sl.trigger.trigger_price_ticks.parse().unwrap_or(0);
-                    let osn: u64 = stop_id
-                        .chars()
-                        .filter(|c| c.is_ascii_digit())
-                        .collect::<String>()
-                        .parse()
-                        .unwrap_or(0);
-                    let side = match sl.trigger.side {
-                        phoenix_rise::types::Side::Bid => TradingSide::Long,
-                        phoenix_rise::types::Side::Ask => TradingSide::Short,
-                    };
-                    orders.push(OrderInfo {
-                        symbol: symbol.clone(),
-                        order_sequence_number: osn,
-                        side,
-                        order_type: sl.trigger.kind.clone(),
-                        price_usd: 0.0,
-                        price_ticks: trigger_ticks,
-                        size_remaining: 0.0,
-                        initial_size: 0.0,
-                        reduce_only: true,
-                        is_stop_loss: true,
-                    });
-                }
-
-                if orders_tx.send(orders).is_err() {
-                    // Receiver dropped (poller shutting down).
-                    drop(handle);
-                    return;
+                    _ = conditional_interval.tick() => {
+                        conditional_orders = fetch_conditional_order_rows(
+                            &conditional_rpc,
+                            &conditional_orders_address,
+                            &conditional_asset_symbols,
+                        )
+                        .await;
+                        if orders_tx.send(build_order_rows(&trader, &stop_triggers, &conditional_orders)).is_err() {
+                            drop(handle);
+                            return;
+                        }
+                    }
                 }
             }
 

@@ -1,5 +1,6 @@
 //! Wallet connect / disconnect helpers.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use phoenix_rise::PhoenixHttpClient;
@@ -28,6 +29,7 @@ pub(super) fn connect_wallet_with_keypair(
     state: &mut TuiState,
     kp: Keypair,
     cfg: &SplineConfig,
+    configs: &HashMap<String, SplineConfig>,
     channels: &Channels,
     ws_url: &str,
     http: Arc<PhoenixHttpClient>,
@@ -69,7 +71,15 @@ pub(super) fn connect_wallet_with_keypair(
         channels.tx_status.clone(),
     );
 
-    let trader_orders = spawn_trader_orders_ws(Arc::clone(&kp_arc), channels.orders_tx.clone());
+    let conditional_asset_symbols = configs
+        .values()
+        .map(|cfg| (cfg.asset_id, cfg.symbol.clone()))
+        .collect();
+    let trader_orders = spawn_trader_orders_ws(
+        Arc::clone(&kp_arc),
+        channels.orders_tx.clone(),
+        conditional_asset_symbols,
+    );
 
     WalletHandles {
         wallet_wss,
