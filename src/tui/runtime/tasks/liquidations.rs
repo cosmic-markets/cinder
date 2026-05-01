@@ -42,7 +42,6 @@ use tracing::warn;
 
 use super::super::super::config::SplineConfig;
 use super::super::super::constants::QUOTE_LOT_DECIMALS;
-use super::super::super::format::pubkey_trader_prefix;
 use super::super::super::math::{base_lots_to_units, ticks_to_price};
 use super::super::super::state::{LiquidationEntry, LiquidationFeedMsg};
 use super::{WSS_RETRY_CAP, WSS_RETRY_INIT};
@@ -436,11 +435,9 @@ fn build_entry(
         received_at,
         symbol,
         asset_id: e.asset_id,
-        liquidated_trader: pubkey_trader_prefix(&e.liquidated_trader),
         size,
         mark_price,
         notional,
-        position_closed: e.position_closed,
         price_decimals,
         size_decimals,
     }

@@ -155,10 +155,6 @@ pub struct Strings {
     pub liq_feed_scroll: &'static str,
     /// Placeholder shown before the first liquidation arrives.
     pub liq_feed_waiting: &'static str,
-    /// Status cell label when the position was fully closed by the liquidator.
-    pub liq_feed_status_closed: &'static str,
-    /// Status cell label when only part of the position was liquidated.
-    pub liq_feed_status_partial: &'static str,
 
     // ── Status bar messages — static (no format args) ────────────────────────
     pub st_loading_ctx: &'static str,

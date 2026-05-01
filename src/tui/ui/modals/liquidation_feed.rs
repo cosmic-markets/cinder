@@ -13,7 +13,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     view: &LiquidationFeedView,
 ) {
     let row_count = view.entries.len().max(1) as u16;
-    let max_width: u16 = 96;
+    // Width budget: cursor(1) + time(8) + market(7) + notional(10) + size(10)
+    // + price(11) + 5 column gaps + 2 borders = 54.
+    let max_width: u16 = 56;
     let popup_w = max_width.min(area.width.saturating_sub(4));
     let popup_h = (row_count + 6).min(area.height.saturating_sub(2));
 
@@ -120,18 +122,8 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 e.symbol.clone()
             };
             let size_str = fmt_size(e.size, e.size_decimals.min(6));
-            let mark_str = format!("${}", fmt_price(e.mark_price, e.price_decimals));
+            let price_str = format!("${}", fmt_price(e.mark_price, e.price_decimals));
             let notional_str = format!("${}", fmt_compact(e.notional));
-            let status_label = if e.position_closed {
-                s.liq_feed_status_closed
-            } else {
-                s.liq_feed_status_partial
-            };
-            let status_color = if e.position_closed {
-                Color::LightRed
-            } else {
-                Color::Yellow
-            };
 
             let row_style = if is_selected {
                 Style::default()
@@ -146,16 +138,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(cursor_str),
                 Cell::from(time_str).style(Style::default().fg(Color::DarkGray)),
                 Cell::from(market_str).style(Style::default().fg(FIRE_ORANGE)),
-                Cell::from(e.liquidated_trader.clone()).style(Style::default().fg(Color::Cyan)),
-                Cell::from(Line::from(size_str).alignment(Alignment::Right)),
-                Cell::from(Line::from(mark_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
-                Cell::from(Span::styled(
-                    status_label,
-                    Style::default()
-                        .fg(status_color)
-                        .add_modifier(Modifier::BOLD),
-                )),
+                Cell::from(Line::from(size_str).alignment(Alignment::Right)),
+                Cell::from(Line::from(price_str).alignment(Alignment::Right)),
             ])
             .style(row_style)
         })
@@ -168,11 +153,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
         Cell::from(""),
         Cell::from(s.ledger_col_time),
         Cell::from(s.market),
-        Cell::from(s.trader),
-        Cell::from(Line::from(s.size).alignment(Alignment::Right)),
-        Cell::from(Line::from(s.mark).alignment(Alignment::Right)),
         Cell::from(Line::from(s.notional_col).alignment(Alignment::Right)),
-        Cell::from(s.status),
+        Cell::from(Line::from(s.size).alignment(Alignment::Right)),
+        Cell::from(Line::from(s.price).alignment(Alignment::Right)),
     ])
     .style(header_style);
 
@@ -180,11 +163,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
         Constraint::Length(1),
         Constraint::Length(8),
         Constraint::Length(7),
-        Constraint::Length(6),
-        Constraint::Length(12),
-        Constraint::Length(11),
         Constraint::Length(10),
-        Constraint::Length(7),
+        Constraint::Length(10),
+        Constraint::Length(11),
     ];
 
     let table = Table::new(table_rows, widths)

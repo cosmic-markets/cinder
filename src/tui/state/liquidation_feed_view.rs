@@ -22,16 +22,12 @@ pub struct LiquidationEntry {
     /// On-chain asset_id from the event — kept around so the row can render
     /// usefully even when symbol resolution failed.
     pub asset_id: u32,
-    /// 4-char prefix of the liquidated trader's PDA pubkey.
-    pub liquidated_trader: String,
     /// Base-asset units actually filled by the liquidation order.
     pub size: f64,
     /// Mark price (USD) used during liquidation.
     pub mark_price: f64,
     /// `size * mark_price` — convenience field for the table.
     pub notional: f64,
-    /// True if the liquidated position became fully closed on this market.
-    pub position_closed: bool,
     /// Decimals used when formatting `mark_price` so the modal renders in the
     /// same precision the orderbook does.
     pub price_decimals: usize,
@@ -124,16 +120,14 @@ impl Default for LiquidationFeedView {
 mod tests {
     use super::*;
 
-    fn make_entry_at(trader: &str, secs: i64) -> LiquidationEntry {
+    fn make_entry_at(tag: &str, secs: i64) -> LiquidationEntry {
         LiquidationEntry {
             received_at: DateTime::from_timestamp(1_700_000_000 + secs, 0).unwrap(),
-            symbol: "SOL".to_string(),
+            symbol: tag.to_string(),
             asset_id: 0,
-            liquidated_trader: trader.to_string(),
             size: 1.0,
             mark_price: 100.0,
             notional: 100.0,
-            position_closed: false,
             price_decimals: 2,
             size_decimals: 2,
         }
@@ -145,12 +139,8 @@ mod tests {
         v.push(make_entry_at("older", 0));
         v.push(make_entry_at("newer", 10));
         v.push(make_entry_at("middle", 5));
-        let traders: Vec<&str> = v
-            .entries
-            .iter()
-            .map(|e| e.liquidated_trader.as_str())
-            .collect();
-        assert_eq!(traders, vec!["newer", "middle", "older"]);
+        let tags: Vec<&str> = v.entries.iter().map(|e| e.symbol.as_str()).collect();
+        assert_eq!(tags, vec!["newer", "middle", "older"]);
     }
 
     #[test]
@@ -162,15 +152,12 @@ mod tests {
         assert_eq!(v.entries.len(), LIQUIDATION_FEED_CAPACITY);
         // Largest i is newest by received_at, so it sits at the front.
         assert_eq!(
-            v.entries.front().unwrap().liquidated_trader,
+            v.entries.front().unwrap().symbol,
             format!("{:04}", LIQUIDATION_FEED_CAPACITY + 4)
         );
         // Five oldest entries (i = 0..=4) were evicted; back of the deque is
         // therefore i = 5.
-        assert_eq!(
-            v.entries.back().unwrap().liquidated_trader,
-            format!("{:04}", 5)
-        );
+        assert_eq!(v.entries.back().unwrap().symbol, format!("{:04}", 5));
     }
 
     #[test]
@@ -182,11 +169,7 @@ mod tests {
         }
         v.push(make_entry_at("ancient", 0));
         assert_eq!(v.entries.len(), LIQUIDATION_FEED_CAPACITY);
-        // "ancient" should never have made it into the visible buffer.
-        assert!(v
-            .entries
-            .iter()
-            .all(|e| e.liquidated_trader != "ancient"));
+        assert!(v.entries.iter().all(|e| e.symbol != "ancient"));
     }
 
     #[test]
