@@ -8,6 +8,8 @@ use std::collections::VecDeque;
 
 use chrono::{DateTime, Utc};
 
+use super::super::trading::TradingSide;
+
 /// One row in the liquidation feed.
 #[derive(Debug, Clone)]
 pub struct LiquidationEntry {
@@ -22,6 +24,11 @@ pub struct LiquidationEntry {
     /// On-chain asset_id from the event — kept around so the row can render
     /// usefully even when symbol resolution failed.
     pub asset_id: u32,
+    /// Side of the liquidated trader's position (the position being closed,
+    /// not the liquidator's offsetting trade). `None` when the program log
+    /// announcing the side wasn't present or couldn't be parsed; the modal
+    /// renders that as a dash.
+    pub side: Option<TradingSide>,
     /// Base-asset units actually filled by the liquidation order.
     pub size: f64,
     /// Mark price (USD) used during liquidation.
@@ -125,6 +132,7 @@ mod tests {
             received_at: DateTime::from_timestamp(1_700_000_000 + secs, 0).unwrap(),
             symbol: tag.to_string(),
             asset_id: 0,
+            side: None,
             size: 1.0,
             mark_price: 100.0,
             notional: 100.0,

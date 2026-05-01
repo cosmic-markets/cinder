@@ -44,6 +44,7 @@ use super::super::super::config::SplineConfig;
 use super::super::super::constants::QUOTE_LOT_DECIMALS;
 use super::super::super::math::{base_lots_to_units, ticks_to_price};
 use super::super::super::state::{LiquidationEntry, LiquidationFeedMsg};
+use super::super::super::trading::TradingSide;
 use super::{WSS_RETRY_CAP, WSS_RETRY_INIT};
 
 /// How many recently-seen tx signatures to remember so we don't re-fetch the
@@ -380,6 +381,20 @@ async fn fetch_and_decode(
             None => return Vec::new(),
         };
 
+    // The `LiquidationEvent` doesn't include the position's side, so we read
+    // it out of the program logs the runtime emits alongside each liquidation:
+    //   `Program log: Position side for trader [b0, b1, …, b31] on asset N: Long`
+    // (or `Short`). Build a (trader, asset_id) → side map so each event can
+    // resolve its own side without re-scanning the log slice.
+    let sides: HashMap<(Pubkey, u32), TradingSide> = match &meta.log_messages {
+        OptionSerializer::Some(lines) => lines
+            .iter()
+            .filter_map(|l| parse_position_side_log(l))
+            .map(|(trader, asset_id, side)| ((trader, asset_id), side))
+            .collect(),
+        _ => HashMap::new(),
+    };
+
     let parsed_ixs = match flatten_inner_instructions(&inner_ixs, &account_keys) {
         Some(p) => p,
         None => return Vec::new(),
@@ -395,16 +410,64 @@ async fn fetch_and_decode(
             let received_at = block_time
                 .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
                 .unwrap_or_else(Utc::now);
-            out.push(build_entry(&e, received_at, configs_by_asset.as_ref()));
+            let side = sides.get(&(e.liquidated_trader, e.asset_id)).copied();
+            out.push(build_entry(
+                &e,
+                received_at,
+                configs_by_asset.as_ref(),
+                side,
+            ));
         }
     }
     out
+}
+
+/// Extract `(trader, asset_id, side)` from a runtime log line of the form
+/// `Program log: Position side for trader [b0, b1, …, b31] on asset N: Long`.
+/// Returns `None` for any line that doesn't match the shape — the parser is
+/// strict about the marker but lenient about surrounding whitespace.
+fn parse_position_side_log(line: &str) -> Option<(Pubkey, u32, TradingSide)> {
+    const MARKER: &str = "Position side for trader [";
+    let bytes_start = line.find(MARKER)? + MARKER.len();
+    let close_offset = line[bytes_start..].find(']')?;
+    let bytes_str = &line[bytes_start..bytes_start + close_offset];
+
+    let mut arr = [0u8; 32];
+    let mut count = 0usize;
+    for tok in bytes_str.split(',') {
+        if count >= 32 {
+            return None;
+        }
+        arr[count] = tok.trim().parse().ok()?;
+        count += 1;
+    }
+    if count != 32 {
+        return None;
+    }
+    let trader = Pubkey::from(arr);
+
+    let after = &line[bytes_start + close_offset + 1..];
+    const ASSET_MARKER: &str = "on asset ";
+    let asset_start = after.find(ASSET_MARKER)? + ASSET_MARKER.len();
+    let colon = after[asset_start..].find(':')?;
+    let asset_id: u32 = after[asset_start..asset_start + colon].trim().parse().ok()?;
+    let side_str = after[asset_start + colon + 1..].trim();
+    let side = if side_str.starts_with("Long") {
+        TradingSide::Long
+    } else if side_str.starts_with("Short") {
+        TradingSide::Short
+    } else {
+        return None;
+    };
+
+    Some((trader, asset_id, side))
 }
 
 fn build_entry(
     e: &phoenix_eternal_types::LiquidationEvent,
     received_at: chrono::DateTime<Utc>,
     configs_by_asset: &HashMap<u32, SplineConfig>,
+    side: Option<TradingSide>,
 ) -> LiquidationEntry {
     let cfg = configs_by_asset.get(&e.asset_id);
     let (symbol, price_decimals, size_decimals, size, mark_price) = match cfg {
@@ -435,6 +498,7 @@ fn build_entry(
         received_at,
         symbol,
         asset_id: e.asset_id,
+        side,
         size,
         mark_price,
         notional,
@@ -565,11 +629,31 @@ mod tests {
             position_closed: false,
         };
 
-        let entry = build_entry(&event, Utc::now(), &configs);
+        let entry = build_entry(&event, Utc::now(), &configs, Some(TradingSide::Long));
 
         assert_eq!(entry.size, 3.0);
         assert_eq!(entry.mark_price, 2.0);
         assert_eq!(entry.notional, 7.5);
+        assert_eq!(entry.side, Some(TradingSide::Long));
+    }
+
+    #[test]
+    fn parse_position_side_log_extracts_trader_asset_and_side() {
+        let bytes = (0u8..32).map(|b| b.to_string()).collect::<Vec<_>>().join(", ");
+        let line = format!(
+            "Program log: Position side for trader [{}] on asset 7: Short",
+            bytes
+        );
+        let (trader, asset_id, side) = parse_position_side_log(&line).expect("parses");
+        assert_eq!(trader, Pubkey::from(std::array::from_fn::<u8, 32, _>(|i| i as u8)));
+        assert_eq!(asset_id, 7);
+        assert_eq!(side, TradingSide::Short);
+    }
+
+    #[test]
+    fn parse_position_side_log_rejects_unrelated_lines() {
+        assert!(parse_position_side_log("Program log: instruction Liquidate").is_none());
+        assert!(parse_position_side_log("Program log: Position side for trader [1, 2] on asset 0: Long").is_none());
     }
 
     #[test]

@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::tui::state::LiquidationFeedView;
+use crate::tui::trading::TradingSide;
 
 pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     f: &mut Frame,
@@ -13,9 +14,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     view: &LiquidationFeedView,
 ) {
     let row_count = view.entries.len().max(1) as u16;
-    // Width budget: cursor(1) + time(8) + market(7) + notional(10) + size(10)
-    // + price(11) + 5 column gaps + 2 borders = 54.
-    let max_width: u16 = 56;
+    // Width budget: cursor(1) + time(8) + market(8) + side(5) + notional(10)
+    // + size(10) + price(11) + 6 column gaps + 2 borders = 61.
+    let max_width: u16 = 62;
     let popup_w = max_width.min(area.width.saturating_sub(4));
     let popup_h = (row_count + 6).min(area.height.saturating_sub(2));
 
@@ -124,6 +125,11 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             let size_str = fmt_size(e.size, e.size_decimals.min(6));
             let price_str = format!("${}", fmt_price(e.mark_price, e.price_decimals));
             let notional_str = format!("${}", fmt_compact(e.notional));
+            let (side_label, side_color) = match e.side {
+                Some(TradingSide::Long) => ("LONG", TradingSide::Long.color()),
+                Some(TradingSide::Short) => ("SHORT", TradingSide::Short.color()),
+                None => ("—", Color::DarkGray),
+            };
 
             let row_style = if is_selected {
                 Style::default()
@@ -138,6 +144,12 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(cursor_str),
                 Cell::from(time_str).style(Style::default().fg(Color::DarkGray)),
                 Cell::from(market_str).style(Style::default().fg(FIRE_ORANGE)),
+                Cell::from(Span::styled(
+                    side_label,
+                    Style::default()
+                        .fg(side_color)
+                        .add_modifier(Modifier::BOLD),
+                )),
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(size_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(price_str).alignment(Alignment::Right)),
@@ -153,6 +165,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
         Cell::from(""),
         Cell::from(s.ledger_col_time),
         Cell::from(s.market),
+        Cell::from(s.side),
         Cell::from(Line::from(s.notional_col).alignment(Alignment::Right)),
         Cell::from(Line::from(s.size).alignment(Alignment::Right)),
         Cell::from(Line::from(s.price).alignment(Alignment::Right)),
@@ -162,7 +175,8 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     let widths = [
         Constraint::Length(1),
         Constraint::Length(8),
-        Constraint::Length(7),
+        Constraint::Length(8),
+        Constraint::Length(5),
         Constraint::Length(10),
         Constraint::Length(10),
         Constraint::Length(11),
