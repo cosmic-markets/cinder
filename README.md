@@ -41,13 +41,6 @@ flowchart TB
     Runtime --> Solana
 ```
 
-## Requirements
-
-- **Rust** toolchain (2021 edition; see `rust-version` in `Cargo.toml`).
-- `cargo fmt` uses the checked-in `rustfmt.toml`.
-- A **Solana JSON-RPC HTTP** endpoint (`RPC_URL`). WebSocket URL is optional and can be derived from HTTP.
-- Optional **keypair** JSON for live trading and wallet-scoped views (env vars below).
-
 ## Environment
 
 | Variable | Required | Description |
@@ -57,16 +50,6 @@ flowchart TB
 | `PHX_WALLET_PATH` or `KEYPAIR_PATH` | No | Keypair file (default `~/.config/solana/id.json`) |
 | `RUST_LOG` | No | e.g. `info` or `cinder=debug,phoenix_rise=warn` |
 | `CINDER_LOG_DIR` | No | Directory for transaction error logs (default `~/.config/phoenix-cinder/logs`) |
-
-## Trading safety
-
-Cinder can sign real Solana transactions. The release defaults favor safety:
-
-- Transaction sends run RPC preflight before broadcast.
-- Order and close sizes are checked before converting to on-chain base lots.
-- Deposit and withdrawal amounts must be finite, positive, and within the release safety limit.
-- A confirmation timeout means the transaction status is unknown, not failed. Check the displayed signature before retrying.
-- Raw transaction errors are written to `cinder-error.log` under the Cinder log directory rather than the current working directory.
 
 ## Build and run
 
@@ -80,14 +63,6 @@ cargo build --release
 RPC_URL=https://api.mainnet-beta.solana.com ./target/release/cinder
 ```
 
-**Tests and lint:**
-
-```bash
-cargo fmt --all --check
-cargo clippy --workspace --locked --all-targets -- -D warnings
-cargo test --workspace --locked
-```
-
 ## Docker
 
 ```bash
@@ -95,8 +70,6 @@ docker compose build               # one-time (or after Cargo/source changes)
 
 docker compose run --rm cinder     # interactive TUI run
 ```
-
-Set **`RPC_URL`** in your shell env (or a local **`.env`**). Optional overrides: **`RPC_WS_URL`** (derived from **`RPC_URL`** when unset — note that the Compose service uses the bare-key form `RPC_WS_URL` so an unset value is *not* injected as an empty string, which would make the binary hang on a malformed WSS URL), and **`RUST_LOG`**.
 
 For signing, mount a Solana keypair via the CLI. The binary defaults `PHX_WALLET_PATH` to `~/.config/solana/id.json`, which inside the distroless `nonroot` image resolves to `/home/nonroot/.config/solana/id.json`:
 
@@ -115,13 +88,6 @@ docker compose run --rm \
   cinder
 ```
 
-## Contributing and security
-
-See `CONTRIBUTING.md` for local development and PR expectations. Report
-vulnerabilities through `SECURITY.md`.
-
 ## License
 
-Cinder is MIT licensed; see `LICENSE`. The vendored
-`crates/phoenix-eternal-types` workspace member is Apache-2.0 licensed; see
-`crates/phoenix-eternal-types/LICENSE` and `NOTICE`.
+MIT
