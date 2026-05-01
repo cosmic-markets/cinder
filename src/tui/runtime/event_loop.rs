@@ -16,7 +16,7 @@ use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_rpc_client_types::config::RpcAccountInfoConfig;
 use tokio::sync::watch;
-use tracing::{error, warn};
+use tracing::warn;
 
 use super::super::config::{
     current_user_config, rpc_http_url_from_env, ws_url_from_env, SplineConfig,
@@ -25,7 +25,7 @@ use super::super::data::{spawn_gti_loader, GtiHandle};
 use super::super::state::{
     L2BookStreamMsg, MarketInfo, MarketListUpdate, MarketStatUpdate, TuiState,
 };
-use super::super::terminal::setup_terminal;
+use super::super::terminal::TuiTerminal;
 use super::super::ui;
 use super::{
     connection, keyboard::handle_key_press, new_channels, redraw::redraw_tui_force, tasks,
@@ -33,6 +33,7 @@ use super::{
 };
 
 pub async fn spawn_spline_poller(
+    terminal: TuiTerminal,
     _ws: &Arc<phoenix_rise::PhoenixClient>,
     market_list: Vec<MarketInfo>,
     configs: std::collections::HashMap<String, SplineConfig>,
@@ -48,13 +49,7 @@ pub async fn spawn_spline_poller(
     };
 
     let handle = tokio::spawn(async move {
-        let mut terminal = match setup_terminal() {
-            Ok(t) => t,
-            Err(e) => {
-                error!(error = %e, "TUI setup failed");
-                return;
-            }
-        };
+        let mut terminal = terminal;
 
         let mut configs = configs;
         let mut state = TuiState::new(market_list);

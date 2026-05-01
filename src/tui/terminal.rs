@@ -9,7 +9,9 @@ use crossterm::{cursor, execute};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-pub fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+pub type TuiTerminal = Terminal<CrosstermBackend<Stdout>>;
+
+pub fn setup_terminal() -> io::Result<TuiTerminal> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     if let Err(err) = execute!(stdout, EnterAlternateScreen, cursor::Hide) {
@@ -27,7 +29,7 @@ pub fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     }
 }
 
-pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) {
+pub fn restore_terminal(terminal: &mut TuiTerminal) {
     let _ = disable_raw_mode();
     let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen, cursor::Show);
 }
