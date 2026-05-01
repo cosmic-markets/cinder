@@ -29,6 +29,9 @@ pub struct LiquidationEntry {
     /// announcing the side wasn't present or couldn't be parsed; the modal
     /// renders that as a dash.
     pub side: Option<TradingSide>,
+    /// 4-char prefix of the liquidated trader's pubkey, displayed in the
+    /// modal's rightmost column.
+    pub liquidated_trader: String,
     /// Base-asset units actually filled by the liquidation order.
     pub size: f64,
     /// Mark price (USD) used during liquidation.
@@ -133,6 +136,7 @@ mod tests {
             symbol: tag.to_string(),
             asset_id: 0,
             side: None,
+            liquidated_trader: String::new(),
             size: 1.0,
             mark_price: 100.0,
             notional: 100.0,

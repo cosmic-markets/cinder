@@ -4,7 +4,10 @@
 //! a footer hint for navigation and a header counter for total entries seen
 //! while the modal was alive.
 
+use chrono::Utc;
+
 use super::*;
+use crate::tui::format::fmt_time_since_secs;
 use crate::tui::state::LiquidationFeedView;
 use crate::tui::trading::TradingSide;
 
@@ -14,10 +17,14 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     view: &LiquidationFeedView,
 ) {
     let row_count = view.entries.len().max(1) as u16;
-    // Width budget: cursor(1) + time(8) + market(8) + side(5) + notional(10)
-    // + size(10) + price(11) + 6 column gaps + 2 borders = 61.
-    let max_width: u16 = 62;
+    // Width budget: cursor(1) + time(4) + market(8) + side(5) + notional(10)
+    // + size(10) + price(11) + trader(6) + 7 column gaps + 2 borders = 64.
+    // Trader values are only 4 chars but the header label "Trader" is 6.
+    let max_width: u16 = 66;
     let popup_w = max_width.min(area.width.saturating_sub(4));
+    // Captured once per draw; the runtime force-redraws the TUI on each 1s
+    // clock tick so age columns advance without per-row work.
+    let now = Utc::now();
     let popup_h = (row_count + 6).min(area.height.saturating_sub(2));
 
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
@@ -116,7 +123,8 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             let is_selected = i == view.selected_index;
             let cursor_str = if is_selected { "▸" } else { " " };
 
-            let time_str = e.received_at.format("%H:%M:%S").to_string();
+            let age_secs = (now - e.received_at).num_seconds();
+            let time_str = fmt_time_since_secs(age_secs);
             let market_str = if e.symbol.is_empty() {
                 format!("#{}", e.asset_id)
             } else {
@@ -142,7 +150,8 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
 
             Row::new(vec![
                 Cell::from(cursor_str),
-                Cell::from(time_str).style(Style::default().fg(Color::DarkGray)),
+                Cell::from(Line::from(time_str).alignment(Alignment::Right))
+                    .style(Style::default().fg(Color::DarkGray)),
                 Cell::from(market_str).style(Style::default().fg(FIRE_ORANGE)),
                 Cell::from(Span::styled(
                     side_label,
@@ -153,6 +162,8 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(size_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(price_str).alignment(Alignment::Right)),
+                Cell::from(e.liquidated_trader.clone())
+                    .style(Style::default().fg(Color::Cyan)),
             ])
             .style(row_style)
         })
@@ -163,23 +174,25 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
         .add_modifier(Modifier::BOLD);
     let header = Row::new(vec![
         Cell::from(""),
-        Cell::from(s.ledger_col_time),
+        Cell::from(Line::from(s.ledger_col_time).alignment(Alignment::Right)),
         Cell::from(s.market),
         Cell::from(s.side),
         Cell::from(Line::from(s.notional_col).alignment(Alignment::Right)),
         Cell::from(Line::from(s.size).alignment(Alignment::Right)),
         Cell::from(Line::from(s.price).alignment(Alignment::Right)),
+        Cell::from(s.trader),
     ])
     .style(header_style);
 
     let widths = [
         Constraint::Length(1),
-        Constraint::Length(8),
+        Constraint::Length(4),
         Constraint::Length(8),
         Constraint::Length(5),
         Constraint::Length(10),
         Constraint::Length(10),
         Constraint::Length(11),
+        Constraint::Length(6),
     ];
 
     let table = Table::new(table_rows, widths)
