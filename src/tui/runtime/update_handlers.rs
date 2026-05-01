@@ -424,10 +424,18 @@ pub(super) fn handle_stat_update(
     let is_active_market = update.symbol == cfg.symbol;
     let pv_touched = state.positions_view.apply_mark_price(&update);
     if is_active_market {
+        state
+            .market_stats_cache
+            .insert(update.symbol.clone(), update.clone());
         state.market_stats = Some(update);
         reconcile_active_position_mark(state);
-    } else if matches!(state.trading.input_mode, InputMode::SelectingMarket) {
-        redraw_tui_force(terminal, state, cfg, rpc_host);
+    } else {
+        state
+            .market_stats_cache
+            .insert(update.symbol.clone(), update);
+        if matches!(state.trading.input_mode, InputMode::SelectingMarket) {
+            redraw_tui_force(terminal, state, cfg, rpc_host);
+        }
     }
 
     let should_redraw_feed = is_active_market

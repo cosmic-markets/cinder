@@ -104,6 +104,12 @@ async fn subscribe_market_stats(
                         change_24h: compute_change(&update),
                     },
                 );
+                // Also forward the captured update into the runtime channel so
+                // the TUI's per-symbol stats cache is hot before the first
+                // frame renders. Without this, the active market's header
+                // briefly shows "Waiting for market data…" until Phoenix's
+                // next periodic push (which can be several seconds out).
+                let _ = stat_tx.try_send(update);
             }
         }
         remaining_rxs.push((sym, rx));
