@@ -11,10 +11,8 @@
 ## Features
 
 - **Markets** — Loads Active / PostOnly markets from the Phoenix HTTP API; background refresh about every 60s.
-- **Stats** — Per-symbol WebSocket updates (e.g. mark, volume, 24h change).
-- **Spline** — `accountSubscribe` to the market’s on-chain spline account for ladder-style liquidity.
-- **CLOB** — Optional merge of FIFO L2 levels from the market orderbook account (toggle in user config).
-- **GTI** — In-memory Global Trader Index cache so book rows can show wallet authorities instead of opaque pointers.
+- **Spline Liquidity** — `accountSubscribe` to the market’s on-chain spline account for ladder-style liquidity.
+- **CLOB Liquidity** — Optional merge of FIFO L2 levels from the market orderbook account (toggle in user config).
 - **Top positions** — Periodic scan of the protocol-wide Active Trader Buffer for a leaderboard-style modal (`T`).
 - **Trading** — Market / limit / stop-style flows with confirmation modals; deposits and withdrawals when a wallet is loaded.
 - **i18n** — UI strings in English and Chinese.
@@ -58,7 +56,6 @@ flowchart TB
 cargo build
 cargo run
 
-# Release (profile tuned for size in Cargo.toml)
 cargo build --release
 RPC_URL=https://api.mainnet-beta.solana.com ./target/release/cinder
 ```
@@ -67,7 +64,6 @@ RPC_URL=https://api.mainnet-beta.solana.com ./target/release/cinder
 
 ```bash
 docker compose build               # one-time (or after Cargo/source changes)
-
 docker compose run --rm cinder     # interactive TUI run
 ```
 
