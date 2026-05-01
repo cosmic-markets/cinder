@@ -280,6 +280,16 @@ pub(in crate::tui::runtime) fn handle_normal_key(
             state.trading.input_mode = InputMode::ViewingTopPositions;
             KeyAction::Redraw
         }
+        // [F] opens the live liquidation feed modal — recent on-chain
+        // `LiquidationEvent`s parsed from Phoenix Eternal transactions. The
+        // subscription task runs continuously in the background and keeps
+        // pushing entries even while the modal is closed, so the buffer is
+        // already warm on first open.
+        KeyCode::Char('F') => {
+            state.liquidation_feed_view.selected_index = 0;
+            state.trading.input_mode = InputMode::ViewingLiquidations;
+            KeyAction::Redraw
+        }
         _ => KeyAction::Nothing,
     }
 }

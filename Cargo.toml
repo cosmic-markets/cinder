@@ -19,6 +19,7 @@ resolver = "2"
 # Phoenix and all Solana client I/O (`solana-rpc-client`, `solana-pubsub-client`) use the Agave 2.3.x wire stack so
 # HTTP RPC and WebSocket subscriptions resolve to one `solana-rpc-client-types` / `solana-commitment-config` graph.
 arboard                 = { version = "3.4", default-features = false }
+bs58                    = "0.5"
 chrono                  = { version = "0.4.44", default-features = false, features = ["std", "clock"] }
 crossterm               = { version = "0.29.0", features = ["event-stream"] }
 dotenvy                 = "0.15"
@@ -42,6 +43,7 @@ solana-rpc-client-types = "=2.3.13"
 solana-signature        = "2.3.0"
 solana-signer           = "2.2.1"
 solana-transaction      = { version = "2.2.3", features = ["bincode"] }
+solana-transaction-status-client-types = "=2.3.13"
 tokio                   = { version = "1.51.1", features = ["rt", "rt-multi-thread", "macros", "time", "sync", "signal"] }
 tracing                 = "0.1.44"
 tracing-subscriber      = { version = "0.3.23", default-features = false, features = ["std", "fmt"] }

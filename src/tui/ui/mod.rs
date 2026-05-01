@@ -8,8 +8,8 @@ use solana_signer::Signer;
 
 use super::config::SplineConfig;
 use super::state::{
-    MarketSelector, MergedBook, OrderChartMarker, OrdersView, PositionsView, TopPositionsView,
-    TradeMarker, TradingState,
+    LiquidationFeedView, MarketSelector, MergedBook, OrderChartMarker, OrdersView, PositionsView,
+    TopPositionsView, TradeMarker, TradingState,
 };
 use super::trading::InputMode;
 
@@ -75,6 +75,7 @@ pub fn render_frame(
     positions_view: &PositionsView,
     orders_view: &OrdersView,
     top_positions_view: &TopPositionsView,
+    liquidation_feed_view: &LiquidationFeedView,
     order_chart_markers: &std::collections::HashMap<(String, u64), OrderChartMarker>,
     rpc_host: &str,
     switching_to: &Option<String>,
@@ -167,6 +168,10 @@ pub fn render_frame(
 
     if trading.input_mode == InputMode::ViewingTopPositions {
         modals::render_top_positions_modal(f, area, top_positions_view, market_selector);
+    }
+
+    if trading.input_mode == InputMode::ViewingLiquidations {
+        modals::render_liquidation_feed_modal(f, area, liquidation_feed_view);
     }
 
     if trading.input_mode == InputMode::ViewingOrders {

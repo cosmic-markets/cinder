@@ -109,6 +109,7 @@ pub static CN: Strings = Strings {
     ledger_copy_failed: "无法复制到剪贴板",
 
     top_positions_title: "顶级持仓",
+    liquidations_title: "强平",
     top_positions_loading: "正在从链上加载顶级持仓\u{2026}",
     top_positions_empty: "Phoenix 当前无活跃持仓",
     top_positions_rank: "#",

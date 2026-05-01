@@ -36,6 +36,9 @@ pub(super) fn handle_key_press(
             input::handle_positions_view_key(key.code, state, cfg, pending_market_switch)
         }
         InputMode::ViewingTopPositions => input::handle_top_positions_view_key(key.code, state),
+        InputMode::ViewingLiquidations => {
+            input::handle_liquidation_feed_view_key(key.code, state)
+        }
         InputMode::EditingSize => input::handle_editing_size(key.code, &mut state.trading),
         InputMode::EditingPrice => input::handle_editing_price(key.code, &mut state.trading),
         InputMode::EditingDeposit => input::handle_editing_deposit(key.code, &mut state.trading),

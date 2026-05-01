@@ -25,6 +25,22 @@ pub(super) fn render_status_tray(
     ))
     .left_aligned();
 
+    // Ledger sits in the top-right of the status frame so the high-traffic
+    // bottom hotkey row stays focused on modal toggles.
+    let ledger_top_right = Line::from(vec![
+        Span::styled(
+            "[L]",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(" {} ", s.txid),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ])
+    .right_aligned();
+
     let rpc_bottom_left = Line::from(vec![
         Span::styled(
             " [c] ",
@@ -71,6 +87,16 @@ pub(super) fn render_status_tray(
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
+            "[F]",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(" {} ", s.liquidations_title),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
             "[m]",
             Style::default()
                 .fg(Color::Cyan)
@@ -78,16 +104,6 @@ pub(super) fn render_status_tray(
         ),
         Span::styled(
             format!(" {} ", s.markets),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            "[L]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.txid),
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
@@ -105,6 +121,7 @@ pub(super) fn render_status_tray(
 
     let block = Block::default()
         .title_top(status_label)
+        .title_top(ledger_top_right)
         .title_bottom(rpc_bottom_left)
         .title_bottom(quit_hint)
         .borders(Borders::ALL)

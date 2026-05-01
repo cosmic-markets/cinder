@@ -9,6 +9,7 @@ use super::super::data::GtiCache;
 use super::super::data::ParsedSplineData;
 use super::super::format::pubkey_trader_prefix;
 use super::book::{BookRow, ClobLevel, MergedBook, RowSource};
+use super::liquidation_feed_view::LiquidationFeedView;
 use super::markers::{OrderChartMarker, TradeMarker};
 use super::market::{MarketInfo, MarketSelector};
 use super::orders_view::OrdersView;
@@ -40,6 +41,9 @@ pub struct TuiState {
     /// Top-N largest positions across the protocol (on-chain ActiveTraderBuffer
     /// scan).
     pub top_positions_view: TopPositionsView,
+    /// Live liquidation feed: most-recent `LiquidationEvent`s decoded from
+    /// inner instructions on Phoenix Eternal txs.
+    pub liquidation_feed_view: LiquidationFeedView,
     /// One chart marker per active-market open order, keyed by `(symbol,
     /// order_sequence_number)`. Kept separate from `orders_view` because it
     /// tracks chart-geometry state (x-coordinate that scrolls with
@@ -76,6 +80,7 @@ impl TuiState {
             positions_view: PositionsView::new(),
             orders_view: OrdersView::new(),
             top_positions_view: TopPositionsView::new(),
+            liquidation_feed_view: LiquidationFeedView::new(),
             order_chart_markers: HashMap::new(),
             switching_to: None,
             chart_data_cache: Vec::with_capacity(MAX_PRICE_HISTORY),

@@ -109,6 +109,7 @@ pub static EN: Strings = Strings {
     ledger_copy_failed: "Could not copy to clipboard",
 
     top_positions_title: "top positions",
+    liquidations_title: "liquidations",
     top_positions_loading: "Loading top positions from on-chain\u{2026}",
     top_positions_empty: "No active positions on Phoenix",
     top_positions_rank: "#",

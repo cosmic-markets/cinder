@@ -17,7 +17,9 @@ use super::super::data::GtiHandle;
 use super::super::data::{parse_spline_data, parse_spline_sequence};
 use super::super::format::pubkey_trader_short;
 use super::super::i18n::strings;
-use super::super::state::{BalanceUpdate, MarketListUpdate, TuiState, TxStatusMsg};
+use super::super::state::{
+    BalanceUpdate, LiquidationEntry, MarketListUpdate, TuiState, TxStatusMsg,
+};
 use super::super::trading::{InputMode, OrderInfo, TopPositionEntry, TradingSide};
 use super::super::tx::TxContext;
 use super::redraw::{redraw_tui, redraw_tui_force};
@@ -145,6 +147,22 @@ pub(super) fn handle_position_leaderboard_update(
     state.top_positions_view.loaded = true;
     state.top_positions_view.clamp_index();
     if matches!(state.trading.input_mode, InputMode::ViewingTopPositions) {
+        redraw_tui_force(terminal, state, cfg, rpc_host);
+    }
+}
+
+/// Push a fresh `LiquidationEntry` to the in-memory feed, then redraw if the
+/// modal is currently open. Background pushes (modal closed) just update state
+/// silently — the next opening of the modal renders them.
+pub(super) fn handle_liquidation_update(
+    entry: LiquidationEntry,
+    state: &mut TuiState,
+    cfg: &SplineConfig,
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    rpc_host: &str,
+) {
+    state.liquidation_feed_view.push(entry);
+    if matches!(state.trading.input_mode, InputMode::ViewingLiquidations) {
         redraw_tui_force(terminal, state, cfg, rpc_host);
     }
 }

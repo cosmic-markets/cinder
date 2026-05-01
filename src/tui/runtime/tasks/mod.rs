@@ -47,6 +47,7 @@ use super::{TxCtxMsg, L2_EMIT_MIN_INTERVAL, L2_SNAPSHOT_DEPTH, WSS_RETRY_CAP, WS
 mod balances;
 mod connect_flow;
 mod l2_book;
+mod liquidations;
 mod orders;
 mod position_leaderboard;
 mod tx_context;
@@ -55,6 +56,7 @@ mod wallet_stream;
 pub(in crate::tui::runtime) use balances::*;
 pub(in crate::tui::runtime) use connect_flow::*;
 pub(in crate::tui::runtime) use l2_book::*;
+pub(in crate::tui::runtime) use liquidations::*;
 pub(in crate::tui::runtime) use orders::*;
 pub(in crate::tui::runtime) use position_leaderboard::*;
 pub(in crate::tui::runtime) use tx_context::*;

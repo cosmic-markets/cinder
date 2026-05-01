@@ -3,6 +3,7 @@
 use chrono::Utc;
 
 pub mod book;
+pub mod liquidation_feed_view;
 pub mod markers;
 pub mod market;
 pub mod orders_view;
@@ -13,6 +14,7 @@ pub mod tui;
 pub mod updates;
 
 pub use book::*;
+pub use liquidation_feed_view::*;
 pub use markers::*;
 pub use market::*;
 pub use orders_view::*;

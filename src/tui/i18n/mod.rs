@@ -143,6 +143,10 @@ pub struct Strings {
     /// Modal footer hint for the Enter key — "copy trader" / "复制交易方".
     pub top_positions_copy_hint: &'static str,
 
+    // ── Liquidation feed modal ─────────────────────────────────────────────
+    /// Bottom-bar label for the [F] hotkey ("Liquidations" / "强平").
+    pub liquidations_title: &'static str,
+
     // ── Status bar messages — static (no format args) ────────────────────────
     pub st_loading_ctx: &'static str,
     pub st_wallet_disconnected: &'static str,

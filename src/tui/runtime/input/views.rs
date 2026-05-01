@@ -79,6 +79,30 @@ pub(in crate::tui::runtime) fn handle_orders_view_key(
     }
 }
 
+/// Live liquidation feed modal — Up/Down navigate; Esc/F/q close. Rows are
+/// read-only; there's no Enter action since the trader pubkey isn't resolved
+/// in the entry payload.
+pub(in crate::tui::runtime) fn handle_liquidation_feed_view_key(
+    code: KeyCode,
+    state: &mut TuiState,
+) -> KeyAction {
+    match code {
+        KeyCode::Up => {
+            state.liquidation_feed_view.move_up();
+            KeyAction::Redraw
+        }
+        KeyCode::Down => {
+            state.liquidation_feed_view.move_down();
+            KeyAction::Redraw
+        }
+        KeyCode::Esc | KeyCode::Char('F') | KeyCode::Char('q') => {
+            state.trading.input_mode = InputMode::Normal;
+            KeyAction::Redraw
+        }
+        _ => KeyAction::Nothing,
+    }
+}
+
 /// "Top positions on Phoenix" modal — Up/Down navigate; Enter copies the
 /// selected row's trader pubkey to the clipboard (closes the modal so the
 /// status line confirms the copy); Esc/T/q close.

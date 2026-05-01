@@ -840,6 +840,7 @@ name = "cinder"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "bs58",
  "chrono",
  "crossterm",
  "dotenvy",
@@ -862,6 +863,7 @@ dependencies = [
  "solana-signature",
  "solana-signer",
  "solana-transaction",
+ "solana-transaction-status-client-types",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -84,6 +84,17 @@ pub async fn spawn_spline_poller(
         let mut tx_ctx_rx = receivers.tx_ctx_rx;
         let mut orders_rx = receivers.orders_rx;
         let mut top_positions_rx = receivers.top_positions_rx;
+        let mut liquidation_rx = receivers.liquidation_rx;
+
+        // The liquidation feed task is independent of any wallet/market and
+        // lives for the whole process. Toggling the modal doesn't stop it,
+        // so the buffer is warm on first open and survives modal close/reopen.
+        let mut liquidation_task = tasks::spawn_liquidation_feed_task(
+            ws_url.clone(),
+            rpc_http_url_from_env(),
+            configs.clone(),
+            channels.liquidation_tx.clone(),
+        );
 
         let mut balance_interval = tokio::time::interval(Duration::from_millis(1100));
         balance_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -375,6 +386,18 @@ pub async fn spawn_spline_poller(
                             }
                         }
 
+                        liquidation = liquidation_rx.recv() => {
+                            if let Some(entry) = liquidation {
+                                update_handlers::handle_liquidation_update(
+                                    entry,
+                                    &mut state,
+                                    &cfg,
+                                    &mut terminal,
+                                    &rpc_host,
+                                );
+                            }
+                        }
+
                         market_update = market_rx.recv() => {
                             if let Some(update) = market_update {
                                 update_handlers::handle_market_list_update(
@@ -437,10 +460,12 @@ pub async fn spawn_spline_poller(
                     &mut wallet_wss_handle,
                     &mut blockhash_refresh_handle,
                     &mut tx_ctx_task,
+                    &mut liquidation_task,
                     &mut state,
                     &cfg,
                     &balance_http,
                     &channels,
+                    &configs,
                 ) {
                     break 'sub;
                 }
@@ -479,6 +504,7 @@ pub async fn spawn_spline_poller(
             &mut top_positions_handle,
             &mut l2_book_task,
             &mut gti_loader_task,
+            &mut liquidation_task,
             &mut terminal,
         );
     });
