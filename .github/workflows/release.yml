@@ -43,6 +43,7 @@ jobs:
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
+        continue-on-error: true
 
       - name: Build release binary
         run: cargo build --release --locked --bin ${{ env.BINARY_NAME }}
