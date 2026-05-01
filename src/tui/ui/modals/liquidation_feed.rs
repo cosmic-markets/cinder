@@ -162,8 +162,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(size_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(price_str).alignment(Alignment::Right)),
-                Cell::from(e.liquidated_trader.clone())
-                    .style(Style::default().fg(Color::Cyan)),
+                Cell::from(e.liquidated_trader.clone()),
             ])
             .style(row_style)
         })

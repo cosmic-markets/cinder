@@ -80,7 +80,7 @@ const BACKFILL_CONCURRENCY: usize = 1;
 /// shows up in the modal. We do NOT keep paging until N events are found,
 /// because (a) the RPC bottlenecks per-tx fetches and (b) paging deeper just
 /// surfaces stale rows.
-const BACKFILL_TX_FETCH_LIMIT: usize = 10;
+const BACKFILL_TX_FETCH_LIMIT: usize = 15;
 
 /// Limit passed to the single `getSignaturesForAddress` call. Sized large so
 /// the recent window almost always contains at least
