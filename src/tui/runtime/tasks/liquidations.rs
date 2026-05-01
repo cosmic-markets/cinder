@@ -1,13 +1,14 @@
 //! Live liquidation feed task.
 //!
-//! Subscribes (via `logsSubscribe`) to confirmed transactions mentioning
-//! Phoenix's current sole liquidator. For each transaction, we fetch the full
-//! transaction, flatten the inner instructions, and parse
+//! On startup, backfills a short recent window by polling recent successful
+//! transactions mentioning Phoenix's current sole liquidator. Then subscribes
+//! (via `logsSubscribe`) for live updates. For each transaction, we fetch the
+//! full transaction, flatten the inner instructions, and parse
 //! `MarketEvent::Liquidation`s out of the self-CPI event stream. Each
 //! liquidation is converted to display units against the locally-cached
 //! `SplineConfig` map and shipped to the TUI through `liquidation_tx`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +24,7 @@ use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_rpc_client_types::config::{
     RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
 };
@@ -61,6 +63,14 @@ const GET_TX_TIMEOUT: Duration = Duration::from_secs(8);
 /// cannot create an unbounded pile of RPC requests.
 const MAX_CONCURRENT_GET_TX: usize = 8;
 
+/// One-shot startup backfill depth (recent successful txs touching the
+/// liquidator account). This warms the modal even before the first live event.
+const STARTUP_BACKFILL_SIGNATURE_LIMIT: usize = 100;
+
+/// Cap on `get_signatures_for_address_with_config`; used only during startup
+/// backfill.
+const GET_SIGNATURES_TIMEOUT: Duration = Duration::from_secs(8);
+
 /// Spawn the long-running liquidation subscription. Reconnects on its own with
 /// exponential backoff capped at [`WSS_RETRY_CAP`]. The task lives for the
 /// duration of the process; closing the modal does not stop it (so the buffer
@@ -88,8 +98,18 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
 
         let mut backoff = WSS_RETRY_INIT;
         let mut seen_signatures: HashSet<String> = HashSet::with_capacity(SIGNATURE_DEDUP_CAP);
-        let mut seen_order: std::collections::VecDeque<String> =
-            std::collections::VecDeque::with_capacity(SIGNATURE_DEDUP_CAP);
+        let mut seen_order: VecDeque<String> = VecDeque::with_capacity(SIGNATURE_DEDUP_CAP);
+
+        // One-shot startup backfill so the modal has recent rows even if this
+        // process came online after liquidations already happened. We only pull
+        // signatures here; actual transaction fetch/decode starts after the
+        // live subscription is established.
+        let mut startup_backfill_sigs = collect_recent_liquidation_signatures(
+            Arc::clone(&rpc),
+            &mut seen_signatures,
+            &mut seen_order,
+        )
+        .await;
 
         loop {
             let pubsub = match PubsubClient::new(&ws_url).await {
@@ -118,6 +138,26 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
                     continue;
                 }
             };
+
+            // Kick off startup backfill only once, after we already have the
+            // live stream attached.
+            if !startup_backfill_sigs.is_empty() {
+                let signatures = std::mem::take(&mut startup_backfill_sigs);
+                let rpc_clone = Arc::clone(&rpc);
+                let configs_clone = Arc::clone(&configs_by_asset);
+                let tx_clone = tx.clone();
+                tokio::spawn(async move {
+                    for signature in signatures {
+                        fetch_and_emit(
+                            Arc::clone(&rpc_clone),
+                            signature,
+                            Arc::clone(&configs_clone),
+                            tx_clone.clone(),
+                        )
+                        .await;
+                    }
+                });
+            }
 
             while let Some(notif) = stream.next().await {
                 if notif.value.err.is_some() {
@@ -149,7 +189,7 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
 
 fn remember_signature(
     set: &mut HashSet<String>,
-    order: &mut std::collections::VecDeque<String>,
+    order: &mut VecDeque<String>,
     sig: String,
 ) -> bool {
     if !set.insert(sig.clone()) {
@@ -162,6 +202,54 @@ fn remember_signature(
         }
     }
     true
+}
+
+async fn collect_recent_liquidation_signatures(
+    rpc: Arc<RpcClient>,
+    seen_signatures: &mut HashSet<String>,
+    seen_order: &mut VecDeque<String>,
+) -> Vec<String> {
+    let Ok(liquidator) = Pubkey::from_str(PHOENIX_SOLE_LIQUIDATOR) else {
+        warn!("invalid liquidator pubkey; skipping liquidation backfill");
+        return Vec::new();
+    };
+
+    let cfg = GetConfirmedSignaturesForAddress2Config {
+        before: None,
+        until: None,
+        limit: Some(STARTUP_BACKFILL_SIGNATURE_LIMIT),
+        commitment: Some(CommitmentConfig::confirmed()),
+        // `get_signatures_for_address_with_config` uses this compatibility
+        // config type and maps it to the JSON-RPC config under the hood.
+    };
+    let fetch = rpc.get_signatures_for_address_with_config(&liquidator, cfg);
+    let signatures = match tokio::time::timeout(GET_SIGNATURES_TIMEOUT, fetch).await {
+        Ok(Ok(rows)) => rows,
+        Ok(Err(e)) => {
+            warn!(error = %e, "liquidation startup backfill signatures RPC failed");
+            return Vec::new();
+        }
+        Err(_) => {
+            warn!("liquidation startup backfill signatures RPC timed out");
+            return Vec::new();
+        }
+    };
+
+    // RPC returns newest-first. Replay oldest->newest so the feed's push_front
+    // ordering remains newest-first after the backfill is inserted.
+    let mut ordered_sigs = Vec::with_capacity(signatures.len());
+    for row in signatures {
+        // `err: null` means success in `getSignaturesForAddress`. We backfill
+        // only successful signatures and skip failures.
+        if row.err.is_some() {
+            continue;
+        }
+        let signature = row.signature;
+        if remember_signature(seen_signatures, seen_order, signature.clone()) {
+            ordered_sigs.push(signature);
+        }
+    }
+    ordered_sigs.into_iter().rev().collect()
 }
 
 async fn fetch_and_emit(
