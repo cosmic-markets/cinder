@@ -110,6 +110,11 @@ pub static CN: Strings = Strings {
 
     top_positions_title: "顶级持仓",
     liquidations_title: "强平",
+    liq_feed_live: "实时",
+    liq_feed_scroll: "滚动",
+    liq_feed_waiting: "等待强平\u{2026}",
+    liq_feed_status_closed: "已平",
+    liq_feed_status_partial: "部分",
     top_positions_loading: "正在从链上加载顶级持仓\u{2026}",
     top_positions_empty: "Phoenix 当前无活跃持仓",
     top_positions_rank: "#",

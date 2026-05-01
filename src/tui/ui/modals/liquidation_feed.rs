@@ -23,6 +23,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
 
     f.render_widget(ratatui::widgets::Clear, popup_area);
 
+    let s = strings();
     let title = Line::from(vec![
         Span::styled(
             " 🐦‍🔥 Phoenix ",
@@ -31,7 +32,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            "liquidations ",
+            format!("{} ", s.liquidations_title),
             Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
@@ -41,9 +42,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
-            "live ",
+            format!("{} ", s.liq_feed_live),
             Style::default()
-                .fg(Color::LightRed)
+                .fg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD),
         ),
     ]);
@@ -55,14 +56,20 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("scroll  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{}  ", s.liq_feed_scroll),
+            Style::default().fg(Color::DarkGray),
+        ),
         Span::styled(
             "Esc ",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("close ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{} ", s.close),
+            Style::default().fg(Color::DarkGray),
+        ),
     ])
     .left_aligned();
 
@@ -77,7 +84,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
 
     if view.entries.is_empty() {
         let empty = Paragraph::new(Line::from(Span::styled(
-            " waiting for liquidations\u{2026}",
+            format!(" {}", s.liq_feed_waiting),
             Style::default().fg(Color::DarkGray),
         )));
         f.render_widget(empty, inner);
@@ -111,9 +118,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             let mark_str = format!("${}", fmt_price(e.mark_price, e.price_decimals));
             let notional_str = format!("${}", fmt_compact(e.notional));
             let status_label = if e.position_closed {
-                "CLOSED"
+                s.liq_feed_status_closed
             } else {
-                "PARTIAL"
+                s.liq_feed_status_partial
             };
             let status_color = if e.position_closed {
                 Color::LightRed
@@ -154,13 +161,13 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
         .add_modifier(Modifier::BOLD);
     let header = Row::new(vec![
         Cell::from(""),
-        Cell::from("Time"),
-        Cell::from("Market"),
-        Cell::from("Trader"),
-        Cell::from(Line::from("Size").alignment(Alignment::Right)),
-        Cell::from(Line::from("Mark").alignment(Alignment::Right)),
-        Cell::from(Line::from("Notional").alignment(Alignment::Right)),
-        Cell::from("Status"),
+        Cell::from(s.ledger_col_time),
+        Cell::from(s.market),
+        Cell::from(s.trader),
+        Cell::from(Line::from(s.size).alignment(Alignment::Right)),
+        Cell::from(Line::from(s.mark).alignment(Alignment::Right)),
+        Cell::from(Line::from(s.notional_col).alignment(Alignment::Right)),
+        Cell::from(s.status),
     ])
     .style(header_style);
 

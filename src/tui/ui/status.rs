@@ -55,69 +55,62 @@ pub(super) fn render_status_tray(
     ])
     .left_aligned();
 
-    let quit_hint = Line::from(vec![
-        Span::styled(
-            " [o]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.orders),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            "[p]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.positions),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            "[T]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.top_positions_title),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            "[F]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.liquidations_title),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            "[m]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.markets),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            "[q]",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", s.quit),
-            Style::default().fg(Color::DarkGray),
-        ),
-    ])
-    .right_aligned();
+    // Hotkey row labels — full forms by default, with compact fallbacks for
+    // narrow terminals (e.g. 80x24) where the full row would overflow and
+    // truncate. Chinese labels are mostly already short; only the four-glyph
+    // "top positions" needs squeezing.
+    let full_labels: [&str; 6] = [
+        s.orders,
+        s.positions,
+        s.top_positions_title,
+        s.liquidations_title,
+        s.markets,
+        s.quit,
+    ];
+    let short_labels: [&str; 6] = match super::super::config::current_user_config().language {
+        super::super::config::Language::Chinese => [
+            s.orders,
+            s.positions,
+            "顶级",
+            s.liquidations_title,
+            s.markets,
+            s.quit,
+        ],
+        super::super::config::Language::English => {
+            ["ord", "pos", "top", "liq", "mkt", "quit"]
+        }
+    };
+
+    let build_quit_hint = |labels: &[&str; 6]| -> Line<'static> {
+        let key_style = Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD);
+        let label_style = Style::default().fg(Color::DarkGray);
+        Line::from(vec![
+            Span::styled(" [o]", key_style),
+            Span::styled(format!(" {} ", labels[0]), label_style),
+            Span::styled("[p]", key_style),
+            Span::styled(format!(" {} ", labels[1]), label_style),
+            Span::styled("[T]", key_style),
+            Span::styled(format!(" {} ", labels[2]), label_style),
+            Span::styled("[F]", key_style),
+            Span::styled(format!(" {} ", labels[3]), label_style),
+            Span::styled("[m]", key_style),
+            Span::styled(format!(" {} ", labels[4]), label_style),
+            Span::styled("[q]", key_style),
+            Span::styled(format!(" {} ", labels[5]), label_style),
+        ])
+        .right_aligned()
+    };
+
+    let full_hint = build_quit_hint(&full_labels);
+    // Reserve room for the two border columns plus the bottom-left RPC label.
+    let reserved = (rpc_bottom_left.width() as u16).saturating_add(2);
+    let quit_hint = if (full_hint.width() as u16).saturating_add(reserved) > area.width {
+        build_quit_hint(&short_labels)
+    } else {
+        full_hint
+    };
 
     let block = Block::default()
         .title_top(status_label)

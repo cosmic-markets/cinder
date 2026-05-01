@@ -29,7 +29,7 @@ fn registered_domain(host: &str) -> String {
         Some((i, _)) => &host[i + 1..],
         None => host,
     };
-    format!("⚙️  {}", domain)
+    domain.to_string()
 }
 
 pub fn rpc_host_from_urlish(input: &str) -> String {
