@@ -10,11 +10,11 @@ use phoenix_rise::{
 };
 use tracing::warn;
 
-use crate::spline::math::pct_change_24h;
-pub use crate::spline::MarketInfo;
-use crate::spline::{
-    build_spline_config, compute_price_decimals, spawn_spline_poller, MarketListUpdate,
-    MarketStatUpdate, SplineConfig,
+use crate::tui::math::pct_change_24h;
+pub use crate::tui::MarketInfo;
+use crate::tui::{
+    build_spline_config, compute_price_decimals, restore_terminal, setup_terminal, spawn_splash,
+    spawn_spline_poller, MarketListUpdate, MarketStatUpdate, SplineConfig,
 };
 
 const MARKETS_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -183,7 +183,17 @@ fn build_spline_configs(
     out
 }
 
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+struct LoadedSetup {
+    http: Arc<PhoenixHttpClient>,
+    ws: Arc<PhoenixClient>,
+    market_infos: Vec<MarketInfo>,
+    spline_configs: HashMap<String, SplineConfig>,
+    symbols: Vec<String>,
+    stat_tx: tokio::sync::mpsc::Sender<MarketStatUpdate>,
+    stat_rx: tokio::sync::mpsc::Receiver<MarketStatUpdate>,
+}
+
+async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
     let http = Arc::new(PhoenixHttpClient::new_from_env()?);
     let ws = Arc::new(PhoenixClient::new_from_env().await?);
 
@@ -199,9 +209,56 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let market_infos = build_market_infos(&tradable_markets, &snapshots);
     let spline_configs = build_spline_configs(&tradable_markets);
 
+    Ok(LoadedSetup {
+        http,
+        ws,
+        market_infos,
+        spline_configs,
+        symbols,
+        stat_tx,
+        stat_rx,
+    })
+}
+
+pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // Bring up the alt-screen terminal up-front so the splash can paint over
+    // the otherwise blank startup window.
+    let terminal = setup_terminal()?;
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let splash = spawn_splash(terminal, stop_rx);
+
+    let setup_result = load_setup().await;
+
+    // Stop the splash and reclaim the terminal regardless of outcome.
+    let _ = stop_tx.send(());
+    let mut terminal = match splash.await {
+        Ok(t) => t,
+        Err(e) => {
+            crate::tui::cleanup_terminal();
+            return Err(e.into());
+        }
+    };
+
+    let LoadedSetup {
+        http,
+        ws,
+        market_infos,
+        spline_configs,
+        symbols,
+        stat_tx,
+        stat_rx,
+    } = match setup_result {
+        Ok(s) => s,
+        Err(e) => {
+            restore_terminal(&mut terminal);
+            return Err(e);
+        }
+    };
+
     let (market_tx, market_rx) = tokio::sync::mpsc::channel::<MarketListUpdate>(16);
 
     let tui_task = spawn_spline_poller(
+        terminal,
         &ws,
         market_infos,
         spline_configs,
@@ -293,6 +350,6 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    crate::spline::cleanup_terminal();
+    crate::tui::cleanup_terminal();
     Ok(())
 }

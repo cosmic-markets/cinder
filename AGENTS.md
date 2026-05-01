@@ -1,6 +1,6 @@
 # Cinder - Phoenix Perpetuals TUI
 
-Rust terminal trading client for the Phoenix perpetuals exchange on Solana. Renders a ratatui TUI with live price charts, order book, market selection, and position/order management. Not the Elixir/Phoenix web stack and not a JavaScript SPA framework; directory naming is historical.
+Rust terminal trading client for the Phoenix perpetuals exchange on Solana. Renders a ratatui TUI with live price charts, order book, market selection, and position/order management. Not the Elixir/Phoenix web stack and not a JavaScript SPA framework.
 
 ## Directory Structure
 
@@ -16,20 +16,18 @@ phx-ember/
     ├── main.rs             # Binary entry — init .env, tracing, calls cinder::run()
     ├── lib.rs              # Crate root
     ├── app.rs              # Startup orchestration (HTTP markets + WS stats + TUI poller)
-    └── spline/
+    └── tui/
         ├── mod.rs          # Module root
         ├── config.rs       # UserConfig, SplineConfig, env/keypair helpers
         ├── constants.rs    # Colors, MAX_PRICE_HISTORY, TOP_N, ORDER_SIZE_PRESETS
         ├── format.rs       # fmt_price, fmt_size, fmt_balance, compact notation
-        ├── gti.rs          # Global Trader Index cache
-        ├── i18n.rs         # User-facing strings (English + Chinese)
+        ├── i18n/           # User-facing strings (English + Chinese)
         ├── math.rs         # Tick/lot conversions, percent change
-        ├── parse.rs        # On-chain spline account decode
         ├── terminal.rs     # Crossterm/ratatui setup and teardown
-        ├── top_positions.rs # On-chain top-N position scan
-        ├── trading/        # Trading domain types (Side, OrderKind, PositionInfo, ...)
-        ├── poller/         # TUI event loop and async tasks
-        ├── render/         # Frame rendering (chart, orderbook, trading panel, modals)
+        ├── data/           # On-chain decoders, GTI cache, position leaderboard
+        ├── trading/        # Trading types (Side, OrderKind, PositionInfo, ...)
+        ├── runtime/        # TUI event loop, input handlers, async tasks
+        ├── ui/             # Frame rendering (chart, orderbook, trade panel, modals)
         ├── state/          # TUI state containers
         └── tx/             # Solana transaction builders and submission
 ```
@@ -67,18 +65,18 @@ docker compose run --rm cinder
 app::run()
   ├── Phoenix HTTP API  →  fetch tradable markets at startup + every 60s
   ├── Phoenix WebSocket →  per-symbol stats (price, volume, 24h change)
-  └── Spline TUI poller →  Solana accountSubscribe (WSS) for on-chain state
+  └── TUI runtime →  Solana accountSubscribe (WSS) for on-chain spline state
 ```
 
 **Startup** (`src/app.rs`): loads Active/PostOnly markets from Phoenix HTTP, subscribes per-symbol to WebSocket stats, builds `SplineConfig` entries, launches the ratatui TUI. A background task refreshes markets every 60s.
 
-**TUI event loop** (`src/spline/poller/`): crossterm events → key handlers in `input.rs`; order submission in `submit.rs`; background wallet/market refresh tasks in `tasks.rs`.
+**TUI event loop** (`src/tui/runtime/`): crossterm events → key handlers in `input/`; order submission in `submit.rs`; background wallet/market refresh tasks in `tasks/`.
 
-**Rendering** (`src/spline/render/`): each frame paints chart, order book, trading panel, status strip, and optional modal overlays (market selector, positions view, confirmation prompts).
+**Rendering** (`src/tui/ui/`): each frame paints chart, order book, trading panel, status strip, and optional modal overlays (market selector, positions view, confirmation prompts).
 
-**Transactions** (`src/spline/tx/`): builds and signs Solana transactions for market/limit/stop orders, close position, USDC deposit/withdrawal. `compute_budget.rs` estimates fees; `confirmation.rs` drives the confirm-before-send modal.
+**Transactions** (`src/tui/tx/`): builds and signs Solana transactions for market/limit/stop orders, close position, USDC deposit/withdrawal. `compute_budget.rs` estimates fees; `confirmation.rs` drives the confirm-before-send modal.
 
-**State** (`src/spline/state/`): `TuiState`, `TradingState`, `MarketSelector`, `PositionsView`, `TradeMarker` — all owned by the poller and passed to render.
+**State** (`src/tui/state/`): `TuiState`, `TradingState`, `MarketSelector`, `PositionsView`, `TradeMarker` — all owned by the runtime and passed to render.
 
 ## Style
 
@@ -86,5 +84,5 @@ This crate mirrors the [phx](https://github.com/skynetcap/phx) SDK conventions:
 
 - `rustfmt.toml` uses stable rustfmt settings so local `cargo fmt --all --check` matches CI.
 - Every module file opens with a `//!` doc header describing its role.
-- One concept per file: enums, structs, and free functions live next to their tests in focused modules under `spline/trading/`, `spline/state/`, `spline/tx/`, etc.
+- One concept per file: enums, structs, and free functions live next to their tests in focused modules under `tui/trading/`, `tui/state/`, `tui/tx/`, etc.
 - Cargo manifest uses table-aligned key=value formatting in `[package]` and similar blocks.
