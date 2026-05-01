@@ -79,12 +79,15 @@ pub(in crate::tui::runtime) fn handle_orders_view_key(
     }
 }
 
-/// Live liquidation feed modal — Up/Down navigate; Esc/F/q close. Rows are
-/// read-only; there's no Enter action since the trader pubkey isn't resolved
-/// in the entry payload.
+/// Live liquidation feed modal — Up/Down navigate; Enter switches to the
+/// market where the selected liquidation occurred (no-op if the row's symbol
+/// failed to resolve at decode time, or already matches the active market);
+/// Esc/F/q close.
 pub(in crate::tui::runtime) fn handle_liquidation_feed_view_key(
     code: KeyCode,
     state: &mut TuiState,
+    cfg: &SplineConfig,
+    pending_market_switch: &mut Option<String>,
 ) -> KeyAction {
     match code {
         KeyCode::Up => {
@@ -93,6 +96,26 @@ pub(in crate::tui::runtime) fn handle_liquidation_feed_view_key(
         }
         KeyCode::Down => {
             state.liquidation_feed_view.move_down();
+            KeyAction::Redraw
+        }
+        KeyCode::Enter => {
+            let sym = state
+                .liquidation_feed_view
+                .entries
+                .get(state.liquidation_feed_view.selected_index)
+                .map(|e| e.symbol.clone())
+                .unwrap_or_default();
+            if !sym.is_empty() && sym != cfg.symbol {
+                state.trading.input_mode = InputMode::Normal;
+                state.trading.set_status_title(format!(
+                    "{} {}\u{2026}",
+                    strings().st_switching_to,
+                    sym
+                ));
+                *pending_market_switch = Some(sym);
+                return KeyAction::BreakInner;
+            }
+            state.trading.input_mode = InputMode::Normal;
             KeyAction::Redraw
         }
         KeyCode::Esc | KeyCode::Char('F') | KeyCode::Char('q') => {

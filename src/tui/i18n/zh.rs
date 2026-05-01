@@ -113,6 +113,7 @@ pub static CN: Strings = Strings {
     liq_feed_live: "实时",
     liq_feed_backfilling: "回填中\u{2026}",
     liq_feed_scroll: "滚动",
+    liq_feed_open_market: "切换市场",
     liq_feed_waiting: "等待强平\u{2026}",
     top_positions_loading: "正在从链上加载顶级持仓\u{2026}",
     top_positions_empty: "Phoenix 当前无活跃持仓",

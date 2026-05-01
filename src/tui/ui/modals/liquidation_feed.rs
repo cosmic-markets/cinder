@@ -83,6 +83,16 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
+            "Enter ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{}  ", s.liq_feed_open_market),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
             "Esc ",
             Style::default()
                 .fg(Color::Cyan)

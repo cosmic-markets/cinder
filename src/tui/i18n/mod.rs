@@ -153,6 +153,9 @@ pub struct Strings {
     pub liq_feed_backfilling: &'static str,
     /// Footer hint paired with ↑↓ ("scroll" / "滚动").
     pub liq_feed_scroll: &'static str,
+    /// Footer hint paired with Enter ("open market" / "切换市场") — switches
+    /// the active market to the one the selected liquidation occurred in.
+    pub liq_feed_open_market: &'static str,
     /// Placeholder shown before the first liquidation arrives.
     pub liq_feed_waiting: &'static str,
 
