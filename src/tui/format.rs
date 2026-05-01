@@ -58,6 +58,25 @@ pub fn fmt_pnl_compact(abs_usd: f64) -> String {
     fmt_compact(abs_usd)
 }
 
+/// Compact "time since" formatter for relative timestamps. Picks the largest
+/// unit that fits without going to a fractional value: `5s`, `42m`, `3h`,
+/// `2d`, `4w`. Future timestamps (clock skew) clamp to `0s`. Used by the
+/// liquidation feed's age column, which redraws on the runtime's 1Hz tick.
+pub fn fmt_time_since_secs(elapsed_secs: i64) -> String {
+    let s = elapsed_secs.max(0);
+    if s < 60 {
+        format!("{s}s")
+    } else if s < 3600 {
+        format!("{}m", s / 60)
+    } else if s < 86_400 {
+        format!("{}h", s / 3600)
+    } else if s < 604_800 {
+        format!("{}d", s / 86_400)
+    } else {
+        format!("{}w", s / 604_800)
+    }
+}
+
 pub fn pubkey_trader_prefix(trader: &PhoenixPubkey) -> String {
     let s = trader.to_string();
     s[..4.min(s.len())].to_owned()
@@ -110,6 +129,21 @@ mod tests {
         assert_eq!(fmt_pnl_compact(12_345.67), "12.35K");
         assert_eq!(fmt_pnl_compact(1_000_000.0), "1.00M");
         assert_eq!(fmt_pnl_compact(1_500_000_000.0), "1.50B");
+    }
+
+    #[test]
+    fn time_since_picks_largest_fitting_unit() {
+        assert_eq!(fmt_time_since_secs(0), "0s");
+        assert_eq!(fmt_time_since_secs(-5), "0s"); // clock skew clamps
+        assert_eq!(fmt_time_since_secs(59), "59s");
+        assert_eq!(fmt_time_since_secs(60), "1m");
+        assert_eq!(fmt_time_since_secs(3599), "59m");
+        assert_eq!(fmt_time_since_secs(3600), "1h");
+        assert_eq!(fmt_time_since_secs(86_399), "23h");
+        assert_eq!(fmt_time_since_secs(86_400), "1d");
+        assert_eq!(fmt_time_since_secs(604_799), "6d");
+        assert_eq!(fmt_time_since_secs(604_800), "1w");
+        assert_eq!(fmt_time_since_secs(2_419_200), "4w");
     }
 
     #[test]

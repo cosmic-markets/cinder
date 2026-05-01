@@ -17,7 +17,9 @@ use super::super::data::GtiHandle;
 use super::super::data::{parse_spline_data, parse_spline_sequence};
 use super::super::format::pubkey_trader_short;
 use super::super::i18n::strings;
-use super::super::state::{BalanceUpdate, MarketListUpdate, TuiState, TxStatusMsg};
+use super::super::state::{
+    BalanceUpdate, LiquidationFeedMsg, MarketListUpdate, TuiState, TxStatusMsg,
+};
 use super::super::trading::{InputMode, OrderInfo, TopPositionEntry, TradingSide};
 use super::super::tx::TxContext;
 use super::redraw::{redraw_tui, redraw_tui_force};
@@ -145,6 +147,28 @@ pub(super) fn handle_position_leaderboard_update(
     state.top_positions_view.loaded = true;
     state.top_positions_view.clamp_index();
     if matches!(state.trading.input_mode, InputMode::ViewingTopPositions) {
+        redraw_tui_force(terminal, state, cfg, rpc_host);
+    }
+}
+
+/// Apply a fresh `LiquidationFeedMsg` to the in-memory feed, then redraw if
+/// the modal is currently open. Background pushes (modal closed) just update
+/// state silently — the next opening of the modal renders them. Handles both
+/// row arrivals and the one-shot backfill-complete signal.
+pub(super) fn handle_liquidation_update(
+    msg: LiquidationFeedMsg,
+    state: &mut TuiState,
+    cfg: &SplineConfig,
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    rpc_host: &str,
+) {
+    match msg {
+        LiquidationFeedMsg::Entry(entry) => state.liquidation_feed_view.push(entry),
+        LiquidationFeedMsg::BackfillComplete => {
+            state.liquidation_feed_view.is_backfilling = false;
+        }
+    }
+    if matches!(state.trading.input_mode, InputMode::ViewingLiquidations) {
         redraw_tui_force(terminal, state, cfg, rpc_host);
     }
 }
@@ -400,10 +424,18 @@ pub(super) fn handle_stat_update(
     let is_active_market = update.symbol == cfg.symbol;
     let pv_touched = state.positions_view.apply_mark_price(&update);
     if is_active_market {
+        state
+            .market_stats_cache
+            .insert(update.symbol.clone(), update.clone());
         state.market_stats = Some(update);
         reconcile_active_position_mark(state);
-    } else if matches!(state.trading.input_mode, InputMode::SelectingMarket) {
-        redraw_tui_force(terminal, state, cfg, rpc_host);
+    } else {
+        state
+            .market_stats_cache
+            .insert(update.symbol.clone(), update);
+        if matches!(state.trading.input_mode, InputMode::SelectingMarket) {
+            redraw_tui_force(terminal, state, cfg, rpc_host);
+        }
     }
 
     let should_redraw_feed = is_active_market

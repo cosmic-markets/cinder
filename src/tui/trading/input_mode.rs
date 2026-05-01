@@ -20,6 +20,9 @@ pub enum InputMode {
     /// ActiveTraderBuffer.
     ViewingTopPositions,
     ViewingOrders,
+    /// Live liquidation feed modal (toggled with `F`) — shows recent
+    /// `LiquidationEvent`s parsed from on-chain Phoenix Eternal transactions.
+    ViewingLiquidations,
     ViewingLedger,
     ViewingConfig,
     EditingRpcUrl,

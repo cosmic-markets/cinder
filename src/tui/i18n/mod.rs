@@ -143,6 +143,22 @@ pub struct Strings {
     /// Modal footer hint for the Enter key — "copy trader" / "复制交易方".
     pub top_positions_copy_hint: &'static str,
 
+    // ── Liquidation feed modal ─────────────────────────────────────────────
+    /// Bottom-bar label for the [F] hotkey ("Liquidations" / "强平").
+    pub liquidations_title: &'static str,
+    /// Header status indicator next to the entry counter ("live" / "实时").
+    pub liq_feed_live: &'static str,
+    /// Header status indicator shown while the startup backfill is still
+    /// streaming rows ("backfilling…" / "回填中…").
+    pub liq_feed_backfilling: &'static str,
+    /// Footer hint paired with ↑↓ ("scroll" / "滚动").
+    pub liq_feed_scroll: &'static str,
+    /// Footer hint paired with Enter ("open market" / "切换市场") — switches
+    /// the active market to the one the selected liquidation occurred in.
+    pub liq_feed_open_market: &'static str,
+    /// Placeholder shown before the first liquidation arrives.
+    pub liq_feed_waiting: &'static str,
+
     // ── Status bar messages — static (no format args) ────────────────────────
     pub st_loading_ctx: &'static str,
     pub st_wallet_disconnected: &'static str,

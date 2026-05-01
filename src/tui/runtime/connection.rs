@@ -94,10 +94,12 @@ pub(super) fn handle_full_rpc_reconnect(
     wallet_wss_handle: &mut Option<tokio::task::JoinHandle<()>>,
     blockhash_refresh_handle: &mut Option<tokio::task::JoinHandle<()>>,
     tx_ctx_task: &mut Option<tokio::task::JoinHandle<()>>,
+    liquidation_task: &mut tokio::task::JoinHandle<()>,
     state: &mut TuiState,
     cfg: &SplineConfig,
     balance_http: &Arc<PhoenixHttpClient>,
     channels: &Channels,
+    configs: &std::collections::HashMap<String, SplineConfig>,
 ) -> bool {
     if !*pending_full_reconnect {
         return false;
@@ -120,6 +122,18 @@ pub(super) fn handle_full_rpc_reconnect(
     gti_refresh.notify_one();
     abort_handle(wallet_wss_handle);
     abort_handle(blockhash_refresh_handle);
+
+    // Liquidation feed task captures `ws_url`/`rpc_url` at spawn time, so
+    // restart it on RPC change. The bounded buffer in
+    // `LiquidationFeedView` already holds prior history, so the modal stays
+    // populated across the swap.
+    liquidation_task.abort();
+    *liquidation_task = tasks::spawn_liquidation_feed_task(
+        ws_url.clone(),
+        rpc_http_url_from_env(),
+        configs.clone(),
+        channels.liquidation_tx.clone(),
+    );
 
     if let Some(kp) = state.trading.keypair.clone() {
         state.trading.tx_context = None;
@@ -196,6 +210,7 @@ pub(super) fn cleanup_tasks(
     top_positions_handle: &mut Option<tokio::task::JoinHandle<()>>,
     l2_book_task: &mut tokio::task::JoinHandle<()>,
     gti_loader_task: &mut tokio::task::JoinHandle<()>,
+    liquidation_task: &mut tokio::task::JoinHandle<()>,
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
 ) {
     abort_handle(wallet_wss_handle);
@@ -206,6 +221,7 @@ pub(super) fn cleanup_tasks(
     abort_handle(top_positions_handle);
     l2_book_task.abort();
     gti_loader_task.abort();
+    liquidation_task.abort();
     restore_terminal(terminal);
 }
 

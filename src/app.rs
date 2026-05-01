@@ -104,6 +104,12 @@ async fn subscribe_market_stats(
                         change_24h: compute_change(&update),
                     },
                 );
+                // Also forward the captured update into the runtime channel so
+                // the TUI's per-symbol stats cache is hot before the first
+                // frame renders. Without this, the active market's header
+                // briefly shows "Waiting for market data…" until Phoenix's
+                // next periodic push (which can be several seconds out).
+                let _ = stat_tx.try_send(update);
             }
         }
         remaining_rxs.push((sym, rx));
@@ -191,6 +197,10 @@ struct LoadedSetup {
     symbols: Vec<String>,
     stat_tx: tokio::sync::mpsc::Sender<MarketStatUpdate>,
     stat_rx: tokio::sync::mpsc::Receiver<MarketStatUpdate>,
+    // Dropping these unsubscribes the per-market stats streams. Must outlive
+    // `run()` — otherwise the order-book header is stuck on "Waiting for
+    // market data…" because no stat updates ever flow.
+    stat_handles: Vec<PhoenixClientSubscriptionHandle>,
 }
 
 async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
@@ -203,7 +213,7 @@ async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
 
     // Bounded buffer; 512 × stat payload was unused headroom on typical machines.
     let (stat_tx, stat_rx) = tokio::sync::mpsc::channel::<MarketStatUpdate>(128);
-    let (snapshots, _stat_handles) =
+    let (snapshots, stat_handles) =
         subscribe_market_stats(&ws, &symbols, &stat_tx, Duration::from_secs(3)).await;
 
     let market_infos = build_market_infos(&tradable_markets, &snapshots);
@@ -217,6 +227,7 @@ async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
         symbols,
         stat_tx,
         stat_rx,
+        stat_handles,
     })
 }
 
@@ -247,6 +258,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         symbols,
         stat_tx,
         stat_rx,
+        stat_handles: _stat_handles,
     } = match setup_result {
         Ok(s) => s,
         Err(e) => {

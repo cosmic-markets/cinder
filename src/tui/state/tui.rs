@@ -9,6 +9,7 @@ use super::super::data::GtiCache;
 use super::super::data::ParsedSplineData;
 use super::super::format::pubkey_trader_prefix;
 use super::book::{BookRow, ClobLevel, MergedBook, RowSource};
+use super::liquidation_feed_view::LiquidationFeedView;
 use super::markers::{OrderChartMarker, TradeMarker};
 use super::market::{MarketInfo, MarketSelector};
 use super::orders_view::OrdersView;
@@ -19,6 +20,11 @@ use super::trade_panel::TradingState;
 pub struct TuiState {
     pub price_history: VecDeque<f64>,
     pub market_stats: Option<phoenix_rise::MarketStatsUpdate>,
+    /// Most-recent `MarketStatsUpdate` per symbol. Populated for every market
+    /// the stats stream emits, not just the active one, so a market switch can
+    /// seed the header instantly instead of flashing "Waiting for market
+    /// data…" until the next push for the new market arrives.
+    pub market_stats_cache: HashMap<String, phoenix_rise::MarketStatsUpdate>,
     /// Last Phoenix CLOB L2 snapshot (bids best-first, asks best-first) for the
     /// active market. Poller filters by symbol before writing these, so
     /// stale rows don't appear during market switches.
@@ -40,6 +46,9 @@ pub struct TuiState {
     /// Top-N largest positions across the protocol (on-chain ActiveTraderBuffer
     /// scan).
     pub top_positions_view: TopPositionsView,
+    /// Live liquidation feed: most-recent `LiquidationEvent`s decoded from
+    /// inner instructions on Phoenix Eternal txs.
+    pub liquidation_feed_view: LiquidationFeedView,
     /// One chart marker per active-market open order, keyed by `(symbol,
     /// order_sequence_number)`. Kept separate from `orders_view` because it
     /// tracks chart-geometry state (x-coordinate that scrolls with
@@ -64,6 +73,7 @@ impl TuiState {
         Self {
             price_history: VecDeque::with_capacity(MAX_PRICE_HISTORY),
             market_stats: None,
+            market_stats_cache: HashMap::new(),
             clob_bids: Vec::new(),
             clob_asks: Vec::new(),
             merged_book: MergedBook::default(),
@@ -76,6 +86,7 @@ impl TuiState {
             positions_view: PositionsView::new(),
             orders_view: OrdersView::new(),
             top_positions_view: TopPositionsView::new(),
+            liquidation_feed_view: LiquidationFeedView::new(),
             order_chart_markers: HashMap::new(),
             switching_to: None,
             chart_data_cache: Vec::with_capacity(MAX_PRICE_HISTORY),
@@ -88,11 +99,22 @@ impl TuiState {
     /// Marks a market switch in-flight. Old chart/book data stays visible
     /// until [`complete_market_switch`](Self::complete_market_switch) is called
     /// when the first WSS payload for the new market arrives.
+    ///
+    /// `merged_book` is intentionally not reset — the user has asked to keep
+    /// the previous market's order book visible during the switch rather than
+    /// flashing an empty book. `clob_*` are cleared so the next rebuild after
+    /// the switch completes doesn't carry stale CLOB rows from the prior
+    /// market alongside fresh spline rows; while `switching_to` is set,
+    /// [`rebuild_merged_book`](Self::rebuild_merged_book) is a no-op so any
+    /// CLOB writes that arrive mid-switch don't pollute the stale view.
     pub fn begin_market_switch(&mut self, target_symbol: &str) {
         self.switching_to = Some(target_symbol.to_string());
         self.clob_bids.clear();
         self.clob_asks.clear();
-        self.merged_book = MergedBook::default();
+        // Seed the header from the cache so the user doesn't see the old
+        // market's numbers (or "Waiting for market data…") under the new
+        // symbol. Cache miss → None, which is the same fallback as before.
+        self.market_stats = self.market_stats_cache.get(target_symbol).cloned();
         // Clear per-market trading state that shouldn't carry over.
         self.trading.position = None;
         self.trading.order_kind = super::super::trading::OrderKind::Market;
@@ -113,6 +135,14 @@ impl TuiState {
         show_clob: bool,
         gti_cache: Option<&GtiCache>,
     ) {
+        // Mid-switch: keep the prior merged book on screen. CLOB writes that
+        // arrive before the first spline payload (or vice versa) would
+        // otherwise produce a mixed-source book under the new symbol — visibly
+        // wrong. `complete_market_switch` clears `switching_to`, after which
+        // the next call here renders fresh data.
+        if self.switching_to.is_some() {
+            return;
+        }
         let mut bid_rows: Vec<BookRow> = Vec::new();
         let mut ask_rows: Vec<BookRow> = Vec::new();
 
@@ -209,7 +239,11 @@ impl TuiState {
         // be stale).
         self.order_chart_markers.clear();
         self.last_parsed = None;
-        self.market_stats = None;
+        // Note: `market_stats` is intentionally not cleared here — it was
+        // already seeded from the cache in `begin_market_switch` and live
+        // stat updates keep refreshing it. Clearing here would cause a
+        // visible "Waiting for market data…" flash between the first spline
+        // payload and the next stats push.
         self.last_slot = 0;
         self.chart_clock_hms = Utc::now().format("%H:%M:%S").to_string();
         self.chart_data_cache.clear();

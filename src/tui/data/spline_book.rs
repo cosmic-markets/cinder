@@ -55,8 +55,14 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
         let mid_ticks = spline.mid_price;
         let mid = ticks_to_price(mid_ticks, tick_size, bld);
 
-        let n_bid = (spline.bid_num_regions as usize).min(spline.bid_regions.len());
-        for region in spline.bid_regions.iter().take(n_bid) {
+        // Skip exhausted regions: as a spline rolls, `bid_offset` advances past
+        // filled regions whose stored prices are stale. Including them here was
+        // making the displayed book appear crossed.
+        let bid_start = (spline.bid_offset as usize).min(spline.bid_regions.len());
+        let bid_end = (spline.bid_num_regions as usize)
+            .min(spline.bid_regions.len())
+            .max(bid_start);
+        for region in &spline.bid_regions[bid_start..bid_end] {
             if !region_has_liquidity(region) {
                 continue;
             }
@@ -74,8 +80,11 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             bid_rows.push((trader, start, end, density, filled, total));
         }
 
-        let n_ask = (spline.ask_num_regions as usize).min(spline.ask_regions.len());
-        for region in spline.ask_regions.iter().take(n_ask) {
+        let ask_start = (spline.ask_offset as usize).min(spline.ask_regions.len());
+        let ask_end = (spline.ask_num_regions as usize)
+            .min(spline.ask_regions.len())
+            .max(ask_start);
+        for region in &spline.ask_regions[ask_start..ask_end] {
             if !region_has_liquidity(region) {
                 continue;
             }

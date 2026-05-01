@@ -109,6 +109,12 @@ pub static EN: Strings = Strings {
     ledger_copy_failed: "Could not copy to clipboard",
 
     top_positions_title: "top positions",
+    liquidations_title: "liquidations",
+    liq_feed_live: "live",
+    liq_feed_backfilling: "backfilling\u{2026}",
+    liq_feed_scroll: "scroll",
+    liq_feed_open_market: "open market",
+    liq_feed_waiting: "waiting for liquidations\u{2026}",
     top_positions_loading: "Loading top positions from on-chain\u{2026}",
     top_positions_empty: "No active positions on Phoenix",
     top_positions_rank: "#",
