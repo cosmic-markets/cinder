@@ -31,7 +31,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     let now = Utc::now();
     // Height = 2 borders + 1 header + visible data rows. Capped above by the
     // available terminal height.
-    let visible = (view.entries.len() as u16).min(VISIBLE_ROWS).max(1);
+    let visible = (view.entries.len() as u16).clamp(1, VISIBLE_ROWS);
     let popup_h = (visible + 3).min(area.height.saturating_sub(2));
 
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
