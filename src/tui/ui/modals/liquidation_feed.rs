@@ -24,6 +24,11 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     f.render_widget(ratatui::widgets::Clear, popup_area);
 
     let s = strings();
+    let (status_label, status_color) = if view.is_backfilling {
+        (s.liq_feed_backfilling, Color::Yellow)
+    } else {
+        (s.liq_feed_live, Color::LightGreen)
+    };
     let title = Line::from(vec![
         Span::styled(
             " 🐦‍🔥 Phoenix ",
@@ -42,9 +47,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
-            format!("{} ", s.liq_feed_live),
+            format!("{} ", status_label),
             Style::default()
-                .fg(Color::LightGreen)
+                .fg(status_color)
                 .add_modifier(Modifier::BOLD),
         ),
     ]);

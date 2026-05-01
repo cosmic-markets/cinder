@@ -1,16 +1,18 @@
 //! Live liquidation feed task.
 //!
-//! On startup, backfills a short recent window by polling recent successful
-//! transactions mentioning Phoenix's current sole liquidator. Then subscribes
-//! (via `logsSubscribe`) for live updates. For each transaction, we fetch the
-//! full transaction, flatten the inner instructions, and parse
+//! On startup, backfills until N recent liquidations are populated by paging
+//! `getSignaturesForAddress` against Phoenix's sole liquidator and fetching
+//! each non-failed transaction sequentially (RPC providers throttle parallel
+//! `getTransaction` bursts, so there's no benefit to fanning out here). Then
+//! subscribes (via `logsSubscribe`) for live updates. For each transaction we
+//! fetch the full transaction, flatten the inner instructions, and parse
 //! `MarketEvent::Liquidation`s out of the self-CPI event stream. Each
 //! liquidation is converted to display units against the locally-cached
 //! `SplineConfig` map and shipped to the TUI through `liquidation_tx`.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::Utc;
@@ -42,12 +44,14 @@ use super::super::super::config::SplineConfig;
 use super::super::super::constants::QUOTE_LOT_DECIMALS;
 use super::super::super::format::pubkey_trader_prefix;
 use super::super::super::math::{base_lots_to_units, ticks_to_price};
-use super::super::super::state::LiquidationEntry;
+use super::super::super::state::{LiquidationEntry, LiquidationFeedMsg};
 use super::{WSS_RETRY_CAP, WSS_RETRY_INIT};
 
 /// How many recently-seen tx signatures to remember so we don't re-fetch the
 /// same tx if `logsSubscribe` re-emits it (some RPCs do under reconnect or
-/// commitment-level transitions).
+/// commitment-level transitions). Also dedups the small overlap window between
+/// the startup backfill's first page and live notifications arriving for the
+/// same fresh signatures.
 const SIGNATURE_DEDUP_CAP: usize = 256;
 
 /// Phoenix's current sole liquidator. Subscribing to this account is far
@@ -59,16 +63,30 @@ const PHOENIX_SOLE_LIQUIDATOR: &str = "BP7sV1VFnbPMPyJX1tZNbXHbZkyLNFEaBWJhyMvkb
 /// hanging on a stalled RPC is not.
 const GET_TX_TIMEOUT: Duration = Duration::from_secs(8);
 
-/// Bound concurrent transaction fetches so a burst of liquidation-like logs
-/// cannot create an unbounded pile of RPC requests.
+/// Bound concurrent transaction fetches on the live path so a burst of
+/// liquidation-like logs cannot create an unbounded pile of RPC requests.
+/// Backfill uses its own [`BACKFILL_CONCURRENCY`] cap independently.
 const MAX_CONCURRENT_GET_TX: usize = 8;
 
-/// One-shot startup backfill depth (recent successful txs touching the
-/// liquidator account). This warms the modal even before the first live event.
-const STARTUP_BACKFILL_SIGNATURE_LIMIT: usize = 100;
+/// Concurrency for backfill `getTransaction` calls. Kept low because public
+/// RPC providers throttle bursts; 2 in-flight halves wall-clock without
+/// tripping rate limits on typical providers.
+const BACKFILL_CONCURRENCY: usize = 1;
 
-/// Cap on `get_signatures_for_address_with_config`; used only during startup
-/// backfill.
+/// Hard cap on the number of `getTransaction` calls the startup backfill
+/// makes — the most-recent successful signatures (per `getSignaturesForAddress`)
+/// are fetched, in this count. Whatever decodes into `Liquidation` events
+/// shows up in the modal. We do NOT keep paging until N events are found,
+/// because (a) the RPC bottlenecks per-tx fetches and (b) paging deeper just
+/// surfaces stale rows.
+const BACKFILL_TX_FETCH_LIMIT: usize = 10;
+
+/// Limit passed to the single `getSignaturesForAddress` call. Sized large so
+/// the recent window almost always contains at least
+/// [`BACKFILL_TX_FETCH_LIMIT`] successful signatures.
+const BACKFILL_SIGNATURES_LIMIT: usize = 1000;
+
+/// Cap on the single `getSignaturesForAddress` call.
 const GET_SIGNATURES_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// Spawn the long-running liquidation subscription. Reconnects on its own with
@@ -79,7 +97,7 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
     ws_url: String,
     rpc_url: String,
     configs: HashMap<String, SplineConfig>,
-    tx: UnboundedSender<LiquidationEntry>,
+    tx: UnboundedSender<LiquidationFeedMsg>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         // Asset id → cloned config so the feed can resolve symbol/decimals on
@@ -97,19 +115,11 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
         ));
 
         let mut backoff = WSS_RETRY_INIT;
-        let mut seen_signatures: HashSet<String> = HashSet::with_capacity(SIGNATURE_DEDUP_CAP);
-        let mut seen_order: VecDeque<String> = VecDeque::with_capacity(SIGNATURE_DEDUP_CAP);
-
-        // One-shot startup backfill so the modal has recent rows even if this
-        // process came online after liquidations already happened. We only pull
-        // signatures here; actual transaction fetch/decode starts after the
-        // live subscription is established.
-        let mut startup_backfill_sigs = collect_recent_liquidation_signatures(
-            Arc::clone(&rpc),
-            &mut seen_signatures,
-            &mut seen_order,
-        )
-        .await;
+        // Shared between the live loop (single-threaded) and the backfill
+        // task. `std::sync::Mutex` is fine here: the lock body is two
+        // microsecond-scale set/queue ops and is never held across `.await`.
+        let dedup = Arc::new(Mutex::new(SignatureDedup::new()));
+        let mut backfill_started = false;
 
         loop {
             let pubsub = match PubsubClient::new(&ws_url).await {
@@ -139,23 +149,24 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
                 }
             };
 
-            // Kick off startup backfill only once, after we already have the
-            // live stream attached.
-            if !startup_backfill_sigs.is_empty() {
-                let signatures = std::mem::take(&mut startup_backfill_sigs);
+            // One-shot startup backfill, kicked off after the live subscription
+            // is attached so any liquidations occurring during backfill
+            // collection are still captured by the live stream (and deduped via
+            // the shared `SignatureDedup`).
+            if !backfill_started {
+                backfill_started = true;
                 let rpc_clone = Arc::clone(&rpc);
                 let configs_clone = Arc::clone(&configs_by_asset);
                 let tx_clone = tx.clone();
+                let dedup_clone = Arc::clone(&dedup);
                 tokio::spawn(async move {
-                    for signature in signatures {
-                        fetch_and_emit(
-                            Arc::clone(&rpc_clone),
-                            signature,
-                            Arc::clone(&configs_clone),
-                            tx_clone.clone(),
-                        )
-                        .await;
-                    }
+                    backfill_recent_liquidations(
+                        rpc_clone,
+                        configs_clone,
+                        tx_clone,
+                        dedup_clone,
+                    )
+                    .await;
                 });
             }
 
@@ -165,7 +176,11 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
                 }
 
                 let signature = notif.value.signature.clone();
-                if !remember_signature(&mut seen_signatures, &mut seen_order, signature.clone()) {
+                let new = dedup
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .remember(signature.clone());
+                if !new {
                     continue;
                 }
 
@@ -187,79 +202,152 @@ pub(in crate::tui::runtime) fn spawn_liquidation_feed_task(
     })
 }
 
-fn remember_signature(
-    set: &mut HashSet<String>,
-    order: &mut VecDeque<String>,
-    sig: String,
-) -> bool {
-    if !set.insert(sig.clone()) {
-        return false;
-    }
-    order.push_back(sig);
-    while order.len() > SIGNATURE_DEDUP_CAP {
-        if let Some(old) = order.pop_front() {
-            set.remove(&old);
-        }
-    }
-    true
+/// Bounded LRU dedup over recently-seen tx signatures. Held behind a mutex so
+/// the live stream and the startup backfill share a single set.
+struct SignatureDedup {
+    set: HashSet<String>,
+    order: VecDeque<String>,
 }
 
-async fn collect_recent_liquidation_signatures(
+impl SignatureDedup {
+    fn new() -> Self {
+        Self {
+            set: HashSet::with_capacity(SIGNATURE_DEDUP_CAP),
+            order: VecDeque::with_capacity(SIGNATURE_DEDUP_CAP),
+        }
+    }
+
+    /// Returns true if `sig` was newly inserted, false if already known.
+    fn remember(&mut self, sig: String) -> bool {
+        if !self.set.insert(sig.clone()) {
+            return false;
+        }
+        self.order.push_back(sig);
+        while self.order.len() > SIGNATURE_DEDUP_CAP {
+            if let Some(old) = self.order.pop_front() {
+                self.set.remove(&old);
+            }
+        }
+        true
+    }
+}
+
+/// Make a single `getSignaturesForAddress` call against the liquidator, take
+/// the most-recent [`BACKFILL_TX_FETCH_LIMIT`] non-failed signatures, and
+/// fetch them with [`BACKFILL_CONCURRENCY`]-way parallelism. Whatever decodes
+/// into `Liquidation` events streams to the view; the rest are silently
+/// dropped. Bounded above by 1 + [`BACKFILL_TX_FETCH_LIMIT`] RPC round trips
+/// — predictably fast and immune to long bail-out streaks.
+///
+/// Each decoded entry is streamed as it arrives — the view sorts by
+/// `received_at` on insert, so out-of-order arrival (both within backfill and
+/// relative to the live stream) is fine. A `BackfillComplete` signal is
+/// always sent on exit so the modal's "backfilling…" indicator clears
+/// regardless of how the task finished.
+async fn backfill_recent_liquidations(
     rpc: Arc<RpcClient>,
-    seen_signatures: &mut HashSet<String>,
-    seen_order: &mut VecDeque<String>,
-) -> Vec<String> {
+    configs_by_asset: Arc<HashMap<u32, SplineConfig>>,
+    tx: UnboundedSender<LiquidationFeedMsg>,
+    dedup: Arc<Mutex<SignatureDedup>>,
+) {
+    backfill_inner(&rpc, &configs_by_asset, &tx, &dedup).await;
+    // Always notify the view that backfill is finished — target reached, RPC
+    // error, channel closed, all converge here.
+    let _ = tx.send(LiquidationFeedMsg::BackfillComplete);
+}
+
+async fn backfill_inner(
+    rpc: &Arc<RpcClient>,
+    configs_by_asset: &Arc<HashMap<u32, SplineConfig>>,
+    tx: &UnboundedSender<LiquidationFeedMsg>,
+    dedup: &Arc<Mutex<SignatureDedup>>,
+) {
     let Ok(liquidator) = Pubkey::from_str(PHOENIX_SOLE_LIQUIDATOR) else {
         warn!("invalid liquidator pubkey; skipping liquidation backfill");
-        return Vec::new();
+        return;
     };
 
     let cfg = GetConfirmedSignaturesForAddress2Config {
         before: None,
         until: None,
-        limit: Some(STARTUP_BACKFILL_SIGNATURE_LIMIT),
+        limit: Some(BACKFILL_SIGNATURES_LIMIT),
         commitment: Some(CommitmentConfig::confirmed()),
-        // `get_signatures_for_address_with_config` uses this compatibility
-        // config type and maps it to the JSON-RPC config under the hood.
     };
     let fetch = rpc.get_signatures_for_address_with_config(&liquidator, cfg);
-    let signatures = match tokio::time::timeout(GET_SIGNATURES_TIMEOUT, fetch).await {
-        Ok(Ok(rows)) => rows,
+    let rows = match tokio::time::timeout(GET_SIGNATURES_TIMEOUT, fetch).await {
+        Ok(Ok(r)) => r,
         Ok(Err(e)) => {
-            warn!(error = %e, "liquidation startup backfill signatures RPC failed");
-            return Vec::new();
+            warn!(error = %e, "liquidation backfill signatures RPC failed");
+            return;
         }
         Err(_) => {
-            warn!("liquidation startup backfill signatures RPC timed out");
-            return Vec::new();
+            warn!("liquidation backfill signatures RPC timed out");
+            return;
         }
     };
 
-    // RPC returns newest-first. Replay oldest->newest so the feed's push_front
-    // ordering remains newest-first after the backfill is inserted.
-    let mut ordered_sigs = Vec::with_capacity(signatures.len());
-    for row in signatures {
-        // `err: null` means success in `getSignaturesForAddress`. We backfill
-        // only successful signatures and skip failures.
-        if row.err.is_some() {
-            continue;
-        }
-        let signature = row.signature;
-        if remember_signature(seen_signatures, seen_order, signature.clone()) {
-            ordered_sigs.push(signature);
+    // Take the most-recent N successful (and not-yet-seen) signatures.
+    let candidates: Vec<String> = rows
+        .into_iter()
+        .filter_map(|row| {
+            if row.err.is_some() {
+                return None;
+            }
+            let sig = row.signature;
+            let new = dedup
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .remember(sig.clone());
+            if new {
+                Some(sig)
+            } else {
+                None
+            }
+        })
+        .take(BACKFILL_TX_FETCH_LIMIT)
+        .collect();
+
+    let mut decoded = futures_util::stream::iter(candidates)
+        .map(|sig| {
+            let rpc_clone = Arc::clone(rpc);
+            let cfg_clone = Arc::clone(configs_by_asset);
+            async move { fetch_and_decode(rpc_clone, sig, cfg_clone).await }
+        })
+        .buffer_unordered(BACKFILL_CONCURRENCY);
+
+    while let Some(entries) = decoded.next().await {
+        for e in entries {
+            if tx.send(LiquidationFeedMsg::Entry(e)).is_err() {
+                return;
+            }
         }
     }
-    ordered_sigs.into_iter().rev().collect()
 }
 
 async fn fetch_and_emit(
     rpc: Arc<RpcClient>,
     signature: String,
     configs_by_asset: Arc<HashMap<u32, SplineConfig>>,
-    tx: UnboundedSender<LiquidationEntry>,
+    tx: UnboundedSender<LiquidationFeedMsg>,
 ) {
+    for entry in fetch_and_decode(rpc, signature, configs_by_asset).await {
+        if tx.send(LiquidationFeedMsg::Entry(entry)).is_err() {
+            return;
+        }
+    }
+}
+
+/// Pull a single tx, decode any Phoenix Eternal `Liquidation` events, and
+/// return them as display-ready entries. Returns empty on any RPC/decoding
+/// failure (warns rather than propagating — backfill and live both treat empty
+/// as "skip").
+async fn fetch_and_decode(
+    rpc: Arc<RpcClient>,
+    signature: String,
+    configs_by_asset: Arc<HashMap<u32, SplineConfig>>,
+) -> Vec<LiquidationEntry> {
     let Ok(sig) = Signature::from_str(&signature) else {
-        return;
+        return Vec::new();
     };
     let cfg = RpcTransactionConfig {
         encoding: Some(UiTransactionEncoding::Json),
@@ -271,50 +359,47 @@ async fn fetch_and_emit(
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {
             warn!(error = %e, sig = %signature, "get_transaction failed for liquidation tx");
-            return;
+            return Vec::new();
         }
         Err(_) => {
             warn!(sig = %signature, "get_transaction timed out for liquidation tx");
-            return;
+            return Vec::new();
         }
     };
 
     let Some(meta) = response.transaction.meta else {
-        return;
+        return Vec::new();
     };
     let inner_ixs: Vec<UiInnerInstructions> = match meta.inner_instructions {
         OptionSerializer::Some(v) => v,
-        _ => return,
+        _ => return Vec::new(),
     };
 
     let account_keys =
         match extract_account_keys(&response.transaction.transaction, &meta.loaded_addresses) {
             Some(keys) => keys,
-            None => return,
+            None => return Vec::new(),
         };
 
     let parsed_ixs = match flatten_inner_instructions(&inner_ixs, &account_keys) {
         Some(p) => p,
-        None => return,
+        None => return Vec::new(),
     };
 
     let events =
         parse_events_from_inner_instructions_with_context(&PHOENIX_ETERNAL_PROGRAM_ID, &parsed_ixs);
 
-    // Build a quick `liquidated_trader` resolver: walk the event stream and
-    // collect each Liquidation, then convert + emit.
     let block_time = response.block_time;
+    let mut out = Vec::new();
     for event in events {
         if let MarketEvent::Liquidation(e) = event {
             let received_at = block_time
                 .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
                 .unwrap_or_else(Utc::now);
-            let entry = build_entry(&e, received_at, configs_by_asset.as_ref());
-            if tx.send(entry).is_err() {
-                return;
-            }
+            out.push(build_entry(&e, received_at, configs_by_asset.as_ref()));
         }
     }
+    out
 }
 
 fn build_entry(
@@ -488,5 +573,18 @@ mod tests {
         assert_eq!(entry.size, 3.0);
         assert_eq!(entry.mark_price, 2.0);
         assert_eq!(entry.notional, 7.5);
+    }
+
+    #[test]
+    fn signature_dedup_rejects_duplicate_and_evicts_oldest() {
+        let mut d = SignatureDedup::new();
+        assert!(d.remember("a".to_string()));
+        assert!(!d.remember("a".to_string()));
+        for i in 0..SIGNATURE_DEDUP_CAP {
+            d.remember(format!("k{i}"));
+        }
+        // "a" was inserted before the SIGNATURE_DEDUP_CAP fresh entries, so it
+        // has been evicted and re-insertion now succeeds.
+        assert!(d.remember("a".to_string()));
     }
 }

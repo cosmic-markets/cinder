@@ -18,7 +18,7 @@ use super::super::data::{parse_spline_data, parse_spline_sequence};
 use super::super::format::pubkey_trader_short;
 use super::super::i18n::strings;
 use super::super::state::{
-    BalanceUpdate, LiquidationEntry, MarketListUpdate, TuiState, TxStatusMsg,
+    BalanceUpdate, LiquidationFeedMsg, MarketListUpdate, TuiState, TxStatusMsg,
 };
 use super::super::trading::{InputMode, OrderInfo, TopPositionEntry, TradingSide};
 use super::super::tx::TxContext;
@@ -151,17 +151,23 @@ pub(super) fn handle_position_leaderboard_update(
     }
 }
 
-/// Push a fresh `LiquidationEntry` to the in-memory feed, then redraw if the
-/// modal is currently open. Background pushes (modal closed) just update state
-/// silently — the next opening of the modal renders them.
+/// Apply a fresh `LiquidationFeedMsg` to the in-memory feed, then redraw if
+/// the modal is currently open. Background pushes (modal closed) just update
+/// state silently — the next opening of the modal renders them. Handles both
+/// row arrivals and the one-shot backfill-complete signal.
 pub(super) fn handle_liquidation_update(
-    entry: LiquidationEntry,
+    msg: LiquidationFeedMsg,
     state: &mut TuiState,
     cfg: &SplineConfig,
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     rpc_host: &str,
 ) {
-    state.liquidation_feed_view.push(entry);
+    match msg {
+        LiquidationFeedMsg::Entry(entry) => state.liquidation_feed_view.push(entry),
+        LiquidationFeedMsg::BackfillComplete => {
+            state.liquidation_feed_view.is_backfilling = false;
+        }
+    }
     if matches!(state.trading.input_mode, InputMode::ViewingLiquidations) {
         redraw_tui_force(terminal, state, cfg, rpc_host);
     }

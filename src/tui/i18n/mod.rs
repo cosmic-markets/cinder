@@ -148,6 +148,9 @@ pub struct Strings {
     pub liquidations_title: &'static str,
     /// Header status indicator next to the entry counter ("live" / "实时").
     pub liq_feed_live: &'static str,
+    /// Header status indicator shown while the startup backfill is still
+    /// streaming rows ("backfilling…" / "回填中…").
+    pub liq_feed_backfilling: &'static str,
     /// Footer hint paired with ↑↓ ("scroll" / "滚动").
     pub liq_feed_scroll: &'static str,
     /// Placeholder shown before the first liquidation arrives.

@@ -111,6 +111,7 @@ pub static EN: Strings = Strings {
     top_positions_title: "top positions",
     liquidations_title: "liquidations",
     liq_feed_live: "live",
+    liq_feed_backfilling: "backfilling\u{2026}",
     liq_feed_scroll: "scroll",
     liq_feed_waiting: "waiting for liquidations\u{2026}",
     liq_feed_status_closed: "CLOSED",

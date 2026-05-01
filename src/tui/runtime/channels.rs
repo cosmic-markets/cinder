@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::super::state::{BalanceUpdate, LiquidationEntry, TxStatusMsg};
+use super::super::state::{BalanceUpdate, LiquidationFeedMsg, TxStatusMsg};
 use super::super::trading::{OrderInfo, TopPositionEntry};
 use super::super::tx::TxContext;
 
@@ -34,7 +34,7 @@ pub(in crate::tui::runtime) struct Channels {
     pub tx_ctx_tx: UnboundedSender<TxCtxMsg>,
     pub orders_tx: UnboundedSender<Vec<OrderInfo>>,
     pub top_positions_tx: UnboundedSender<Vec<TopPositionEntry>>,
-    pub liquidation_tx: UnboundedSender<LiquidationEntry>,
+    pub liquidation_tx: UnboundedSender<LiquidationFeedMsg>,
 }
 
 pub(in crate::tui::runtime) struct Receivers {
@@ -45,7 +45,7 @@ pub(in crate::tui::runtime) struct Receivers {
     pub tx_ctx_rx: UnboundedReceiver<TxCtxMsg>,
     pub orders_rx: UnboundedReceiver<Vec<OrderInfo>>,
     pub top_positions_rx: UnboundedReceiver<Vec<TopPositionEntry>>,
-    pub liquidation_rx: UnboundedReceiver<LiquidationEntry>,
+    pub liquidation_rx: UnboundedReceiver<LiquidationFeedMsg>,
 }
 
 pub(in crate::tui::runtime) fn new_channels() -> (Channels, Receivers) {
@@ -58,7 +58,7 @@ pub(in crate::tui::runtime) fn new_channels() -> (Channels, Receivers) {
     let (top_positions_tx, top_positions_rx) =
         tokio::sync::mpsc::unbounded_channel::<Vec<TopPositionEntry>>();
     let (liquidation_tx, liquidation_rx) =
-        tokio::sync::mpsc::unbounded_channel::<LiquidationEntry>();
+        tokio::sync::mpsc::unbounded_channel::<LiquidationFeedMsg>();
 
     (
         Channels {

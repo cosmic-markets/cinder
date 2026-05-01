@@ -11,9 +11,10 @@ use chrono::{DateTime, Utc};
 /// One row in the liquidation feed.
 #[derive(Debug, Clone)]
 pub struct LiquidationEntry {
-    /// Wall-clock time the entry was decoded (used as the displayed timestamp;
-    /// we don't have block-time without an extra RPC, so this is "received at"
-    /// rather than "occurred at").
+    /// Block time of the underlying tx when the RPC returned one, otherwise
+    /// the wall-clock time we decoded the event. Used both as the displayed
+    /// timestamp and as the sort key that keeps the modal in chronological
+    /// (newest-first) order regardless of arrival order.
     pub received_at: DateTime<Utc>,
     /// Resolved market symbol (e.g. "SOL"). Empty if the asset_id wasn't in
     /// the local config map at decode time.
@@ -42,10 +43,28 @@ pub struct LiquidationEntry {
 /// need the entire history.
 pub const LIQUIDATION_FEED_CAPACITY: usize = 200;
 
+/// Channel payload carrying either a decoded liquidation row or the one-shot
+/// signal that startup backfill has finished. The runtime forwards both to
+/// `handle_liquidation_update`, which mutates `LiquidationFeedView`
+/// accordingly.
+#[derive(Debug, Clone)]
+pub enum LiquidationFeedMsg {
+    Entry(LiquidationEntry),
+    /// Startup backfill is finished — flip the modal indicator from
+    /// "backfilling…" to "live". Sent exactly once for the process lifetime.
+    BackfillComplete,
+}
+
 pub struct LiquidationFeedView {
-    /// Newest first.
+    /// Sorted by `received_at` descending — newest at index 0. The view is
+    /// fed by both a live stream and an out-of-order startup backfill, so the
+    /// invariant is maintained on insert rather than relying on push order.
     pub entries: VecDeque<LiquidationEntry>,
     pub selected_index: usize,
+    /// True until the startup backfill task signals completion via
+    /// `LiquidationFeedMsg::BackfillComplete`. Drives the modal header
+    /// indicator ("backfilling…" vs "live").
+    pub is_backfilling: bool,
 }
 
 impl LiquidationFeedView {
@@ -53,16 +72,24 @@ impl LiquidationFeedView {
         Self {
             entries: VecDeque::with_capacity(LIQUIDATION_FEED_CAPACITY),
             selected_index: 0,
+            is_backfilling: true,
         }
     }
 
-    /// Insert at the front. Drops the oldest entry once the buffer is full so
-    /// the deque never grows unbounded.
+    /// Insert in chronological position so the deque stays newest-first by
+    /// `received_at`. Drops the oldest entry once the buffer is full so the
+    /// deque never grows unbounded; if the new entry is itself the oldest,
+    /// it's dropped immediately.
     pub fn push(&mut self, entry: LiquidationEntry) {
-        if self.entries.len() == LIQUIDATION_FEED_CAPACITY {
+        let pos = self
+            .entries
+            .iter()
+            .position(|e| entry.received_at > e.received_at)
+            .unwrap_or(self.entries.len());
+        self.entries.insert(pos, entry);
+        while self.entries.len() > LIQUIDATION_FEED_CAPACITY {
             self.entries.pop_back();
         }
-        self.entries.push_front(entry);
         self.clamp_index();
     }
 
@@ -97,9 +124,9 @@ impl Default for LiquidationFeedView {
 mod tests {
     use super::*;
 
-    fn make_entry(trader: &str) -> LiquidationEntry {
+    fn make_entry_at(trader: &str, secs: i64) -> LiquidationEntry {
         LiquidationEntry {
-            received_at: Utc::now(),
+            received_at: DateTime::from_timestamp(1_700_000_000 + secs, 0).unwrap(),
             symbol: "SOL".to_string(),
             asset_id: 0,
             liquidated_trader: trader.to_string(),
@@ -113,32 +140,60 @@ mod tests {
     }
 
     #[test]
-    fn push_inserts_at_front() {
+    fn push_orders_by_received_at_descending_regardless_of_arrival_order() {
         let mut v = LiquidationFeedView::new();
-        v.push(make_entry("aaaa"));
-        v.push(make_entry("bbbb"));
-        assert_eq!(v.entries.front().unwrap().liquidated_trader, "bbbb");
+        v.push(make_entry_at("older", 0));
+        v.push(make_entry_at("newer", 10));
+        v.push(make_entry_at("middle", 5));
+        let traders: Vec<&str> = v
+            .entries
+            .iter()
+            .map(|e| e.liquidated_trader.as_str())
+            .collect();
+        assert_eq!(traders, vec!["newer", "middle", "older"]);
     }
 
     #[test]
     fn push_drops_oldest_at_capacity() {
         let mut v = LiquidationFeedView::new();
         for i in 0..(LIQUIDATION_FEED_CAPACITY + 5) {
-            v.push(make_entry(&format!("{:04}", i)));
+            v.push(make_entry_at(&format!("{:04}", i), i as i64));
         }
         assert_eq!(v.entries.len(), LIQUIDATION_FEED_CAPACITY);
-        // Newest entry sits at the front; oldest five rolled off the back.
+        // Largest i is newest by received_at, so it sits at the front.
         assert_eq!(
             v.entries.front().unwrap().liquidated_trader,
             format!("{:04}", LIQUIDATION_FEED_CAPACITY + 4)
         );
+        // Five oldest entries (i = 0..=4) were evicted; back of the deque is
+        // therefore i = 5.
+        assert_eq!(
+            v.entries.back().unwrap().liquidated_trader,
+            format!("{:04}", 5)
+        );
+    }
+
+    #[test]
+    fn push_drops_self_if_older_than_full_buffer() {
+        let mut v = LiquidationFeedView::new();
+        for i in 0..LIQUIDATION_FEED_CAPACITY {
+            // i = 0 is oldest, so secs starts at 100 to leave room below.
+            v.push(make_entry_at(&format!("{:04}", i), 100 + i as i64));
+        }
+        v.push(make_entry_at("ancient", 0));
+        assert_eq!(v.entries.len(), LIQUIDATION_FEED_CAPACITY);
+        // "ancient" should never have made it into the visible buffer.
+        assert!(v
+            .entries
+            .iter()
+            .all(|e| e.liquidated_trader != "ancient"));
     }
 
     #[test]
     fn move_clamped_to_bounds() {
         let mut v = LiquidationFeedView::new();
-        v.push(make_entry("a"));
-        v.push(make_entry("b"));
+        v.push(make_entry_at("a", 0));
+        v.push(make_entry_at("b", 1));
         v.move_down();
         v.move_down();
         v.move_down();
