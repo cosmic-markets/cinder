@@ -27,7 +27,7 @@ jobs:
             binary_suffix: ""
           - name: windows-x86_64
             os: windows-latest
-            archive: cinder-windows-x86_64.tar.gz
+            archive: cinder-windows-x86_64.zip
             binary_suffix: ".exe"
 
     steps:
@@ -55,7 +55,11 @@ jobs:
           cp "target/release/${BINARY_NAME}${{ matrix.binary_suffix }}" "${package_dir}/"
           cp README.md LICENSE "${package_dir}/"
 
-          tar -czf "dist/${{ matrix.archive }}" -C package "${BINARY_NAME}-${{ matrix.name }}"
+          if [[ "${{ matrix.archive }}" == *.zip ]]; then
+            powershell -NoProfile -Command "Compress-Archive -Path '${package_dir}' -DestinationPath 'dist/${{ matrix.archive }}' -Force"
+          else
+            tar -czf "dist/${{ matrix.archive }}" -C package "${BINARY_NAME}-${{ matrix.name }}"
+          fi
 
           cd dist
           if command -v sha256sum >/dev/null 2>&1; then
