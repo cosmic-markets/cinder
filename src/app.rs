@@ -10,9 +10,9 @@ use phoenix_rise::{
 };
 use tracing::warn;
 
-use crate::spline::math::pct_change_24h;
-pub use crate::spline::MarketInfo;
-use crate::spline::{
+use crate::tui::math::pct_change_24h;
+pub use crate::tui::MarketInfo;
+use crate::tui::{
     build_spline_config, compute_price_decimals, spawn_spline_poller, MarketListUpdate,
     MarketStatUpdate, SplineConfig,
 };
@@ -293,6 +293,6 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    crate::spline::cleanup_terminal();
+    crate::tui::cleanup_terminal();
     Ok(())
 }

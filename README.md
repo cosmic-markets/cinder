@@ -33,12 +33,12 @@ flowchart TB
 
     subgraph cinder [Cinder]
         Run[app::run]
-        Poller[Spline TUI poller]
+        Runtime[TUI runtime]
     end
 
     Run --> PhoenixHTTP
     Run --> PhoenixWS
-    Poller --> Solana
+    Runtime --> Solana
 ```
 
 ## Requirements
