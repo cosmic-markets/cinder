@@ -11,12 +11,16 @@ use crate::tui::format::fmt_time_since_secs;
 use crate::tui::state::LiquidationFeedView;
 use crate::tui::trading::TradingSide;
 
+/// Hard cap on the modal's data area so a buffer of 200 rows doesn't expand
+/// the popup vertically — extra rows scroll under the cursor (same pattern
+/// as the markets modal).
+const VISIBLE_ROWS: u16 = 10;
+
 pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     f: &mut Frame,
     area: ratatui::layout::Rect,
     view: &LiquidationFeedView,
 ) {
-    let row_count = view.entries.len().max(1) as u16;
     // Width budget: cursor(1) + time(4) + market(8) + side(5) + notional(10)
     // + size(10) + price(11) + trader(6) + 7 column gaps + 2 borders = 64.
     // Trader values are only 4 chars but the header label "Trader" is 6.
@@ -25,7 +29,10 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     // Captured once per draw; the runtime force-redraws the TUI on each 1s
     // clock tick so age columns advance without per-row work.
     let now = Utc::now();
-    let popup_h = (row_count + 6).min(area.height.saturating_sub(2));
+    // Height = 2 borders + 1 header + visible data rows. Capped above by the
+    // available terminal height.
+    let visible = (view.entries.len() as u16).min(VISIBLE_ROWS).max(1);
+    let popup_h = (visible + 3).min(area.height.saturating_sub(2));
 
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
     let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
@@ -162,7 +169,9 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
                 Cell::from(Line::from(notional_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(size_str).alignment(Alignment::Right)),
                 Cell::from(Line::from(price_str).alignment(Alignment::Right)),
-                Cell::from(e.liquidated_trader.clone()),
+                Cell::from(
+                    Line::from(e.liquidated_trader.clone()).alignment(Alignment::Right),
+                ),
             ])
             .style(row_style)
         })
@@ -179,7 +188,7 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
         Cell::from(Line::from(s.notional_col).alignment(Alignment::Right)),
         Cell::from(Line::from(s.size).alignment(Alignment::Right)),
         Cell::from(Line::from(s.price).alignment(Alignment::Right)),
-        Cell::from(s.trader),
+        Cell::from(Line::from(s.trader).alignment(Alignment::Right)),
     ])
     .style(header_style);
 
@@ -197,6 +206,5 @@ pub(in crate::tui::ui) fn render_liquidation_feed_modal(
     let table = Table::new(table_rows, widths)
         .header(header)
         .column_spacing(1);
-
     f.render_widget(table, inner);
 }

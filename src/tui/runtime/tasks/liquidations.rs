@@ -72,7 +72,7 @@ const MAX_CONCURRENT_GET_TX: usize = 8;
 /// Concurrency for backfill `getTransaction` calls. Kept low because public
 /// RPC providers throttle bursts; 2 in-flight halves wall-clock without
 /// tripping rate limits on typical providers.
-const BACKFILL_CONCURRENCY: usize = 1;
+const BACKFILL_CONCURRENCY: usize = 2;
 
 /// Hard cap on the number of `getTransaction` calls the startup backfill
 /// makes — the most-recent successful signatures (per `getSignaturesForAddress`)
