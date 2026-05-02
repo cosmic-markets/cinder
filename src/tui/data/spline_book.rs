@@ -121,10 +121,7 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
     // mid-price would jitter as a tiny stale region flickered in and out).
     let mut bid_skip = 0usize;
     let mut ask_skip = 0usize;
-    loop {
-        let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) else {
-            break;
-        };
+    while let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) {
         if b.1 < a.1 {
             break;
         }
