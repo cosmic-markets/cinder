@@ -154,13 +154,13 @@ pub(super) fn render_orderbook(
         .ask_rows
         .iter()
         .take(n)
-        .map(|r| r.size * (r.price_start + r.price_end) / 2.0)
+        .map(|r| r.size * r.price)
         .sum();
     let bid_notional_usd: f64 = merged
         .bid_rows
         .iter()
         .take(n)
-        .map(|r| r.size * (r.price_start + r.price_end) / 2.0)
+        .map(|r| r.size * r.price)
         .sum();
 
     render_side_table(
@@ -237,16 +237,15 @@ pub(super) fn render_orderbook(
     );
 }
 
-/// True when this CLOB row is owned by the user's wallet (matched by authority
-/// pubkey prefix). Avoids the false positives a price-level match produces when
-/// another trader quotes the same tick as the user. Spline rows never get the
-/// arrow.
+/// True when one of the constituent traders at this price level is the user's
+/// wallet. Restricted to `RowSource::Clob` matches because the user only places
+/// CLOB orders — a spline trader whose pubkey prefix collides with the user's
+/// wallet shouldn't get the arrow.
 pub(super) fn user_order_at_book_row(user_trader_prefix: Option<&str>, row: &BookRow) -> bool {
-    if row.source != RowSource::Clob {
-        return false;
-    }
     let Some(prefix) = user_trader_prefix else {
         return false;
     };
-    row.trader == prefix
+    row.traders
+        .iter()
+        .any(|(trader, source)| *source == RowSource::Clob && trader == prefix)
 }

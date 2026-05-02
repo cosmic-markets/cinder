@@ -54,7 +54,6 @@ pub static EN: Strings = Strings {
     bids: "Bids",
     slot: "Slot",
     trader: "Trader",
-    price_range: "Price Range",
     depth: "Depth",
     bid_abbrev: "B",
     ask_abbrev: "A",

@@ -134,6 +134,7 @@ impl TuiState {
         symbol: &str,
         show_clob: bool,
         gti_cache: Option<&GtiCache>,
+        price_decimals: usize,
     ) {
         // Mid-switch: keep the prior merged book on screen. CLOB writes that
         // arrive before the first spline payload (or vice versa) would
@@ -143,9 +144,6 @@ impl TuiState {
         if self.switching_to.is_some() {
             return;
         }
-        let mut bid_rows: Vec<BookRow> = Vec::new();
-        let mut ask_rows: Vec<BookRow> = Vec::new();
-
         let resolve_spline_trader = |pda: &solana_pubkey::Pubkey| -> String {
             let authority = gti_cache.and_then(|c| c.resolve_pda(pda));
             match authority {
@@ -154,60 +152,34 @@ impl TuiState {
             }
         };
 
+        // Per-side raw quotes before grouping. Splines collapse to a single
+        // point at their most aggressive price (price_start of the region) so
+        // the rendered book reads like a normal CLOB.
+        let mut raw_bids: Vec<(f64, f64, String, RowSource)> = Vec::new();
+        let mut raw_asks: Vec<(f64, f64, String, RowSource)> = Vec::new();
+
         if let Some(parsed) = self.last_parsed.as_ref() {
             for r in &parsed.bid_rows {
-                bid_rows.push(BookRow {
-                    source: RowSource::Spline,
-                    trader: resolve_spline_trader(&r.0),
-                    price_start: r.1,
-                    price_end: r.2,
-                    size: r.5,
-                });
+                raw_bids.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
             }
             for r in &parsed.ask_rows {
-                ask_rows.push(BookRow {
-                    source: RowSource::Spline,
-                    trader: resolve_spline_trader(&r.0),
-                    price_start: r.1,
-                    price_end: r.2,
-                    size: r.5,
-                });
+                raw_asks.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
             }
         }
         if show_clob {
             for (price, qty, trader) in &self.clob_bids {
-                bid_rows.push(BookRow {
-                    source: RowSource::Clob,
-                    trader: trader.clone(),
-                    price_start: *price,
-                    price_end: *price,
-                    size: *qty,
-                });
+                raw_bids.push((*price, *qty, trader.clone(), RowSource::Clob));
             }
             for (price, qty, trader) in &self.clob_asks {
-                ask_rows.push(BookRow {
-                    source: RowSource::Clob,
-                    trader: trader.clone(),
-                    price_start: *price,
-                    price_end: *price,
-                    size: *qty,
-                });
+                raw_asks.push((*price, *qty, trader.clone(), RowSource::Clob));
             }
         }
 
-        bid_rows.sort_by(|a, b| {
-            b.price_start
-                .partial_cmp(&a.price_start)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        ask_rows.sort_by(|a, b| {
-            a.price_start
-                .partial_cmp(&b.price_start)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let bid_rows = group_by_price(raw_bids, true, price_decimals);
+        let ask_rows = group_by_price(raw_asks, false, price_decimals);
 
-        let best_bid = bid_rows.first().map(|r| r.price_start);
-        let best_ask = ask_rows.first().map(|r| r.price_start);
+        let best_bid = bid_rows.first().map(|r| r.price);
+        let best_ask = ask_rows.first().map(|r| r.price);
         let spread = match (best_bid, best_ask) {
             (Some(b), Some(a)) => {
                 let raw = (a - b).max(0.0);
@@ -372,6 +344,58 @@ impl TuiState {
     pub fn price_bounds(&self) -> (f64, f64) {
         self.price_bounds_cache
     }
+}
+
+/// Collapse `(price, size, trader, source)` quotes into one [`BookRow`] per
+/// distinct price, summing sizes and concatenating traders. Sorted best-first
+/// (descending for bids, ascending for asks).
+///
+/// Grouping key is the price rounded to `price_decimals` (the market's tick
+/// precision). f64 bit equality isn't enough on its own: a spline price is
+/// computed as `mid - ticks_to_price(offset)`, which can differ in the last
+/// ULP from the same tick reached directly via `ticks_to_price`, so a CLOB
+/// and a spline quote at the same tick would otherwise render as two rows.
+fn group_by_price(
+    raw: Vec<(f64, f64, String, RowSource)>,
+    is_bid: bool,
+    price_decimals: usize,
+) -> Vec<BookRow> {
+    let scale = 10_f64.powi(price_decimals as i32);
+    let mut by_price: Vec<(i64, BookRow)> = Vec::new();
+    for (price, size, trader, source) in raw {
+        let key = (price * scale).round() as i64;
+        match by_price.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, row)) => {
+                row.size += size;
+                row.traders.push((trader, source));
+            }
+            None => {
+                by_price.push((
+                    key,
+                    BookRow {
+                        price,
+                        size,
+                        traders: vec![(trader, source)],
+                    },
+                ));
+            }
+        }
+    }
+    let mut rows: Vec<BookRow> = by_price.into_iter().map(|(_, r)| r).collect();
+    if is_bid {
+        rows.sort_by(|a, b| {
+            b.price
+                .partial_cmp(&a.price)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    } else {
+        rows.sort_by(|a, b| {
+            a.price
+                .partial_cmp(&b.price)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
+    rows
 }
 
 #[cfg(test)]

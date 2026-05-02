@@ -17,10 +17,12 @@ pub(super) fn render_side_table(
     side_notional_usd: f64,
     user_trader_prefix: Option<&str>,
 ) {
-    // When terminal is narrow, hide Size column to preserve the depth bar.
+    // Trader col fits up to four merged initials with the user-arrow prefix
+    // ("> m/x/y/z" = 9 chars). Price drops from a 22-wide range to a single
+    // value ("$12345.67" ≈ 9 chars).
     let borders: u16 = 2;
-    let fixed_with_size: u16 = 7 + 1 + 22 + 1 + 10 + 1 + 10 + 1;
-    let fixed_without_size: u16 = 7 + 1 + 22 + 1 + 10 + 1;
+    let fixed_with_size: u16 = 9 + 1 + 10 + 1 + 10 + 1 + 10 + 1;
+    let fixed_without_size: u16 = 9 + 1 + 10 + 1 + 10 + 1;
     let bar_with_size = area.width.saturating_sub(fixed_with_size + borders) as usize;
     let show_size_col = bar_with_size >= 4;
     let fixed_cols = if show_size_col {
@@ -85,7 +87,7 @@ pub(super) fn render_side_table(
 
     let mut header_cells = vec![
         Cell::from(Line::from(st_s.trader).alignment(Alignment::Right)),
-        Cell::from(Line::from(st_s.price_range).alignment(Alignment::Right)),
+        Cell::from(Line::from(st_s.price).alignment(Alignment::Right)),
     ];
     if show_size_col {
         header_cells.push(Cell::from(
@@ -148,16 +150,16 @@ pub(super) fn render_side_table(
 
     let widths: Vec<Constraint> = if show_size_col {
         vec![
-            Constraint::Length(7),
-            Constraint::Length(22),
+            Constraint::Length(9),
+            Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Fill(1),
         ]
     } else {
         vec![
-            Constraint::Length(7),
-            Constraint::Length(22),
+            Constraint::Length(9),
+            Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Fill(1),
         ]
@@ -165,10 +167,30 @@ pub(super) fn render_side_table(
 
     let table = Table::new(table_rows, widths)
         .header(header_row)
-        .block(block)
-        .column_spacing(1);
+        .column_spacing(1)
+        .block(block);
 
     f.render_widget(table, area);
+}
+
+/// Build the trader display string: first letter of each constituent trader's
+/// pubkey prefix, joined by "/" with a hard cap of 4 traders (3 slashes).
+/// Extra traders past the cap are silently dropped to keep the column inside
+/// its 9-char allotment. Traders are sorted alphabetically by prefix so the
+/// rendered order is stable across frames.
+fn render_trader_initials(traders: &[(String, RowSource)]) -> String {
+    let mut sorted: Vec<&(String, RowSource)> = traders.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut out = String::new();
+    for (i, (prefix, _)) in sorted.iter().take(4).enumerate() {
+        if i > 0 {
+            out.push('/');
+        }
+        if let Some(c) = prefix.chars().next() {
+            out.push(c);
+        }
+    }
+    out
 }
 
 fn build_row<'a>(
@@ -214,20 +236,10 @@ fn build_row<'a>(
         None => Cell::from("\u{2593}".repeat(bar_len)).style(Style::default().fg(color)),
     };
 
-    // CLOB rows are point levels (single price); splines span a range.
-    let price_str = if matches!(row.source, RowSource::Clob) {
-        format!("${}", fmt_price(row.price_start, price_decimals))
-    } else {
-        format!(
-            "${} → ${}",
-            fmt_price(row.price_start, price_decimals),
-            fmt_price(row.price_end, price_decimals)
-        )
-    };
-    let trader_color = match row.source {
-        RowSource::Spline => FIRE_ORANGE,
-        RowSource::Clob => Color::Cyan,
-    };
+    let price_str = format!("${}", fmt_price(row.price, price_decimals));
+
+    let trader_color = FIRE_ORANGE;
+    let display_traders = render_trader_initials(&row.traders);
 
     let trader_cell = if has_user_order_here {
         Cell::from(
@@ -239,14 +251,14 @@ fn build_row<'a>(
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!(" {}", row.trader),
+                    format!(" {}", display_traders),
                     Style::default().fg(trader_color),
                 ),
             ])
             .alignment(Alignment::Right),
         )
     } else {
-        Cell::from(Line::from(row.trader.clone()).alignment(Alignment::Right))
+        Cell::from(Line::from(display_traders).alignment(Alignment::Right))
             .style(Style::default().fg(trader_color))
     };
 

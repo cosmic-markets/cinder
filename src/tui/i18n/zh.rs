@@ -54,7 +54,6 @@ pub static CN: Strings = Strings {
     bids: "买单",
     slot: "槽位",
     trader: "交易方",
-    price_range: "价格区间",
     depth: "深度",
     bid_abbrev: "买",
     ask_abbrev: "卖",

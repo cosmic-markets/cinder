@@ -71,6 +71,7 @@ pub(super) async fn handle_l2_book_msg(
         &cfg.symbol,
         current_user_config().show_clob,
         gti_guard.as_ref(),
+        cfg.price_decimals,
     );
     drop(gti_guard);
     if state.last_parsed.is_some() {

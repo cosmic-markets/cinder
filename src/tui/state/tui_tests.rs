@@ -17,8 +17,8 @@ fn pda_with_prefix(tag: u8) -> PhoenixPubkey {
     PhoenixPubkey::from([tag; 32])
 }
 
-fn spline_row(tag: u8, price_start: f64, price_end: f64, size: f64) -> SplineRow {
-    (pda_with_prefix(tag), price_start, price_end, 0.0, 0.0, size)
+fn spline_row(tag: u8, price: f64, _price_end_unused: f64, size: f64) -> SplineRow {
+    (pda_with_prefix(tag), price, size)
 }
 
 #[test]
@@ -94,19 +94,9 @@ fn rebuild_merged_book_sorts_each_side_best_first() {
         best_bid: Some(100.0),
         best_ask: Some(101.0),
     });
-    s.rebuild_merged_book("BTC", false, None);
-    let bids: Vec<f64> = s
-        .merged_book
-        .bid_rows
-        .iter()
-        .map(|r| r.price_start)
-        .collect();
-    let asks: Vec<f64> = s
-        .merged_book
-        .ask_rows
-        .iter()
-        .map(|r| r.price_start)
-        .collect();
+    s.rebuild_merged_book("BTC", false, None, 2);
+    let bids: Vec<f64> = s.merged_book.bid_rows.iter().map(|r| r.price).collect();
+    let asks: Vec<f64> = s.merged_book.ask_rows.iter().map(|r| r.price).collect();
     assert_eq!(bids, vec![100.0, 99.0]);
     assert_eq!(asks, vec![101.0, 102.0]);
     assert_eq!(s.merged_book.best_bid, Some(100.0));
@@ -124,9 +114,13 @@ fn rebuild_merged_book_omits_clob_when_show_clob_is_false() {
         best_ask: None,
     });
     s.clob_bids = vec![(100.5, 1.0, "Z".to_string())];
-    s.rebuild_merged_book("BTC", false, None);
+    s.rebuild_merged_book("BTC", false, None, 2);
     assert_eq!(s.merged_book.bid_rows.len(), 1);
-    assert!(s.merged_book.bid_rows.iter().all(|r| r.trader != "Z"));
+    assert!(s
+        .merged_book
+        .bid_rows
+        .iter()
+        .all(|r| r.traders.iter().all(|(t, _)| t != "Z")));
 }
 
 #[test]
@@ -134,10 +128,45 @@ fn rebuild_merged_book_includes_clob_when_show_clob_is_true() {
     let mut s = empty_state();
     s.clob_bids = vec![(100.0, 1.0, "Z".to_string())];
     s.clob_asks = vec![(101.0, 1.0, "Y".to_string())];
-    s.rebuild_merged_book("BTC", true, None);
+    s.rebuild_merged_book("BTC", true, None, 2);
     assert_eq!(s.merged_book.bid_rows.len(), 1);
     assert_eq!(s.merged_book.ask_rows.len(), 1);
-    assert_eq!(s.merged_book.bid_rows[0].trader, "Z");
+    assert_eq!(s.merged_book.bid_rows[0].traders[0].0, "Z");
+}
+
+#[test]
+fn rebuild_merged_book_combines_traders_at_same_price_level() {
+    let mut s = empty_state();
+    s.clob_bids = vec![
+        (100.0, 1.0, "mmmb".to_string()),
+        (100.0, 2.0, "xxxy".to_string()),
+        (99.0, 5.0, "qqqq".to_string()),
+    ];
+    s.rebuild_merged_book("BTC", true, None, 2);
+    assert_eq!(s.merged_book.bid_rows.len(), 2);
+    let top = &s.merged_book.bid_rows[0];
+    assert_eq!(top.price, 100.0);
+    assert_eq!(top.size, 3.0);
+    let traders: Vec<&str> = top.traders.iter().map(|(t, _)| t.as_str()).collect();
+    assert_eq!(traders, vec!["mmmb", "xxxy"]);
+}
+
+#[test]
+fn rebuild_merged_book_abstracts_spline_range_to_point_quote() {
+    let mut s = empty_state();
+    s.last_parsed = Some(ParsedSplineData {
+        bid_rows: vec![spline_row(0xA1, 100.0, 95.0, 50.0)],
+        ask_rows: vec![],
+        best_bid: Some(100.0),
+        best_ask: None,
+    });
+    s.rebuild_merged_book("BTC", false, None, 2);
+    assert_eq!(s.merged_book.bid_rows.len(), 1);
+    let row = &s.merged_book.bid_rows[0];
+    assert_eq!(row.price, 100.0);
+    assert_eq!(row.size, 50.0);
+    assert_eq!(row.traders.len(), 1);
+    assert_eq!(row.traders[0].1, RowSource::Spline);
 }
 
 #[test]

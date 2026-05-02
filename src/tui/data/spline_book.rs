@@ -7,10 +7,13 @@ use solana_pubkey::Pubkey as PhoenixPubkey;
 
 use super::super::math::{base_lots_to_units, ticks_to_price};
 
-/// One row: trader PDA (the spline's owning trader account; resolve to the
-/// wallet authority via `GtiCache::resolve_pda` at display time), price
-/// interval, density, filled, total size.
-pub type SplineRow = (PhoenixPubkey, f64, f64, f64, f64, f64);
+/// One row at a single tick: trader PDA (the spline's owning trader account;
+/// resolve to the wallet authority via `GtiCache::resolve_pda` at display
+/// time), tick price, and the available size at that tick (density minus any
+/// per-region fill that's already consumed this tick or the ones in front of
+/// it). Splines are pre-expanded into one row per tick inside their regions
+/// so the displayed book reads as a normal CLOB.
+pub type SplineRow = (PhoenixPubkey, f64, f64);
 
 #[derive(Clone)]
 pub struct ParsedSplineData {
@@ -25,11 +28,6 @@ pub struct ParsedSplineData {
 #[inline]
 fn load_collection(data: &[u8]) -> Option<SplineCollection> {
     std::panic::catch_unwind(|| SplineCollection::try_from_account_bytes(data).ok()).ok()?
-}
-
-#[inline]
-fn checked_lots_to_units(lots: u64, base_lot_decimals: i8) -> Option<f64> {
-    Some(base_lots_to_units(lots, base_lot_decimals))
 }
 
 #[inline]
@@ -50,10 +48,58 @@ pub fn parse_spline_sequence(data: &[u8]) -> Option<(u64, u64)> {
     ))
 }
 
+/// Expand a [`TickRegion`] into one `(trader, price, size)` row per tick.
+///
+/// Each tick within `[start_offset, end_offset)` shows the per-tick `density`
+/// (in base lots), with the unfilled budget (`total_size - filled_size`)
+/// allocated from the rear (least-aggressive) tick inward. Phoenix matches
+/// splines at the most-aggressive end first, so the front (closest to mid)
+/// ticks are the ones already consumed; the unfilled remainder lives in the
+/// rear ticks.
+///
+/// We deliberately do *not* subtract `top_level_hidden_take_size` from the
+/// visible size — direct comparison against the public Phoenix frontend on
+/// live SOL splines showed those values stay visible at full density (e.g.
+/// at the touch where a maker has top_hidden_take ≈ 5× density, the
+/// reference still shows the density). The hidden-take parameter appears to
+/// affect matching behaviour rather than displayed depth.
+///
+/// `price_at_offset` builds the displayed price for a tick offset (mid minus
+/// for bids, mid plus for asks).
+fn expand_region<F>(
+    region: &phoenix_rise::types::accounts::TickRegion,
+    trader: solana_pubkey::Pubkey,
+    bld: i8,
+    price_at_offset: F,
+    out: &mut Vec<SplineRow>,
+) where
+    F: Fn(u64) -> f64,
+{
+    if region.start_offset >= region.end_offset {
+        return;
+    }
+    let unfilled_lots = region.total_size.saturating_sub(region.filled_size);
+    if unfilled_lots == 0 || region.density == 0 {
+        return;
+    }
+    let mut remaining = unfilled_lots;
+    for offset in (region.start_offset..region.end_offset).rev() {
+        if remaining == 0 {
+            break;
+        }
+        let take = remaining.min(region.density);
+        remaining -= take;
+        out.push((trader, price_at_offset(offset), base_lots_to_units(take, bld)));
+    }
+}
+
 pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedSplineData> {
     let collection = load_collection(data)?;
-    let mut bid_rows = Vec::new();
-    let mut ask_rows = Vec::new();
+    if std::env::var_os("CINDER_SPLINE_DEBUG").is_some() {
+        dump_spline_collection_debug(&collection, tick_size, bld);
+    }
+    let mut bid_rows: Vec<SplineRow> = Vec::new();
+    let mut ask_rows: Vec<SplineRow> = Vec::new();
 
     for spline in collection.active_splines() {
         let trader = spline.trader;
@@ -71,18 +117,13 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             if !region_has_liquidity(region) {
                 continue;
             }
-            let start = mid - ticks_to_price(region.start_offset, tick_size, bld);
-            let end = mid - ticks_to_price(region.end_offset, tick_size, bld);
-            let Some(density) = checked_lots_to_units(region.density, bld) else {
-                continue;
-            };
-            let Some(filled) = checked_lots_to_units(region.filled_size, bld) else {
-                continue;
-            };
-            let Some(total) = checked_lots_to_units(region.total_size, bld) else {
-                continue;
-            };
-            bid_rows.push((trader, start, end, density, filled, total));
+            expand_region(
+                region,
+                trader,
+                bld,
+                |offset| mid - ticks_to_price(offset, tick_size, bld),
+                &mut bid_rows,
+            );
         }
 
         let ask_start = (spline.ask_offset as usize).min(spline.ask_regions.len());
@@ -93,18 +134,13 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             if !region_has_liquidity(region) {
                 continue;
             }
-            let start = mid + ticks_to_price(region.start_offset, tick_size, bld);
-            let end = mid + ticks_to_price(region.end_offset, tick_size, bld);
-            let Some(density) = checked_lots_to_units(region.density, bld) else {
-                continue;
-            };
-            let Some(filled) = checked_lots_to_units(region.filled_size, bld) else {
-                continue;
-            };
-            let Some(total) = checked_lots_to_units(region.total_size, bld) else {
-                continue;
-            };
-            ask_rows.push((trader, start, end, density, filled, total));
+            expand_region(
+                region,
+                trader,
+                bld,
+                |offset| mid + ticks_to_price(offset, tick_size, bld),
+                &mut ask_rows,
+            );
         }
     }
 
@@ -115,7 +151,7 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
     // maker-vs-maker, so two splines with different `mid_price` can sit
     // crossed until a taker resolves them. Heuristic: stale-ghost quotes are
     // usually tiny next to the genuine touch, so when the bid/ask cross we
-    // drop whichever side has less unfilled size and re-check. The dropped
+    // drop whichever side has less per-tick size and re-check. The dropped
     // rows are also pulled out of `bid_rows`/`ask_rows` so the chart's
     // `best_bid`/`best_ask` reflect the cleaned touch (otherwise the
     // mid-price would jitter as a tiny stale region flickered in and out).
@@ -125,9 +161,7 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
         if b.1 < a.1 {
             break;
         }
-        let bid_unfilled = b.5 - b.4;
-        let ask_unfilled = a.5 - a.4;
-        if bid_unfilled < ask_unfilled {
+        if b.2 < a.2 {
             bid_skip += 1;
         } else {
             ask_skip += 1;
@@ -145,6 +179,87 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
         best_bid,
         best_ask,
     })
+}
+
+/// Dump the raw on-chain spline regions for the active splines into
+/// `cinder_spline_debug.txt` (file is overwritten on each parse so the latest
+/// snapshot is always there). Gated by the `CINDER_SPLINE_DEBUG` env var so
+/// production runs don't pay the I/O cost. Writes prices alongside the raw
+/// offsets/lots so the file can be read directly without doing the math by
+/// hand.
+fn dump_spline_collection_debug(collection: &SplineCollection, tick_size: u64, bld: i8) {
+    use std::fmt::Write as _;
+    let mut s = String::new();
+    let _ = writeln!(
+        s,
+        "asset={} num_splines={} num_active={} seq={} slot={}",
+        collection.asset_symbol,
+        collection.num_splines,
+        collection.num_active,
+        collection.sequence_number.sequence_number,
+        collection.sequence_number.last_update_slot,
+    );
+    for (i, spline) in collection.splines.iter().enumerate() {
+        if !spline.is_active {
+            continue;
+        }
+        let mid = ticks_to_price(spline.mid_price, tick_size, bld);
+        let trader_short: String = spline.trader.to_string().chars().take(8).collect();
+        let _ = writeln!(
+            s,
+            "spline[{i}] trader={trader_short} mid_ticks={} mid=${mid:.6} \
+             bid_offset={} bid_num_regions={} bid_filled={} \
+             ask_offset={} ask_num_regions={} ask_filled={}",
+            spline.mid_price,
+            spline.bid_offset,
+            spline.bid_num_regions,
+            spline.bid_filled_amount,
+            spline.ask_offset,
+            spline.ask_num_regions,
+            spline.ask_filled_amount,
+        );
+        let bid_end = (spline.bid_num_regions as usize).min(spline.bid_regions.len());
+        for (j, r) in spline.bid_regions.iter().enumerate().take(bid_end) {
+            let active = j >= spline.bid_offset as usize;
+            let p_start = mid - ticks_to_price(r.start_offset, tick_size, bld);
+            let p_end = mid - ticks_to_price(r.end_offset, tick_size, bld);
+            let _ = writeln!(
+                s,
+                "  bid[{j}]{} start_off={} end_off={} ${p_start:.6}..${p_end:.6} \
+                 density={} total={} filled={} hidden_filled={} top_hidden_take={} lifespan={}",
+                if active { "*" } else { " " },
+                r.start_offset,
+                r.end_offset,
+                r.density,
+                r.total_size,
+                r.filled_size,
+                r.hidden_filled_size,
+                r.top_level_hidden_take_size,
+                r.lifespan,
+            );
+        }
+        let ask_end = (spline.ask_num_regions as usize).min(spline.ask_regions.len());
+        for (j, r) in spline.ask_regions.iter().enumerate().take(ask_end) {
+            let active = j >= spline.ask_offset as usize;
+            let p_start = mid + ticks_to_price(r.start_offset, tick_size, bld);
+            let p_end = mid + ticks_to_price(r.end_offset, tick_size, bld);
+            let _ = writeln!(
+                s,
+                "  ask[{j}]{} start_off={} end_off={} ${p_start:.6}..${p_end:.6} \
+                 density={} total={} filled={} hidden_filled={} top_hidden_take={} lifespan={}",
+                if active { "*" } else { " " },
+                r.start_offset,
+                r.end_offset,
+                r.density,
+                r.total_size,
+                r.filled_size,
+                r.hidden_filled_size,
+                r.top_level_hidden_take_size,
+                r.lifespan,
+            );
+        }
+    }
+    let _ = std::fs::write("cinder_spline_debug.txt", s);
 }
 
 /// One aggregated L2 level for a single trader at a single price.
