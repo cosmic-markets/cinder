@@ -613,6 +613,8 @@ mod tests {
                 spline_collection: String::new(),
                 market_pubkey: String::new(),
                 symbol: "SOL".to_string(),
+                max_leverage: 10.0,
+                isolated_only: false,
                 asset_id: 7,
                 price_decimals: 2,
                 size_decimals: 0,

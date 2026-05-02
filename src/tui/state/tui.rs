@@ -50,10 +50,10 @@ pub struct TuiState {
     /// inner instructions on Phoenix Eternal txs.
     pub liquidation_feed_view: LiquidationFeedView,
     /// One chart marker per active-market open order, keyed by `(symbol,
-    /// order_sequence_number)`. Kept separate from `orders_view` because it
+    /// subaccount_index, order_sequence_number)`. Kept separate from `orders_view` because it
     /// tracks chart-geometry state (x-coordinate that scrolls with
     /// `price_history`), whereas `orders_view` is pure snapshot data.
-    pub order_chart_markers: HashMap<(String, u64), OrderChartMarker>,
+    pub order_chart_markers: HashMap<(String, u8, u64), OrderChartMarker>,
     /// Set to the target symbol while a market switch is in-flight. The old
     /// chart/book data stays visible until the first WSS payload arrives for
     /// the new market, at which point this is cleared.
@@ -301,13 +301,13 @@ impl TuiState {
     }
 
     /// Reconcile `order_chart_markers` against the current WS snapshot for
-    /// `active_symbol`. New (symbol, seq) keys are inserted at the current
+    /// `active_symbol`. New (symbol, subaccount, seq) keys are inserted at the current
     /// right-edge x; keys no longer present in the snapshot are removed
     /// (fill / cancel). Price is refreshed from the snapshot in
     /// case the order was amended.
     pub fn sync_order_chart_markers(&mut self, active_symbol: &str) {
         let current_x = self.price_history.len().saturating_sub(1) as f64;
-        let mut seen = std::collections::HashSet::<u64>::new();
+        let mut seen = std::collections::HashSet::<(u8, u64)>::new();
 
         for o in self
             .orders_view
@@ -315,8 +315,13 @@ impl TuiState {
             .iter()
             .filter(|o| o.symbol == active_symbol && o.price_usd > 0.0)
         {
-            seen.insert(o.order_sequence_number);
-            let key = (o.symbol.clone(), o.order_sequence_number);
+            let marker_id = (o.subaccount_index, o.order_sequence_number);
+            seen.insert(marker_id);
+            let key = (
+                o.symbol.clone(),
+                o.subaccount_index,
+                o.order_sequence_number,
+            );
             self.order_chart_markers
                 .entry(key)
                 .and_modify(|m| m.price = o.price_usd)
@@ -327,7 +332,7 @@ impl TuiState {
         }
 
         self.order_chart_markers
-            .retain(|key, _| key.0 != active_symbol || seen.contains(&key.1));
+            .retain(|key, _| key.0 != active_symbol || seen.contains(&(key.1, key.2)));
     }
 
     pub fn add_trade_marker(&mut self, is_buy: bool) {

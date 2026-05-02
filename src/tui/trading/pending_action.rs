@@ -12,6 +12,7 @@ pub enum PendingAction {
     ClosePosition,
     ClosePositionBySymbol {
         symbol: String,
+        subaccount_index: u8,
         side: TradingSide,
         size: f64,
         position_size_raw: Option<(i64, i8)>,
@@ -21,6 +22,7 @@ pub enum PendingAction {
     /// order belongs to).
     CancelOrder {
         symbol: String,
+        subaccount_index: u8,
         side: TradingSide,
         size: f64,
         price_usd: f64,

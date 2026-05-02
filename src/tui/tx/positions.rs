@@ -2,7 +2,6 @@
 //! every open position, batched and staggered so the network accepts the
 //! whole burst.
 
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -20,6 +19,7 @@ use super::error::{log_tx_error, parse_phoenix_tx_error};
 /// its reduce-only market order instruction.
 pub struct ClosePositionEntry {
     pub symbol: String,
+    pub subaccount_index: u8,
     pub close_side: TradingSide,
     pub num_base_lots: u64,
     pub display_size: f64,
@@ -54,8 +54,8 @@ pub fn submit_close_all_positions(
         let mut all_ixs: Vec<(solana_instruction::Instruction, String, String, TradingSide)> =
             Vec::new();
         for entry in &entries {
-            let market = match ctx.metadata.get_market(&entry.symbol) {
-                Some(m) => m,
+            let addrs = match ctx.market_addrs_for_symbol(&entry.symbol) {
+                Some(addrs) => addrs,
                 None => {
                     let _ = tx_status.send(TxStatusMsg::SetStatus {
                         title: format!("{} {} {}", s.market, entry.symbol, s.tx_not_found_skip),
@@ -64,29 +64,7 @@ pub fn submit_close_all_positions(
                     continue;
                 }
             };
-            let keys = ctx.metadata.keys();
-            let orderbook = match solana_pubkey::Pubkey::from_str(&market.market_pubkey) {
-                Ok(pk) => pk,
-                Err(_) => continue,
-            };
-            let spline_collection = match solana_pubkey::Pubkey::from_str(&market.spline_pubkey) {
-                Ok(pk) => pk,
-                Err(_) => continue,
-            };
-            let perp_asset_map = match solana_pubkey::Pubkey::from_str(&keys.perp_asset_map) {
-                Ok(pk) => pk,
-                Err(_) => continue,
-            };
-            let global_trader_index: Vec<solana_pubkey::Pubkey> = keys
-                .global_trader_index
-                .iter()
-                .filter_map(|s| solana_pubkey::Pubkey::from_str(s).ok())
-                .collect();
-            let active_trader_buffer: Vec<solana_pubkey::Pubkey> = keys
-                .active_trader_buffer
-                .iter()
-                .filter_map(|s| solana_pubkey::Pubkey::from_str(s).ok())
-                .collect();
+            let trader_account = ctx.trader_pda_for_subaccount(entry.subaccount_index);
 
             let phx_side = match entry.close_side {
                 TradingSide::Long => Side::Bid,
@@ -94,16 +72,17 @@ pub fn submit_close_all_positions(
             };
             let params = match MarketOrderParams::builder()
                 .trader(ctx.authority_v2)
-                .trader_account(ctx.trader_pda_v2)
-                .perp_asset_map(perp_asset_map)
-                .orderbook(orderbook)
-                .spline_collection(spline_collection)
-                .global_trader_index(global_trader_index)
-                .active_trader_buffer(active_trader_buffer)
+                .trader_account(trader_account)
+                .perp_asset_map(addrs.perp_asset_map)
+                .orderbook(addrs.orderbook)
+                .spline_collection(addrs.spline_collection)
+                .global_trader_index(addrs.global_trader_index)
+                .active_trader_buffer(addrs.active_trader_buffer)
                 .symbol(&entry.symbol)
                 .side(phx_side)
                 .num_base_lots(entry.num_base_lots)
                 .order_flags(OrderFlags::ReduceOnly)
+                .subaccount_index(entry.subaccount_index)
                 .build()
             {
                 Ok(p) => p,

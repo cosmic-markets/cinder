@@ -5,9 +5,12 @@ use super::TradingSide;
 #[derive(Debug, Clone)]
 pub struct OrderInfo {
     pub symbol: String,
-    /// Phoenix order sequence number — unique per market; used as the map key
-    /// for per-order chart markers so their x-coordinate can advance
-    /// independently across snapshots.
+    /// Phoenix trader subaccount index that owns this order.
+    /// `0` is cross-margin; `1+` are isolated subaccounts.
+    pub subaccount_index: u8,
+    /// Phoenix order sequence number — unique per market subaccount; used as
+    /// part of the map key for per-order chart markers so their x-coordinate
+    /// can advance independently across snapshots.
     pub order_sequence_number: u64,
     pub side: TradingSide,
     pub order_type: String,

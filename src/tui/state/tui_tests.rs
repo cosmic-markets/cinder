@@ -200,6 +200,7 @@ fn sync_order_chart_markers_inserts_new_and_drops_filled() {
     s.push_price(100.0);
     s.orders_view.orders = vec![OrderInfo {
         symbol: "SOL".to_string(),
+        subaccount_index: 0,
         order_sequence_number: 1,
         side: TradingSide::Long,
         order_type: "LMT".to_string(),

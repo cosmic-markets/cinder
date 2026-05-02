@@ -5,6 +5,9 @@ use super::TradingSide;
 /// Active-market position summary used by the trading panel and chart.
 #[derive(Debug, Clone)]
 pub struct PositionInfo {
+    /// Phoenix trader subaccount index that owns this position.
+    /// `0` is cross-margin; `1+` are isolated subaccounts.
+    pub subaccount_index: u8,
     pub side: TradingSide,
     pub size: f64,
     /// Phoenix `position_size.value` / `position_size.decimals` for exact lot
@@ -22,6 +25,7 @@ pub struct PositionInfo {
 #[derive(Debug, Clone)]
 pub struct FullPositionInfo {
     pub symbol: String,
+    pub subaccount_index: u8,
     pub side: TradingSide,
     pub size: f64,
     pub position_size_raw: Option<(i64, i8)>,

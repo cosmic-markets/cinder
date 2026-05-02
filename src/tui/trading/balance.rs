@@ -12,30 +12,43 @@ pub async fn fetch_phoenix_balance_and_position(
 ) -> (f64, Option<PositionInfo>, Vec<FullPositionInfo>) {
     match http.traders().get_trader(authority_v2).await {
         Ok(traders) if !traders.is_empty() => {
-            let t = &traders[0];
-            let bal = t.collateral_balance.ui.parse::<f64>().unwrap_or(0.0);
-
-            let pos = t
-                .positions
+            let bal = traders
                 .iter()
-                .find(|p| p.symbol == symbol)
-                .and_then(|p| {
-                    parse_position(p, bal).map(|full| PositionInfo {
-                        side: full.side,
-                        size: full.size,
-                        position_size_raw: full.position_size_raw,
-                        entry_price: full.entry_price,
-                        unrealized_pnl: full.unrealized_pnl,
-                        liquidation_price: full.liquidation_price,
-                        notional: full.notional,
-                        leverage: full.leverage,
+                .find(|t| t.trader_subaccount_index == 0)
+                .or_else(|| traders.first())
+                .map(|t| t.collateral_balance.ui.parse::<f64>().unwrap_or(0.0))
+                .unwrap_or(0.0);
+
+            let pos = traders.iter().find_map(|t| {
+                let collateral = t.collateral_balance.ui.parse::<f64>().unwrap_or(0.0);
+                t.positions
+                    .iter()
+                    .find(|p| p.symbol == symbol)
+                    .and_then(|p| {
+                        parse_position(p, collateral, t.trader_subaccount_index).map(|full| {
+                            PositionInfo {
+                                subaccount_index: full.subaccount_index,
+                                side: full.side,
+                                size: full.size,
+                                position_size_raw: full.position_size_raw,
+                                entry_price: full.entry_price,
+                                unrealized_pnl: full.unrealized_pnl,
+                                liquidation_price: full.liquidation_price,
+                                notional: full.notional,
+                                leverage: full.leverage,
+                            }
+                        })
                     })
-                });
+            });
 
-            let all_positions: Vec<FullPositionInfo> = t
-                .positions
+            let all_positions: Vec<FullPositionInfo> = traders
                 .iter()
-                .filter_map(|p| parse_position(p, bal))
+                .flat_map(|t| {
+                    let collateral = t.collateral_balance.ui.parse::<f64>().unwrap_or(0.0);
+                    t.positions.iter().filter_map(move |p| {
+                        parse_position(p, collateral, t.trader_subaccount_index)
+                    })
+                })
                 .collect();
 
             (bal, pos, all_positions)
@@ -47,6 +60,7 @@ pub async fn fetch_phoenix_balance_and_position(
 fn parse_position(
     p: &phoenix_rise::types::TraderPositionView,
     collateral: f64,
+    subaccount_index: u8,
 ) -> Option<FullPositionInfo> {
     let size = p.position_size.ui.parse::<f64>().unwrap_or(0.0);
     // Discard negligible positions that are functionally zero.
@@ -78,6 +92,7 @@ fn parse_position(
 
     Some(FullPositionInfo {
         symbol: p.symbol.clone(),
+        subaccount_index,
         side,
         size: size.abs(),
         position_size_raw: Some((p.position_size.value, p.position_size.decimals)),

@@ -22,6 +22,7 @@ pub(in crate::tui::runtime) fn handle_orders_view_key(
                 .get(state.orders_view.selected_index)
             {
                 let symbol = o.symbol.clone();
+                let subaccount_index = o.subaccount_index;
                 let side = o.side;
                 let size = o.size_remaining;
                 let price_usd = o.price_usd;
@@ -32,6 +33,7 @@ pub(in crate::tui::runtime) fn handle_orders_view_key(
                 let conditional_trigger_direction = o.conditional_trigger_direction;
                 state.trading.input_mode = InputMode::Confirming(PendingAction::CancelOrder {
                     symbol: symbol.clone(),
+                    subaccount_index,
                     side,
                     size,
                     price_usd,
@@ -219,11 +221,13 @@ pub(in crate::tui::runtime) fn handle_positions_view_key(
                 .get(state.positions_view.selected_index)
             {
                 let symbol = pos.symbol.clone();
+                let subaccount_index = pos.subaccount_index;
                 let side = pos.side;
                 let size = pos.size;
                 state.trading.input_mode =
                     InputMode::Confirming(PendingAction::ClosePositionBySymbol {
                         symbol: symbol.clone(),
+                        subaccount_index,
                         side,
                         size,
                         position_size_raw: pos.position_size_raw,

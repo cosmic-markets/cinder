@@ -23,6 +23,18 @@ fn stop_direction_for(side: TradingSide) -> phoenix_rise::Direction {
     }
 }
 
+fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
+    state
+        .market_selector
+        .markets
+        .iter()
+        .find(|m| m.symbol == symbol)
+        .map(|m| m.price)
+        .filter(|price| price.is_finite() && *price > 0.0)
+        .or_else(|| state.price_history.back().copied())
+        .unwrap_or(0.0)
+}
+
 pub(super) fn execute_confirmed_action(
     action: &PendingAction,
     state: &mut TuiState,
@@ -44,6 +56,7 @@ pub(super) fn execute_confirmed_action(
 
     if let PendingAction::ClosePositionBySymbol {
         symbol,
+        subaccount_index,
         side,
         size,
         position_size_raw,
@@ -82,6 +95,7 @@ pub(super) fn execute_confirmed_action(
             ctx,
             vec![ClosePositionEntry {
                 symbol: symbol.clone(),
+                subaccount_index: *subaccount_index,
                 close_side: side.toggle(),
                 num_base_lots,
                 display_size: *size,
@@ -113,6 +127,7 @@ pub(super) fn execute_confirmed_action(
                     num_base_lots_for_close(market_cfg, pos.size, pos.position_size_raw).ok()?;
                 Some(ClosePositionEntry {
                     symbol: pos.symbol.clone(),
+                    subaccount_index: pos.subaccount_index,
                     close_side: pos.side.toggle(),
                     num_base_lots,
                     display_size: pos.size,
@@ -131,6 +146,7 @@ pub(super) fn execute_confirmed_action(
 
     if let PendingAction::CancelOrder {
         symbol,
+        subaccount_index,
         side,
         size,
         price_usd,
@@ -157,6 +173,7 @@ pub(super) fn execute_confirmed_action(
             ctx,
             vec![CancelOrderEntry {
                 symbol: symbol.clone(),
+                subaccount_index: *subaccount_index,
                 price_ticks: *price_ticks,
                 order_sequence_number: *order_sequence_number,
                 is_stop_loss: *is_stop_loss,
@@ -191,6 +208,7 @@ pub(super) fn execute_confirmed_action(
             .iter()
             .map(|o| CancelOrderEntry {
                 symbol: o.symbol.clone(),
+                subaccount_index: o.subaccount_index,
                 price_ticks: o.price_ticks,
                 order_sequence_number: o.order_sequence_number,
                 is_stop_loss: o.is_stop_loss,
@@ -245,6 +263,8 @@ pub(super) fn execute_confirmed_action(
                         num_base_lots,
                         *price,
                         *size,
+                        cfg.isolated_only,
+                        cfg.max_leverage,
                         tx_status.clone(),
                     );
                 }
@@ -253,6 +273,16 @@ pub(super) fn execute_confirmed_action(
                         "{} {} {} {} @ ${:.2}\u{2026}",
                         s.st_submitting_stop, side_lbl, size, cfg.symbol, trigger
                     ));
+                    let subaccount_index = if cfg.isolated_only {
+                        state
+                            .trading
+                            .position
+                            .as_ref()
+                            .map(|p| p.subaccount_index)
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    };
                     submit_stop_market_order(
                         kp,
                         ctx,
@@ -261,6 +291,8 @@ pub(super) fn execute_confirmed_action(
                         num_base_lots,
                         *trigger,
                         *size,
+                        subaccount_index,
+                        cfg.isolated_only,
                         tx_status.clone(),
                     );
                 }
@@ -269,6 +301,7 @@ pub(super) fn execute_confirmed_action(
                         "{} {} {} {}\u{2026}",
                         s.st_submitting, side_lbl, size, cfg.symbol
                     ));
+                    let reference_price_usd = market_price_for_symbol(state, &cfg.symbol);
                     submit_market_order(
                         kp,
                         ctx,
@@ -277,6 +310,10 @@ pub(super) fn execute_confirmed_action(
                         num_base_lots,
                         false,
                         *size,
+                        0,
+                        cfg.isolated_only,
+                        cfg.max_leverage,
+                        reference_price_usd,
                         tx_status.clone(),
                     );
                 }
@@ -316,6 +353,10 @@ pub(super) fn execute_confirmed_action(
                 num_base_lots,
                 true,
                 pos.size,
+                pos.subaccount_index,
+                cfg.isolated_only,
+                cfg.max_leverage,
+                pos.entry_price,
                 tx_status.clone(),
             );
         }

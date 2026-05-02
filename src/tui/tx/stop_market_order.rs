@@ -29,6 +29,8 @@ pub fn submit_stop_market_order(
     num_base_lots: u64,
     trigger_price_usd: f64,
     display_size: f64,
+    subaccount_index: u8,
+    isolated_only: bool,
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
@@ -61,18 +63,27 @@ pub fn submit_stop_market_order(
         };
 
         let builder = PhoenixTxBuilder::new(&ctx.metadata);
+        let isolated_only = isolated_only || ctx.market_isolated_only(&symbol);
+        if isolated_only && subaccount_index == 0 {
+            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
+                detail: "isolated stop orders require an existing isolated position".to_string(),
+            });
+            return;
+        }
+        let trader_account = ctx.trader_pda_for_subaccount(subaccount_index);
 
         let mut prepended_conditional_create = false;
         let mut ixs: Vec<solana_instruction::Instruction> = Vec::new();
 
-        let cond_pda = get_conditional_orders_address(&ctx.trader_pda_v2);
+        let cond_pda = get_conditional_orders_address(&trader_account);
         match ctx.rpc_client.get_account(&cond_pda).await {
             Ok(acc) if !acc.data.is_empty() => {}
             _ => {
                 match builder.build_create_conditional_orders_account(
                     ctx.authority_v2,
                     ctx.authority_v2,
-                    ctx.trader_pda_v2,
+                    trader_account,
                     8,
                 ) {
                     Ok(mut create_ixs) => {
@@ -92,7 +103,7 @@ pub fn submit_stop_market_order(
 
         let mut bracket_ixs = match builder.build_bracket_leg_orders(
             ctx.authority_v2,
-            ctx.trader_pda_v2,
+            trader_account,
             &symbol,
             position_side,
             &bracket,
@@ -109,12 +120,13 @@ pub fn submit_stop_market_order(
         ixs.append(&mut bracket_ixs);
 
         let mut includes_register = false;
-        if !ctx
-            .trader_registered
-            .load(std::sync::atomic::Ordering::Relaxed)
+        if subaccount_index == 0
+            && !ctx
+                .trader_registered
+                .load(std::sync::atomic::Ordering::Relaxed)
         {
             let builder = PhoenixTxBuilder::new(&ctx.metadata);
-            match ctx.rpc_client.get_account(&ctx.trader_pda_v2).await {
+            match ctx.rpc_client.get_account(&trader_account).await {
                 Ok(acc) if !acc.data.is_empty() => {
                     ctx.trader_registered
                         .store(true, std::sync::atomic::Ordering::Relaxed);

@@ -22,7 +22,7 @@ pub(in crate::tui::runtime) fn spawn_tx_context_task(
         }
     };
     tokio::spawn(async move {
-        match TxContext::new(&kp, &symbol, &http).await {
+        match TxContext::new(&kp, &symbol, Arc::clone(&http)).await {
             Ok(ctx) => {
                 let ctx = Arc::new(ctx);
                 let _ = ctx_chan.send((wallet, symbol, ctx));
