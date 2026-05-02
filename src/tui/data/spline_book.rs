@@ -34,7 +34,12 @@ fn checked_lots_to_units(lots: u64, base_lot_decimals: i8) -> Option<f64> {
 
 #[inline]
 fn region_has_liquidity(region: &phoenix_rise::types::accounts::TickRegion) -> bool {
-    region.total_size > 0
+    // `bid_offset` / `ask_offset` only advance once the *front* region in the
+    // rolling window is fully consumed; later regions inside the active window
+    // can be drained while the offset stays put. Including a fully-filled
+    // region in the displayed book leaves a stale price ghost that crosses the
+    // touch.
+    region.total_size > region.filled_size
 }
 
 pub fn parse_spline_sequence(data: &[u8]) -> Option<(u64, u64)> {
@@ -105,6 +110,34 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
 
     bid_rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     ask_rows.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Trim crossed rows at the touch. Phoenix splines don't auto-match
+    // maker-vs-maker, so two splines with different `mid_price` can sit
+    // crossed until a taker resolves them. Heuristic: stale-ghost quotes are
+    // usually tiny next to the genuine touch, so when the bid/ask cross we
+    // drop whichever side has less unfilled size and re-check. The dropped
+    // rows are also pulled out of `bid_rows`/`ask_rows` so the chart's
+    // `best_bid`/`best_ask` reflect the cleaned touch (otherwise the
+    // mid-price would jitter as a tiny stale region flickered in and out).
+    let mut bid_skip = 0usize;
+    let mut ask_skip = 0usize;
+    loop {
+        let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) else {
+            break;
+        };
+        if b.1 < a.1 {
+            break;
+        }
+        let bid_unfilled = b.5 - b.4;
+        let ask_unfilled = a.5 - a.4;
+        if bid_unfilled < ask_unfilled {
+            bid_skip += 1;
+        } else {
+            ask_skip += 1;
+        }
+    }
+    let bid_rows: Vec<SplineRow> = bid_rows.into_iter().skip(bid_skip).collect();
+    let ask_rows: Vec<SplineRow> = ask_rows.into_iter().skip(ask_skip).collect();
 
     let best_bid = bid_rows.first().map(|r| r.1);
     let best_ask = ask_rows.first().map(|r| r.1);
