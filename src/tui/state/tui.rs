@@ -154,31 +154,36 @@ impl TuiState {
 
         // Per-side raw quotes before grouping. Splines collapse to a single
         // point at their most aggressive price (price_start of the region) so
-        // the rendered book reads like a normal CLOB. The trailing bool is
-        // the spline iceberg-hit flag; CLOB rows don't have hidden fills so
-        // they always carry `false`.
-        let mut raw_bids: Vec<(f64, f64, String, RowSource, bool)> = Vec::new();
-        let mut raw_asks: Vec<(f64, f64, String, RowSource, bool)> = Vec::new();
+        // the rendered book reads like a normal CLOB.
+        let mut raw_bids: Vec<(f64, f64, String, RowSource)> = Vec::new();
+        let mut raw_asks: Vec<(f64, f64, String, RowSource)> = Vec::new();
 
-        if let Some(parsed) = self.last_parsed.as_ref() {
-            for r in &parsed.bid_rows {
-                raw_bids.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline, r.3));
-            }
-            for r in &parsed.ask_rows {
-                raw_asks.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline, r.3));
-            }
-        }
+        let (bid_iceberg_prices, ask_iceberg_prices): (&[f64], &[f64]) =
+            match self.last_parsed.as_ref() {
+                Some(parsed) => {
+                    for r in &parsed.bid_rows {
+                        raw_bids.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
+                    }
+                    for r in &parsed.ask_rows {
+                        raw_asks.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
+                    }
+                    (&parsed.bid_iceberg_prices, &parsed.ask_iceberg_prices)
+                }
+                None => (&[], &[]),
+            };
         if show_clob {
             for (price, qty, trader) in &self.clob_bids {
-                raw_bids.push((*price, *qty, trader.clone(), RowSource::Clob, false));
+                raw_bids.push((*price, *qty, trader.clone(), RowSource::Clob));
             }
             for (price, qty, trader) in &self.clob_asks {
-                raw_asks.push((*price, *qty, trader.clone(), RowSource::Clob, false));
+                raw_asks.push((*price, *qty, trader.clone(), RowSource::Clob));
             }
         }
 
-        let bid_rows = group_by_price(raw_bids, true, price_decimals);
-        let ask_rows = group_by_price(raw_asks, false, price_decimals);
+        let mut bid_rows = group_by_price(raw_bids, true, price_decimals);
+        let mut ask_rows = group_by_price(raw_asks, false, price_decimals);
+        apply_iceberg_markers(&mut bid_rows, bid_iceberg_prices, price_decimals);
+        apply_iceberg_markers(&mut ask_rows, ask_iceberg_prices, price_decimals);
 
         let best_bid = bid_rows.first().map(|r| r.price);
         let best_ask = ask_rows.first().map(|r| r.price);
@@ -363,19 +368,18 @@ impl TuiState {
 /// ULP from the same tick reached directly via `ticks_to_price`, so a CLOB
 /// and a spline quote at the same tick would otherwise render as two rows.
 fn group_by_price(
-    raw: Vec<(f64, f64, String, RowSource, bool)>,
+    raw: Vec<(f64, f64, String, RowSource)>,
     is_bid: bool,
     price_decimals: usize,
 ) -> Vec<BookRow> {
     let scale = 10_f64.powi(price_decimals as i32);
     let mut by_price: Vec<(i64, BookRow)> = Vec::new();
-    for (price, size, trader, source, has_hidden_fill) in raw {
+    for (price, size, trader, source) in raw {
         let key = (price * scale).round() as i64;
         match by_price.iter_mut().find(|(k, _)| *k == key) {
             Some((_, row)) => {
                 row.size += size;
                 row.traders.push((trader, source));
-                row.has_hidden_fill |= has_hidden_fill;
             }
             None => {
                 by_price.push((
@@ -384,7 +388,7 @@ fn group_by_price(
                         price,
                         size,
                         traders: vec![(trader, source)],
-                        has_hidden_fill,
+                        has_hidden_fill: false,
                     },
                 ));
             }
@@ -405,6 +409,30 @@ fn group_by_price(
         });
     }
     rows
+}
+
+/// Sets `has_hidden_fill` on each row whose price matches one of the supplied
+/// marker prices. Marker prices are computed at `price_at_offset(end_offset)`
+/// for each spline region with a hidden iceberg, which is one tick further
+/// from mid than the region's worst visible tick. They typically coincide with
+/// the next-outer region's worst tick; markers with no matching row are
+/// silently dropped.
+///
+/// Matching uses integer tick keys (rounded to `price_decimals`) so spline
+/// prices computed from different mid values still collide cleanly with the
+/// row prices produced by `group_by_price`.
+fn apply_iceberg_markers(rows: &mut [BookRow], marker_prices: &[f64], price_decimals: usize) {
+    if marker_prices.is_empty() {
+        return;
+    }
+    let scale = 10_f64.powi(price_decimals as i32);
+    let key_of = |p: f64| (p * scale).round() as i64;
+    for marker in marker_prices {
+        let key = key_of(*marker);
+        if let Some(row) = rows.iter_mut().find(|r| key_of(r.price) == key) {
+            row.has_hidden_fill = true;
+        }
+    }
 }
 
 #[cfg(test)]

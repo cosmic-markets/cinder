@@ -9,18 +9,24 @@ use super::super::math::{base_lots_to_units, ticks_to_price};
 
 /// One row at a single tick: trader PDA (the spline's owning trader account;
 /// resolve to the wallet authority via `GtiCache::resolve_pda` at display
-/// time), tick price, the available size at that tick (density minus any
+/// time), tick price, and the available size at that tick (density minus any
 /// per-region fill that's already consumed this tick or the ones in front of
-/// it), and a flag set when this is the topmost rendered tick of a region
-/// that has a hidden iceberg configured (`top_level_hidden_take_size > 0`).
-/// Splines are pre-expanded into one row per tick inside their regions so the
-/// displayed book reads as a normal CLOB.
-pub type SplineRow = (PhoenixPubkey, f64, f64, bool);
+/// it). Splines are pre-expanded into one row per tick inside their regions
+/// so the displayed book reads as a normal CLOB.
+pub type SplineRow = (PhoenixPubkey, f64, f64);
 
 #[derive(Clone)]
 pub struct ParsedSplineData {
     pub bid_rows: Vec<SplineRow>,
     pub ask_rows: Vec<SplineRow>,
+    /// Prices at which a 🧊 iceberg marker should be painted. One entry per
+    /// active spline region with `top_level_hidden_take_size > 0`, positioned
+    /// at `price_at_offset(end_offset)` — i.e., one tick further from mid than
+    /// the region's worst visible tick. That price typically coincides with
+    /// the worst tick of the next-outer region, so the marker lands on a real
+    /// row; orphan markers (no row at that price) are dropped at merge time.
+    pub bid_iceberg_prices: Vec<f64>,
+    pub ask_iceberg_prices: Vec<f64>,
     pub best_bid: Option<f64>,
     pub best_ask: Option<f64>,
 }
@@ -93,22 +99,13 @@ fn expand_region<F>(
         return;
     }
     let mut remaining = unfilled_lots;
-    // Iteration goes outer→inner, so the *first* row pushed is the worst
-    // (least-aggressive, furthest-from-mid) quote for this spline region.
-    // Mark only that row when the region carries a hidden iceberg.
-    let mut iceberg_pending = region.top_level_hidden_take_size > 0;
     for offset in (region.start_offset..region.end_offset).rev() {
         if remaining == 0 {
             break;
         }
         let take = remaining.min(region.density);
         remaining -= take;
-        out.push((
-            trader,
-            price_at_offset(offset),
-            base_lots_to_units(take, bld),
-            std::mem::replace(&mut iceberg_pending, false),
-        ));
+        out.push((trader, price_at_offset(offset), base_lots_to_units(take, bld)));
     }
 }
 
@@ -124,6 +121,8 @@ pub fn parse_spline_data(
     }
     let mut bid_rows: Vec<SplineRow> = Vec::new();
     let mut ask_rows: Vec<SplineRow> = Vec::new();
+    let mut bid_iceberg_prices: Vec<f64> = Vec::new();
+    let mut ask_iceberg_prices: Vec<f64> = Vec::new();
 
     for spline in collection.active_splines() {
         let trader = spline.trader;
@@ -142,13 +141,11 @@ pub fn parse_spline_data(
             if !region_is_active(region, current_slot, last_updated_slot) {
                 continue;
             }
-            expand_region(
-                region,
-                trader,
-                bld,
-                |offset| mid - ticks_to_price(offset, tick_size, bld),
-                &mut bid_rows,
-            );
+            let price_at_offset = |offset| mid - ticks_to_price(offset, tick_size, bld);
+            if region.top_level_hidden_take_size > 0 {
+                bid_iceberg_prices.push(price_at_offset(region.end_offset));
+            }
+            expand_region(region, trader, bld, price_at_offset, &mut bid_rows);
         }
 
         let ask_start = (spline.ask_offset as usize).min(spline.ask_regions.len());
@@ -159,13 +156,11 @@ pub fn parse_spline_data(
             if !region_is_active(region, current_slot, last_updated_slot) {
                 continue;
             }
-            expand_region(
-                region,
-                trader,
-                bld,
-                |offset| mid + ticks_to_price(offset, tick_size, bld),
-                &mut ask_rows,
-            );
+            let price_at_offset = |offset| mid + ticks_to_price(offset, tick_size, bld);
+            if region.top_level_hidden_take_size > 0 {
+                ask_iceberg_prices.push(price_at_offset(region.end_offset));
+            }
+            expand_region(region, trader, bld, price_at_offset, &mut ask_rows);
         }
     }
 
@@ -201,6 +196,8 @@ pub fn parse_spline_data(
     Some(ParsedSplineData {
         bid_rows,
         ask_rows,
+        bid_iceberg_prices,
+        ask_iceberg_prices,
         best_bid,
         best_ask,
     })
