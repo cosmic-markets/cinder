@@ -138,6 +138,7 @@ fn parse_phoenix_tx_error_with_table(error: &str, s: &Strings) -> String {
     }
     if lower.contains("insufficientfunds")
         || lower.contains("insufficient funds")
+        || lower.contains("insufficient transferable funds")
         || error.contains("MarginError")
         || error.contains("validate_margin_state_change failed")
     {
@@ -199,6 +200,15 @@ mod tests {
         assert_eq!(
             parse_phoenix_tx_error_with_table(raw, &EN),
             EN.tx_err_isolated_only_cross_margin
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_insufficient_transferable_funds() {
+        let raw = r#"API error: 400 - {"error":"Insufficient transferable funds in source account. Total Balance: $0.24, Transferable: $0.00, Requested: $0.01."}"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_insufficient_funds
         );
     }
 }

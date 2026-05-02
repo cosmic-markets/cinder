@@ -81,9 +81,10 @@ pub fn submit_limit_order(
             {
                 Ok(ixs) => ixs,
                 Err(e) => {
+                    let detail = parse_phoenix_tx_error(&format!("{}", e));
                     let _ = tx_status.send(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
-                        detail: format!("{}", e),
+                        detail,
                     });
                     return;
                 }
