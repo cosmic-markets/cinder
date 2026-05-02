@@ -64,7 +64,6 @@ pub struct Strings {
     pub bids: &'static str,
     pub slot: &'static str,
     pub trader: &'static str,
-    pub price_range: &'static str,
     pub depth: &'static str,
     pub bid_abbrev: &'static str,
     pub ask_abbrev: &'static str,

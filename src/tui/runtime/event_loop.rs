@@ -222,6 +222,7 @@ pub async fn spawn_spline_poller(
                                                     &cfg.symbol,
                                                     false,
                                                     gti_guard.as_ref(),
+                                                    cfg.price_decimals,
                                                 );
                                                 drop(gti_guard);
                                             }

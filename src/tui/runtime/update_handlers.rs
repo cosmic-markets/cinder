@@ -81,6 +81,7 @@ pub(super) async fn handle_spline_account_update(
             &cfg.symbol,
             current_user_config().show_clob,
             gti_guard.as_ref(),
+            cfg.price_decimals,
         );
         drop(gti_guard);
         redraw_tui(terminal, state, cfg, rpc_host);
