@@ -37,7 +37,9 @@ use super::super::data::fetch_top_positions;
 use super::super::data::GtiHandle;
 use super::super::data::{parse_l2_book_from_market_account, L2Level};
 use super::super::format::pubkey_trader_prefix;
-use super::super::state::{BalanceUpdate, ClobLevel, L2BookStreamMsg, SplineBootstrapMsg, TxStatusMsg};
+use super::super::state::{
+    BalanceUpdate, ClobLevel, L2BookStreamMsg, SplineBootstrapMsg, TxStatusMsg,
+};
 use super::super::trading::{
     fetch_phoenix_balance_and_position, OrderInfo, TopPositionEntry, TradingSide,
 };

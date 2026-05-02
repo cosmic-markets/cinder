@@ -98,7 +98,9 @@ fn is_post_only_cross_error(text: &str) -> bool {
 fn is_isolated_only_cross_margin_error(text: &str) -> bool {
     let lower = text.to_lowercase();
     lower.contains("isolated-only markets reject cross-margin trader accounts")
-        || (lower.contains("isolated-only") && lower.contains("cross-margin") && lower.contains("reject"))
+        || (lower.contains("isolated-only")
+            && lower.contains("cross-margin")
+            && lower.contains("reject"))
 }
 
 fn parse_phoenix_tx_error_with_table(error: &str, s: &Strings) -> String {
