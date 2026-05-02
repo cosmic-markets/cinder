@@ -160,10 +160,10 @@ impl TuiState {
 
         if let Some(parsed) = self.last_parsed.as_ref() {
             for r in &parsed.bid_rows {
-                raw_bids.push((r.1, r.5, resolve_spline_trader(&r.0), RowSource::Spline));
+                raw_bids.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
             }
             for r in &parsed.ask_rows {
-                raw_asks.push((r.1, r.5, resolve_spline_trader(&r.0), RowSource::Spline));
+                raw_asks.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
             }
         }
         if show_clob {
