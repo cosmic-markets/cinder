@@ -154,24 +154,26 @@ impl TuiState {
 
         // Per-side raw quotes before grouping. Splines collapse to a single
         // point at their most aggressive price (price_start of the region) so
-        // the rendered book reads like a normal CLOB.
-        let mut raw_bids: Vec<(f64, f64, String, RowSource)> = Vec::new();
-        let mut raw_asks: Vec<(f64, f64, String, RowSource)> = Vec::new();
+        // the rendered book reads like a normal CLOB. The trailing bool is
+        // the spline iceberg-hit flag; CLOB rows don't have hidden fills so
+        // they always carry `false`.
+        let mut raw_bids: Vec<(f64, f64, String, RowSource, bool)> = Vec::new();
+        let mut raw_asks: Vec<(f64, f64, String, RowSource, bool)> = Vec::new();
 
         if let Some(parsed) = self.last_parsed.as_ref() {
             for r in &parsed.bid_rows {
-                raw_bids.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
+                raw_bids.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline, r.3));
             }
             for r in &parsed.ask_rows {
-                raw_asks.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline));
+                raw_asks.push((r.1, r.2, resolve_spline_trader(&r.0), RowSource::Spline, r.3));
             }
         }
         if show_clob {
             for (price, qty, trader) in &self.clob_bids {
-                raw_bids.push((*price, *qty, trader.clone(), RowSource::Clob));
+                raw_bids.push((*price, *qty, trader.clone(), RowSource::Clob, false));
             }
             for (price, qty, trader) in &self.clob_asks {
-                raw_asks.push((*price, *qty, trader.clone(), RowSource::Clob));
+                raw_asks.push((*price, *qty, trader.clone(), RowSource::Clob, false));
             }
         }
 
@@ -361,18 +363,19 @@ impl TuiState {
 /// ULP from the same tick reached directly via `ticks_to_price`, so a CLOB
 /// and a spline quote at the same tick would otherwise render as two rows.
 fn group_by_price(
-    raw: Vec<(f64, f64, String, RowSource)>,
+    raw: Vec<(f64, f64, String, RowSource, bool)>,
     is_bid: bool,
     price_decimals: usize,
 ) -> Vec<BookRow> {
     let scale = 10_f64.powi(price_decimals as i32);
     let mut by_price: Vec<(i64, BookRow)> = Vec::new();
-    for (price, size, trader, source) in raw {
+    for (price, size, trader, source, has_hidden_fill) in raw {
         let key = (price * scale).round() as i64;
         match by_price.iter_mut().find(|(k, _)| *k == key) {
             Some((_, row)) => {
                 row.size += size;
                 row.traders.push((trader, source));
+                row.has_hidden_fill |= has_hidden_fill;
             }
             None => {
                 by_price.push((
@@ -381,6 +384,7 @@ fn group_by_price(
                         price,
                         size,
                         traders: vec![(trader, source)],
+                        has_hidden_fill,
                     },
                 ));
             }

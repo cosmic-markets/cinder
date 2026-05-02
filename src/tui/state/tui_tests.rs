@@ -18,7 +18,7 @@ fn pda_with_prefix(tag: u8) -> PhoenixPubkey {
 }
 
 fn spline_row(tag: u8, price: f64, _price_end_unused: f64, size: f64) -> SplineRow {
-    (pda_with_prefix(tag), price, size)
+    (pda_with_prefix(tag), price, size, false)
 }
 
 #[test]

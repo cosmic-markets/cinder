@@ -19,10 +19,12 @@ pub(super) fn render_side_table(
 ) {
     // Trader col fits up to four merged initials with the user-arrow prefix
     // ("> m/x/y/z" = 9 chars). Price drops from a 22-wide range to a single
-    // value ("$12345.67" ≈ 9 chars).
+    // value ("$12345.67" ≈ 9 chars). The leading 2-wide marker column carries
+    // a 🧊 glyph (cell-width 2 in modern terminals) when this row's spline
+    // has had its hidden iceberg consumed against; otherwise it's blank.
     let borders: u16 = 2;
-    let fixed_with_size: u16 = 9 + 1 + 10 + 1 + 10 + 1 + 10 + 1;
-    let fixed_without_size: u16 = 9 + 1 + 10 + 1 + 10 + 1;
+    let fixed_with_size: u16 = 2 + 1 + 9 + 1 + 10 + 1 + 10 + 1 + 10 + 1;
+    let fixed_without_size: u16 = 2 + 1 + 9 + 1 + 10 + 1 + 10 + 1;
     let bar_with_size = area.width.saturating_sub(fixed_with_size + borders) as usize;
     let show_size_col = bar_with_size >= 4;
     let fixed_cols = if show_size_col {
@@ -86,6 +88,7 @@ pub(super) fn render_side_table(
         .border_style(Style::default().fg(border_color));
 
     let mut header_cells = vec![
+        Cell::from(""),
         Cell::from(Line::from(st_s.trader).alignment(Alignment::Right)),
         Cell::from(Line::from(st_s.price).alignment(Alignment::Right)),
     ];
@@ -150,6 +153,7 @@ pub(super) fn render_side_table(
 
     let widths: Vec<Constraint> = if show_size_col {
         vec![
+            Constraint::Length(2),
             Constraint::Length(9),
             Constraint::Length(10),
             Constraint::Length(10),
@@ -158,6 +162,7 @@ pub(super) fn render_side_table(
         ]
     } else {
         vec![
+            Constraint::Length(2),
             Constraint::Length(9),
             Constraint::Length(10),
             Constraint::Length(10),
@@ -293,7 +298,13 @@ fn build_row<'a>(
             .style(Style::default().fg(trader_color))
     };
 
+    let marker_cell = if row.has_hidden_fill {
+        Cell::from(Line::from("\u{1F9CA}").alignment(Alignment::Left))
+    } else {
+        Cell::from("")
+    };
     let mut cells = vec![
+        marker_cell,
         trader_cell,
         Cell::from(Line::from(price_str).alignment(Alignment::Right)),
     ];

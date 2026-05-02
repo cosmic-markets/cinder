@@ -1,0 +1,34 @@
+asset=SOL num_splines=3 num_active=3 seq=54272891 slot=417191642
+spline[0] trader=DUGirckB mid_ticks=8440 mid=$84.400000 bid_offset=0 bid_num_regions=10 bid_filled=0 ask_offset=0 ask_num_regions=10 ask_filled=0
+  bid[0]* start_off=1 end_off=2 $84.390000..$84.380000 density=8553 total=8553 filled=0 hidden_filled=0 top_hidden_take=47449 lifespan=6
+  bid[1]* start_off=2 end_off=3 $84.380000..$84.370000 density=30810 total=30810 filled=0 hidden_filled=0 top_hidden_take=71173 lifespan=6
+  bid[2]* start_off=3 end_off=4 $84.370000..$84.360000 density=157335 total=157335 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[3]* start_off=7 end_off=8 $84.330000..$84.320000 density=203204 total=203204 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[4]* start_off=10 end_off=11 $84.300000..$84.290000 density=151601 total=151601 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[5]* start_off=14 end_off=15 $84.260000..$84.250000 density=188065 total=188065 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[6]* start_off=17 end_off=18 $84.230000..$84.220000 density=201337 total=201337 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[7]* start_off=21 end_off=22 $84.190000..$84.180000 density=231895 total=231895 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[8]* start_off=26 end_off=34 $84.140000..$84.060000 density=21352 total=170816 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[9]* start_off=140 end_off=216 $83.000000..$82.240000 density=11862 total=901512 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=12
+  ask[0]* start_off=1 end_off=2 $84.410000..$84.420000 density=9589 total=9589 filled=0 hidden_filled=0 top_hidden_take=47449 lifespan=6
+  ask[1]* start_off=2 end_off=3 $84.420000..$84.430000 density=33563 total=33563 filled=0 hidden_filled=0 top_hidden_take=71173 lifespan=6
+  ask[2]* start_off=3 end_off=4 $84.430000..$84.440000 density=35649 total=35649 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[3]* start_off=7 end_off=8 $84.470000..$84.480000 density=200124 total=200124 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[4]* start_off=10 end_off=11 $84.500000..$84.510000 density=148278 total=148278 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[5]* start_off=14 end_off=15 $84.540000..$84.550000 density=184234 total=184234 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[6]* start_off=17 end_off=18 $84.570000..$84.580000 density=205212 total=205212 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[7]* start_off=21 end_off=22 $84.610000..$84.620000 density=237360 total=237360 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[8]* start_off=26 end_off=34 $84.660000..$84.740000 density=21352 total=170816 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[9]* start_off=140 end_off=216 $85.800000..$86.560000 density=11862 total=901512 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=12
+spline[1] trader=4UN4drzC mid_ticks=8439 mid=$84.390000 bid_offset=0 bid_num_regions=3 bid_filled=0 ask_offset=0 ask_num_regions=3 ask_filled=0
+  bid[0]* start_off=0 end_off=1 $84.390000..$84.380000 density=9584 total=9584 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[1]* start_off=1 end_off=2 $84.380000..$84.370000 density=34450 total=34450 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[2]* start_off=2 end_off=3 $84.370000..$84.360000 density=169325 total=169325 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[0]* start_off=1 end_off=2 $84.400000..$84.410000 density=8759 total=8759 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[1]* start_off=2 end_off=3 $84.410000..$84.420000 density=32512 total=32512 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  ask[2]* start_off=3 end_off=4 $84.420000..$84.430000 density=169191 total=169191 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+spline[2] trader=FDgug8gK mid_ticks=8437 mid=$84.370000 bid_offset=0 bid_num_regions=4 bid_filled=0 ask_offset=0 ask_num_regions=0 ask_filled=0
+  bid[0]* start_off=2 end_off=3 $84.350000..$84.340000 density=200 total=200 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[1]* start_off=3 end_off=4 $84.340000..$84.330000 density=400 total=400 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[2]* start_off=7 end_off=8 $84.300000..$84.290000 density=800 total=800 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6
+  bid[3]* start_off=13 end_off=14 $84.240000..$84.230000 density=1600 total=1600 filled=0 hidden_filled=0 top_hidden_take=0 lifespan=6

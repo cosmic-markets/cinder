@@ -9,11 +9,13 @@ use super::super::math::{base_lots_to_units, ticks_to_price};
 
 /// One row at a single tick: trader PDA (the spline's owning trader account;
 /// resolve to the wallet authority via `GtiCache::resolve_pda` at display
-/// time), tick price, and the available size at that tick (density minus any
+/// time), tick price, the available size at that tick (density minus any
 /// per-region fill that's already consumed this tick or the ones in front of
-/// it). Splines are pre-expanded into one row per tick inside their regions
-/// so the displayed book reads as a normal CLOB.
-pub type SplineRow = (PhoenixPubkey, f64, f64);
+/// it), and a flag set when this is the topmost rendered tick of a region
+/// that has a hidden iceberg configured (`top_level_hidden_take_size > 0`).
+/// Splines are pre-expanded into one row per tick inside their regions so the
+/// displayed book reads as a normal CLOB.
+pub type SplineRow = (PhoenixPubkey, f64, f64, bool);
 
 #[derive(Clone)]
 pub struct ParsedSplineData {
@@ -91,6 +93,10 @@ fn expand_region<F>(
         return;
     }
     let mut remaining = unfilled_lots;
+    // Iteration goes outer→inner, so the *first* row pushed is the worst
+    // (least-aggressive, furthest-from-mid) quote for this spline region.
+    // Mark only that row when the region carries a hidden iceberg.
+    let mut iceberg_pending = region.top_level_hidden_take_size > 0;
     for offset in (region.start_offset..region.end_offset).rev() {
         if remaining == 0 {
             break;
@@ -101,6 +107,7 @@ fn expand_region<F>(
             trader,
             price_at_offset(offset),
             base_lots_to_units(take, bld),
+            std::mem::replace(&mut iceberg_pending, false),
         ));
     }
 }
