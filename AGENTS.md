@@ -257,7 +257,7 @@ The `[profile.release]` settings (`codegen-units=1`, `lto=thin`, `opt-level="s"`
 - **Background tasks** never touch `TuiState` directly. They send typed payloads through `tokio::sync::mpsc::Unbounded*` channels (or one bounded channel for stats). The event loop drains those receivers and applies updates via `update_handlers::*`.
 - **Static work** (decoders, IX builders, formatters, math) is sync and free of `tokio` types.
 - **`watch::channel<SplineConfig>`** drives the L2 book task without an extra mpsc — the task `borrow().clone()`s on every reconnect so a market switch propagates by replacing the watched value.
-- **Backpressure**: the only bounded channel is `MarketStatUpdate` (cap 128). On full it drops via `try_send`. Every other channel is unbounded; producers are externally rate-limited (`L2_EMIT_MIN_INTERVAL = 100 ms`, balances 1.1 s, top positions 5 s).
+- **Backpressure**: the only bounded channel is `MarketStatUpdate` (cap 128). On full it drops via `try_send`. Every other channel is unbounded; producers are externally rate-limited (`L2_POLL_INTERVAL = 500 ms`, balances 1.1 s, top positions 5 s).
 - **Reconnect backoff**: `WSS_RETRY_INIT = 2 s` doubling to `WSS_RETRY_CAP = 30 s`. The spline pubsub uses a flat 5 s sleep instead.
 
 ### Channel topology (`tui::runtime::channels`)
@@ -482,7 +482,7 @@ Keep this document tight and pointer-rich — it's read by future agents before 
 - Add or remove a top-level module / file under `src/tui/`.
 - Change the channel topology (new producer / consumer, new payload).
 - Change a pinned dependency version (especially the `=2.3.13` solana stack).
-- Touch a tuning constant (`FEED_REDRAW_MIN_INTERVAL`, `L2_EMIT_MIN_INTERVAL`, `WSS_RETRY_*`, `MAX_PRICE_HISTORY`, `TOP_N`, `LEDGER_CAPACITY`, `SIGNATURE_DEDUP_CAP`, `MAX_CONCURRENT_GET_TX`, `GET_TX_TIMEOUT`, `BLOCKHASH_FETCH_TIMEOUT`, `REFRESH_MIN_INTERVAL`, `RPC_BATCH_SIZE`).
+- Touch a tuning constant (`FEED_REDRAW_MIN_INTERVAL`, `L2_POLL_INTERVAL`, `WSS_RETRY_*`, `MAX_PRICE_HISTORY`, `TOP_N`, `LEDGER_CAPACITY`, `SIGNATURE_DEDUP_CAP`, `MAX_CONCURRENT_GET_TX`, `GET_TX_TIMEOUT`, `BLOCKHASH_FETCH_TIMEOUT`, `REFRESH_MIN_INTERVAL`, `RPC_BATCH_SIZE`).
 - Add a new InputMode, KeyAction variant, or modal.
 
 Out of scope for this file: per-task implementation detail (read the source), one-off bug fixes (commit message), and ephemeral release notes (CHANGELOG / git log).

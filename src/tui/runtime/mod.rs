@@ -22,12 +22,6 @@ pub(in crate::tui::runtime) use channels::{new_channels, Channels, KeyAction, Tx
 /// decrease for snappier visuals.
 const FEED_REDRAW_MIN_INTERVAL: Duration = Duration::from_millis(150);
 
-/// Throttle for the Phoenix L2 producer task. Phoenix emits many book deltas
-/// per second; anything faster than the TUI redraw cadence is coalesced away
-/// downstream, so we cap emission here to avoid per-delta allocation and
-/// channel traffic.
-pub(super) const L2_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(100);
-
 /// Max L2 levels per side pushed to the TUI. The orderbook only renders
 /// `TOP_N` rows; we keep a small cushion so spline/CLOB merge logic has some
 /// depth to choose from.
