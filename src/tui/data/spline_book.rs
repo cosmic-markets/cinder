@@ -19,6 +19,14 @@ pub type SplineRow = (PhoenixPubkey, f64, f64);
 pub struct ParsedSplineData {
     pub bid_rows: Vec<SplineRow>,
     pub ask_rows: Vec<SplineRow>,
+    /// Prices at which a 🧊 iceberg marker should be painted. One entry per
+    /// active spline region with `top_level_hidden_take_size > 0`, positioned
+    /// at `price_at_offset(end_offset)` — i.e., one tick further from mid than
+    /// the region's worst visible tick. That price typically coincides with
+    /// the worst tick of the next-outer region, so the marker lands on a real
+    /// row; orphan markers (no row at that price) are dropped at merge time.
+    pub bid_iceberg_prices: Vec<f64>,
+    pub ask_iceberg_prices: Vec<f64>,
     pub best_bid: Option<f64>,
     pub best_ask: Option<f64>,
 }
@@ -31,13 +39,21 @@ fn load_collection(data: &[u8]) -> Option<SplineCollection> {
 }
 
 #[inline]
-fn region_has_liquidity(region: &phoenix_rise::types::accounts::TickRegion) -> bool {
-    // `bid_offset` / `ask_offset` only advance once the *front* region in the
-    // rolling window is fully consumed; later regions inside the active window
-    // can be drained while the offset stays put. Including a fully-filled
-    // region in the displayed book leaves a stale price ghost that crosses the
-    // touch.
-    region.total_size > region.filled_size
+fn region_is_active(
+    region: &phoenix_rise::types::accounts::TickRegion,
+    current_slot: u64,
+    last_updated_slot: u64,
+) -> bool {
+    // Mirror the on-chain `TickRegion::is_active` predicate: a region is live
+    // only if it still has unfilled visible capacity AND its lifespan window
+    // (relative to the spline's last user update) hasn't elapsed. Skipping the
+    // lifespan half left expired non-GTC regions painted as ghost depth at the
+    // back end of the curve. GTC regions use `lifespan = u64::MAX` so the
+    // saturating add keeps them permanently active.
+    if region.total_size <= region.filled_size {
+        return false;
+    }
+    region.lifespan.saturating_add(last_updated_slot) >= current_slot
 }
 
 pub fn parse_spline_sequence(data: &[u8]) -> Option<(u64, u64)> {
@@ -89,26 +105,30 @@ fn expand_region<F>(
         }
         let take = remaining.min(region.density);
         remaining -= take;
-        out.push((
-            trader,
-            price_at_offset(offset),
-            base_lots_to_units(take, bld),
-        ));
+        out.push((trader, price_at_offset(offset), base_lots_to_units(take, bld)));
     }
 }
 
-pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedSplineData> {
+pub fn parse_spline_data(
+    data: &[u8],
+    tick_size: u64,
+    bld: i8,
+    current_slot: u64,
+) -> Option<ParsedSplineData> {
     let collection = load_collection(data)?;
     if std::env::var_os("CINDER_SPLINE_DEBUG").is_some() {
         dump_spline_collection_debug(&collection, tick_size, bld);
     }
     let mut bid_rows: Vec<SplineRow> = Vec::new();
     let mut ask_rows: Vec<SplineRow> = Vec::new();
+    let mut bid_iceberg_prices: Vec<f64> = Vec::new();
+    let mut ask_iceberg_prices: Vec<f64> = Vec::new();
 
     for spline in collection.active_splines() {
         let trader = spline.trader;
         let mid_ticks = spline.mid_price;
         let mid = ticks_to_price(mid_ticks, tick_size, bld);
+        let last_updated_slot = spline.user_update_slot;
 
         // Skip exhausted regions: as a spline rolls, `bid_offset` advances past
         // filled regions whose stored prices are stale. Including them here was
@@ -118,16 +138,14 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             .min(spline.bid_regions.len())
             .max(bid_start);
         for region in &spline.bid_regions[bid_start..bid_end] {
-            if !region_has_liquidity(region) {
+            if !region_is_active(region, current_slot, last_updated_slot) {
                 continue;
             }
-            expand_region(
-                region,
-                trader,
-                bld,
-                |offset| mid - ticks_to_price(offset, tick_size, bld),
-                &mut bid_rows,
-            );
+            let price_at_offset = |offset| mid - ticks_to_price(offset, tick_size, bld);
+            if region.top_level_hidden_take_size > 0 {
+                bid_iceberg_prices.push(price_at_offset(region.end_offset));
+            }
+            expand_region(region, trader, bld, price_at_offset, &mut bid_rows);
         }
 
         let ask_start = (spline.ask_offset as usize).min(spline.ask_regions.len());
@@ -135,16 +153,14 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             .min(spline.ask_regions.len())
             .max(ask_start);
         for region in &spline.ask_regions[ask_start..ask_end] {
-            if !region_has_liquidity(region) {
+            if !region_is_active(region, current_slot, last_updated_slot) {
                 continue;
             }
-            expand_region(
-                region,
-                trader,
-                bld,
-                |offset| mid + ticks_to_price(offset, tick_size, bld),
-                &mut ask_rows,
-            );
+            let price_at_offset = |offset| mid + ticks_to_price(offset, tick_size, bld);
+            if region.top_level_hidden_take_size > 0 {
+                ask_iceberg_prices.push(price_at_offset(region.end_offset));
+            }
+            expand_region(region, trader, bld, price_at_offset, &mut ask_rows);
         }
     }
 
@@ -180,6 +196,8 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
     Some(ParsedSplineData {
         bid_rows,
         ask_rows,
+        bid_iceberg_prices,
+        ask_iceberg_prices,
         best_bid,
         best_ask,
     })

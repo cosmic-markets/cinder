@@ -46,7 +46,8 @@ pub(super) async fn handle_spline_account_update(
     }
     *last_seen_seq = Some(seq);
 
-    let Some(parsed) = parse_spline_data(&data, cfg.tick_size, cfg.base_lot_decimals) else {
+    let Some(parsed) = parse_spline_data(&data, cfg.tick_size, cfg.base_lot_decimals, wss_slot)
+    else {
         tracing::warn!(slot = wss_slot, "failed to parse spline payload");
         return;
     };
