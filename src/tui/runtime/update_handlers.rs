@@ -51,7 +51,8 @@ pub(super) async fn handle_spline_account_update(
         return;
     };
 
-    if state.switching_to.is_some() {
+    let just_completed_switch = state.switching_to.is_some();
+    if just_completed_switch {
         state.complete_market_switch();
     }
     if let (Some(bid), Some(ask)) = (parsed.best_bid, parsed.best_ask) {
@@ -67,7 +68,14 @@ pub(super) async fn handle_spline_account_update(
         }
     }
 
-    if last_feed_paint.elapsed() >= FEED_REDRAW_MIN_INTERVAL {
+    // Bypass the redraw throttle on the first payload after a switch:
+    // `merged_book` is still holding the prior market's rows (kept on screen
+    // during the switch), and an L2-book msg arriving mid-switch may have
+    // already pushed `last_feed_paint` forward without ever rebuilding (the
+    // rebuild is a no-op while `switching_to.is_some()`). On a quiet market
+    // the next stream push could be far away, so without this we'd display
+    // stale pre-switch rows under the new symbol.
+    if just_completed_switch || last_feed_paint.elapsed() >= FEED_REDRAW_MIN_INTERVAL {
         let gti_guard = gti_cache.read().await;
         state.rebuild_merged_book(
             &cfg.symbol,
