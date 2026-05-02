@@ -180,19 +180,45 @@ pub(super) fn render_side_table(
 /// silently dropped to keep the column inside its 9-char allotment.
 /// Multi-trader rows are sorted alphabetically by prefix so the rendered
 /// order is stable across frames.
+///
+/// Called per book row per frame; uses a stack-allocated array (cap 4 traders)
+/// instead of `Vec::collect` + `sort_by` to skip the per-row heap alloc.
 fn render_trader_initials(traders: &[(String, RowSource)]) -> String {
     if traders.len() == 1 {
         return traders[0].0.chars().take(4).collect();
     }
-    let mut sorted: Vec<&(String, RowSource)> = traders.iter().collect();
-    sorted.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut out = String::new();
-    for (i, (prefix, _)) in sorted.iter().take(4).enumerate() {
+    let mut top: [Option<&str>; 4] = [None; 4];
+    let mut len = 0usize;
+    for (prefix, _) in traders {
+        let p = prefix.as_str();
+        let bound = len.min(top.len());
+        let insert_at = top
+            .iter()
+            .take(bound)
+            .position(|slot| matches!(slot, Some(existing) if p < *existing))
+            .unwrap_or(bound);
+        if insert_at < top.len() {
+            // Shift right to make room (drop overflow off the end).
+            let end = (len + 1).min(top.len());
+            for j in (insert_at + 1..end).rev() {
+                top[j] = top[j - 1];
+            }
+            top[insert_at] = Some(p);
+            if len < top.len() {
+                len += 1;
+            }
+        }
+    }
+
+    let mut out = String::with_capacity(7);
+    for (i, slot) in top.iter().take(len).enumerate() {
         if i > 0 {
             out.push('/');
         }
-        if let Some(c) = prefix.chars().next() {
-            out.push(c);
+        if let Some(prefix) = slot {
+            if let Some(c) = prefix.chars().next() {
+                out.push(c);
+            }
         }
     }
     out

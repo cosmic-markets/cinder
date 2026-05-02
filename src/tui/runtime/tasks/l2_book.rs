@@ -69,10 +69,11 @@ pub(in crate::tui::runtime) fn spawn_phoenix_l2_book_rpc(
                 return;
             }
         };
-        // Skip emits when the account hasn't changed since the last poll —
-        // server-reported context slot is monotonic per market, so an unchanged
-        // slot means the orderbook view we already shipped is still current.
-        let mut last_slot: u64 = 0;
+        // Skip emits when the orderbook hasn't changed between polls. Avoids
+        // burning CPU on the parse/resolve/redraw chain when the market is
+        // idle. Hash of the raw account data; cheap (~50 µs at 100 KB) and
+        // robust against fields that wiggle inside the account.
+        let mut last_data_hash: u64 = 0;
         let mut poll_ticker = tokio::time::interval(L2_POLL_INTERVAL);
         poll_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -87,7 +88,7 @@ pub(in crate::tui::runtime) fn spawn_phoenix_l2_book_rpc(
                         match Pubkey::from_str(&new_cfg.market_pubkey) {
                             Ok(pk) => {
                                 market_pk = pk;
-                                last_slot = 0;
+                                last_data_hash = 0;
                             }
                             Err(e) => {
                                 warn!(
@@ -116,13 +117,19 @@ pub(in crate::tui::runtime) fn spawn_phoenix_l2_book_rpc(
                             continue;
                         }
                     };
-                    if resp.context.slot <= last_slot {
-                        continue;
-                    }
-                    last_slot = resp.context.slot;
                     let Some(account) = resp.value else {
                         continue;
                     };
+                    let hash = {
+                        use std::hash::Hasher;
+                        let mut h = std::collections::hash_map::DefaultHasher::new();
+                        h.write(&account.data);
+                        h.finish()
+                    };
+                    if hash == last_data_hash {
+                        continue;
+                    }
+                    last_data_hash = hash;
                     let Some((bids_raw, asks_raw)) = parse_l2_book_from_market_account(
                         account.data,
                         cfg.tick_size,

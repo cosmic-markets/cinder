@@ -103,19 +103,35 @@ impl MarketSelector {
     }
 
     /// Update price/volume/change for a single market from a live stat event.
+    ///
+    /// Only resorts when the *new* `volume_24h` would actually change the
+    /// symbol's rank against its neighbours. Stat pushes fire continuously
+    /// across every subscribed market and the previous unconditional sort
+    /// (O(N log N) per push × N markets) was a real CPU drain; in steady
+    /// state most pushes shift volume by tiny amounts and don't change order.
     pub fn update_stat(&mut self, update: &MarketStatsUpdate) {
-        let found = if let Some(m) = self.markets.iter_mut().find(|m| m.symbol == update.symbol) {
+        let Some(idx) = self.markets.iter().position(|m| m.symbol == update.symbol) else {
+            return;
+        };
+        let new_vol = update.day_volume_usd;
+        let prev_vol = self.markets[idx].volume_24h;
+        {
+            let m = &mut self.markets[idx];
             m.price = update.mark_price;
-            m.volume_24h = update.day_volume_usd;
+            m.volume_24h = new_vol;
             m.open_interest_usd = update.open_interest * update.mark_price;
             m.change_24h = pct_change_24h(update.mark_price, update.prev_day_mark_price);
-            true
-        } else {
-            false
-        };
-        if found {
-            self.sort_by_volume_desc();
         }
+
+        if new_vol == prev_vol {
+            return;
+        }
+        let above_ok = idx == 0 || self.markets[idx - 1].volume_24h >= new_vol;
+        let below_ok = idx + 1 >= self.markets.len() || self.markets[idx + 1].volume_24h <= new_vol;
+        if above_ok && below_ok {
+            return;
+        }
+        self.sort_by_volume_desc();
     }
 }
 
