@@ -320,6 +320,8 @@ pub struct Strings {
     pub tx_err_order_size_nonzero: &'static str,
     /// Market-wide post-only mode rejects crossing the spread (simulation / program logs).
     pub tx_err_post_only_no_cross: &'static str,
+    /// Isolated market rejects a cross-margin trader account (simulation / program logs).
+    pub tx_err_isolated_only_cross_margin: &'static str,
     /// On-chain `CapabilityDenied`.
     pub tx_err_capability_denied: &'static str,
     /// On-chain `TraderFrozen`.
