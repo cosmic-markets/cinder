@@ -29,7 +29,7 @@ pub(super) fn render_status_tray(
     // bottom hotkey row stays focused on modal toggles.
     let ledger_top_right = Line::from(vec![
         Span::styled(
-            "[L]",
+            " [L]",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
