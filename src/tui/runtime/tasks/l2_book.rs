@@ -52,10 +52,8 @@ pub(in crate::tui::runtime) fn spawn_phoenix_l2_book_rpc(
     gti_refresh: Arc<tokio::sync::Notify>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let rpc = RpcClient::new_with_commitment(
-            rpc_http_url_from_env(),
-            CommitmentConfig::processed(),
-        );
+        let rpc =
+            RpcClient::new_with_commitment(rpc_http_url_from_env(), CommitmentConfig::processed());
 
         let mut cfg = cfg_rx.borrow().clone();
         let mut market_pk = match Pubkey::from_str(&cfg.market_pubkey) {
