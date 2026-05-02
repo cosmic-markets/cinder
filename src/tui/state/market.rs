@@ -13,6 +13,7 @@ pub struct MarketInfo {
     pub max_leverage: f64,
     pub change_24h: f64,
     pub price_decimals: usize,
+    pub isolated_only: bool,
 }
 
 pub struct MarketSelector {
@@ -131,6 +132,7 @@ mod tests {
             max_leverage: 10.0,
             change_24h: 0.0,
             price_decimals,
+            isolated_only: false,
         }
     }
 

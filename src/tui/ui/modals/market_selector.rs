@@ -153,7 +153,8 @@ pub(in crate::tui::ui) fn render_market_selector(
             } else {
                 Color::DarkGray
             };
-            let lev_str = format!("{:.0}x", m.max_leverage);
+            let lev_prefix = if m.isolated_only { "ISO" } else { "   " };
+            let lev_num = format!("{:>3.0}x", m.max_leverage);
             let vol_str = if m.volume_24h > 0.0 {
                 format!("${}", fmt_compact(m.volume_24h))
             } else {
@@ -202,7 +203,13 @@ pub(in crate::tui::ui) fn render_market_selector(
                     .style(price_cell_style),
                 Cell::from(Line::from(chg_str).alignment(Alignment::Right))
                     .style(Style::default().fg(chg_color)),
-                Cell::from(Line::from(lev_str).alignment(Alignment::Right)).style(lev_cell_style),
+                Cell::from(
+                    Line::from(vec![
+                        Span::styled(lev_prefix, Style::default().fg(Color::DarkGray)),
+                        Span::styled(lev_num, lev_cell_style),
+                    ])
+                    .alignment(Alignment::Right),
+                ),
                 Cell::from(Line::from(vol_str).alignment(Alignment::Right)).style(vol_cell_style),
                 Cell::from(Line::from(oi_str).alignment(Alignment::Right)).style(oi_cell_style),
             ])

@@ -20,3 +20,15 @@ pub struct MarketListUpdate {
 }
 
 pub type MarketStatUpdate = MarketStatsUpdate;
+
+/// Snapshot of a spline collection account fetched once at market-switch time.
+///
+/// Solana's `accountSubscribe` only pushes when the account changes, so an
+/// idle market would leave the "Switching to … market…" modal stuck until
+/// the next on-chain spline write. This message carries the current account
+/// state (HTTP `getAccountInfo`) into the same handler the WSS path uses.
+pub struct SplineBootstrapMsg {
+    pub symbol: String,
+    pub slot: u64,
+    pub data: Vec<u8>,
+}

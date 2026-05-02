@@ -215,7 +215,8 @@ pub static EN: Strings = Strings {
     tx_err_balance_too_low: "Balance too low",
     tx_err_order_size_nonzero: "Order size must be greater than zero. Set a non-zero size before \
                                submitting.",
-    tx_err_post_only_no_cross: "Market is PostOnly: can't cross the spread.",
+    tx_err_post_only_no_cross: "Market in post-only mode",
+    tx_err_isolated_only_cross_margin: "Cross margin disabled. Use isolated",
     tx_err_capability_denied: "Trader account lacks permissions. Register via app.phoenix.trade \
                                with an invite code first.",
     tx_err_trader_frozen: "Trader account is frozen. Register at app.phoenix.trade with an invite \

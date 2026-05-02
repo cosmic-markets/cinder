@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::super::state::{BalanceUpdate, LiquidationFeedMsg, TxStatusMsg};
+use super::super::state::{BalanceUpdate, LiquidationFeedMsg, SplineBootstrapMsg, TxStatusMsg};
 use super::super::trading::{OrderInfo, TopPositionEntry};
 use super::super::tx::TxContext;
 
@@ -35,6 +35,7 @@ pub(in crate::tui::runtime) struct Channels {
     pub orders_tx: UnboundedSender<Vec<OrderInfo>>,
     pub top_positions_tx: UnboundedSender<Vec<TopPositionEntry>>,
     pub liquidation_tx: UnboundedSender<LiquidationFeedMsg>,
+    pub spline_bootstrap_tx: UnboundedSender<SplineBootstrapMsg>,
 }
 
 pub(in crate::tui::runtime) struct Receivers {
@@ -46,6 +47,7 @@ pub(in crate::tui::runtime) struct Receivers {
     pub orders_rx: UnboundedReceiver<Vec<OrderInfo>>,
     pub top_positions_rx: UnboundedReceiver<Vec<TopPositionEntry>>,
     pub liquidation_rx: UnboundedReceiver<LiquidationFeedMsg>,
+    pub spline_bootstrap_rx: UnboundedReceiver<SplineBootstrapMsg>,
 }
 
 pub(in crate::tui::runtime) fn new_channels() -> (Channels, Receivers) {
@@ -59,6 +61,8 @@ pub(in crate::tui::runtime) fn new_channels() -> (Channels, Receivers) {
         tokio::sync::mpsc::unbounded_channel::<Vec<TopPositionEntry>>();
     let (liquidation_tx, liquidation_rx) =
         tokio::sync::mpsc::unbounded_channel::<LiquidationFeedMsg>();
+    let (spline_bootstrap_tx, spline_bootstrap_rx) =
+        tokio::sync::mpsc::unbounded_channel::<SplineBootstrapMsg>();
 
     (
         Channels {
@@ -70,6 +74,7 @@ pub(in crate::tui::runtime) fn new_channels() -> (Channels, Receivers) {
             orders_tx,
             top_positions_tx,
             liquidation_tx,
+            spline_bootstrap_tx,
         },
         Receivers {
             rx_status,
@@ -80,6 +85,7 @@ pub(in crate::tui::runtime) fn new_channels() -> (Channels, Receivers) {
             orders_rx,
             top_positions_rx,
             liquidation_rx,
+            spline_bootstrap_rx,
         },
     )
 }

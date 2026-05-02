@@ -75,9 +75,30 @@ pub(super) fn format_not_confirmed_error(e: &str) -> String {
     }
     if e.contains("InsufficientFunds") {
         s.tx_err_balance_too_low.to_string()
+    } else if is_post_only_cross_error(e) {
+        s.tx_err_post_only_no_cross.to_string()
+    } else if is_isolated_only_cross_margin_error(e) {
+        s.tx_err_isolated_only_cross_margin.to_string()
     } else {
         e.to_string()
     }
+}
+
+/// Simulation / program logs use slightly different casing; some paths emit `PostOnlyCross`
+/// instead of the full sentence.
+fn is_post_only_cross_error(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    if lower.contains("postonlycross") {
+        return true;
+    }
+    lower.contains("postonly does not satisfy cross")
+        || (lower.contains("postonly") && lower.contains("satisfy cross"))
+}
+
+fn is_isolated_only_cross_margin_error(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    lower.contains("isolated-only markets reject cross-margin trader accounts")
+        || (lower.contains("isolated-only") && lower.contains("cross-margin") && lower.contains("reject"))
 }
 
 fn parse_phoenix_tx_error_with_table(error: &str, s: &Strings) -> String {
@@ -92,8 +113,11 @@ fn parse_phoenix_tx_error_with_table(error: &str, s: &Strings) -> String {
     if lower.contains("order size must be non-zero") {
         return s.tx_err_order_size_nonzero.to_string();
     }
-    if error.contains("PostOnly does not satisfy cross") {
+    if is_post_only_cross_error(error) {
         return s.tx_err_post_only_no_cross.to_string();
+    }
+    if is_isolated_only_cross_margin_error(error) {
+        return s.tx_err_isolated_only_cross_margin.to_string();
     }
     if error.contains("CapabilityDenied") {
         return s.tx_err_capability_denied.to_string();
@@ -146,6 +170,33 @@ mod tests {
         assert_eq!(
             parse_phoenix_tx_error_with_table(raw, &EN),
             EN.tx_err_not_enough_sol
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_post_only_cross_case_insensitive() {
+        let raw = r#"RpcError( RpcResponseError { message: "Program log: postonly does not satisfy cross" })"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_post_only_no_cross
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_postonlycross_token() {
+        let raw = "InstructionError(0, Custom(AccountCustomError { code: 6001, message: \"PostOnlyCross\" }))";
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_post_only_no_cross
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_isolated_only_cross_margin() {
+        let raw = "Program log: isolated-only markets reject cross-margin trader accounts";
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_isolated_only_cross_margin
         );
     }
 }
