@@ -105,7 +105,11 @@ fn expand_region<F>(
         }
         let take = remaining.min(region.density);
         remaining -= take;
-        out.push((trader, price_at_offset(offset), base_lots_to_units(take, bld)));
+        out.push((
+            trader,
+            price_at_offset(offset),
+            base_lots_to_units(take, bld),
+        ));
     }
 }
 
