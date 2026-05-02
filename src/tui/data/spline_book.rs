@@ -31,13 +31,21 @@ fn load_collection(data: &[u8]) -> Option<SplineCollection> {
 }
 
 #[inline]
-fn region_has_liquidity(region: &phoenix_rise::types::accounts::TickRegion) -> bool {
-    // `bid_offset` / `ask_offset` only advance once the *front* region in the
-    // rolling window is fully consumed; later regions inside the active window
-    // can be drained while the offset stays put. Including a fully-filled
-    // region in the displayed book leaves a stale price ghost that crosses the
-    // touch.
-    region.total_size > region.filled_size
+fn region_is_active(
+    region: &phoenix_rise::types::accounts::TickRegion,
+    current_slot: u64,
+    last_updated_slot: u64,
+) -> bool {
+    // Mirror the on-chain `TickRegion::is_active` predicate: a region is live
+    // only if it still has unfilled visible capacity AND its lifespan window
+    // (relative to the spline's last user update) hasn't elapsed. Skipping the
+    // lifespan half left expired non-GTC regions painted as ghost depth at the
+    // back end of the curve. GTC regions use `lifespan = u64::MAX` so the
+    // saturating add keeps them permanently active.
+    if region.total_size <= region.filled_size {
+        return false;
+    }
+    region.lifespan.saturating_add(last_updated_slot) >= current_slot
 }
 
 pub fn parse_spline_sequence(data: &[u8]) -> Option<(u64, u64)> {
@@ -97,7 +105,12 @@ fn expand_region<F>(
     }
 }
 
-pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedSplineData> {
+pub fn parse_spline_data(
+    data: &[u8],
+    tick_size: u64,
+    bld: i8,
+    current_slot: u64,
+) -> Option<ParsedSplineData> {
     let collection = load_collection(data)?;
     if std::env::var_os("CINDER_SPLINE_DEBUG").is_some() {
         dump_spline_collection_debug(&collection, tick_size, bld);
@@ -109,6 +122,7 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
         let trader = spline.trader;
         let mid_ticks = spline.mid_price;
         let mid = ticks_to_price(mid_ticks, tick_size, bld);
+        let last_updated_slot = spline.user_update_slot;
 
         // Skip exhausted regions: as a spline rolls, `bid_offset` advances past
         // filled regions whose stored prices are stale. Including them here was
@@ -118,7 +132,7 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             .min(spline.bid_regions.len())
             .max(bid_start);
         for region in &spline.bid_regions[bid_start..bid_end] {
-            if !region_has_liquidity(region) {
+            if !region_is_active(region, current_slot, last_updated_slot) {
                 continue;
             }
             expand_region(
@@ -135,7 +149,7 @@ pub fn parse_spline_data(data: &[u8], tick_size: u64, bld: i8) -> Option<ParsedS
             .min(spline.ask_regions.len())
             .max(ask_start);
         for region in &spline.ask_regions[ask_start..ask_end] {
-            if !region_has_liquidity(region) {
+            if !region_is_active(region, current_slot, last_updated_slot) {
                 continue;
             }
             expand_region(
