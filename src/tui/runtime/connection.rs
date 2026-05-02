@@ -176,6 +176,17 @@ pub(super) fn handle_pending_market_switch(
             .trading
             .set_status_title(format!("{} {}", strings().st_switched_to, cfg.symbol));
 
+        // Bootstrap the spline view from a one-shot HTTP getAccountInfo. The
+        // WSS account_subscribe only pushes when the account changes, so for
+        // an idle market the "Switching to … market…" modal would otherwise
+        // hang until the next on-chain spline write.
+        tasks::spawn_spline_bootstrap_fetch(
+            cfg.symbol.clone(),
+            cfg.spline_collection.clone(),
+            rpc_http_url_from_env(),
+            channels.spline_bootstrap_tx.clone(),
+        );
+
         if let Some(kp) = &state.trading.keypair {
             state.trading.tx_context = None;
             let new_tx_ctx = tasks::spawn_tx_context_task(

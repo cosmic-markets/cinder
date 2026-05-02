@@ -85,6 +85,7 @@ pub async fn spawn_spline_poller(
         let mut orders_rx = receivers.orders_rx;
         let mut top_positions_rx = receivers.top_positions_rx;
         let mut liquidation_rx = receivers.liquidation_rx;
+        let mut spline_bootstrap_rx = receivers.spline_bootstrap_rx;
 
         // The liquidation feed task is independent of any wallet/market and
         // lives for the whole process. Toggling the modal doesn't stop it,
@@ -395,6 +396,29 @@ pub async fn spawn_spline_poller(
                                     &mut terminal,
                                     &rpc_host,
                                 );
+                            }
+                        }
+
+                        boot = spline_bootstrap_rx.recv() => {
+                            if let Some(msg) = boot {
+                                // Drop stale bootstraps from prior switches and any
+                                // bootstrap that lost the race to the first WSS push
+                                // (clearing `switching_to`). `accountSubscribe` only
+                                // dedupes within a session, so a late-arriving stale
+                                // payload could otherwise overwrite live data.
+                                if state.switching_to.as_deref() == Some(msg.symbol.as_str()) {
+                                    update_handlers::handle_spline_account_update(
+                                        msg.slot,
+                                        msg.data,
+                                        &cfg,
+                                        &mut state,
+                                        &gti_cache,
+                                        &mut terminal,
+                                        &rpc_host,
+                                        &mut last_seen_seq,
+                                        &mut last_feed_paint,
+                                    ).await;
+                                }
                             }
                         }
 
