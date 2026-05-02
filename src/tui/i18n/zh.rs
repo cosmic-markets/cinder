@@ -213,7 +213,7 @@ pub static CN: Strings = Strings {
     tx_err_not_enough_sol: "SOL 不足",
     tx_err_balance_too_low: "余额过低",
     tx_err_order_size_nonzero: "订单数量必须大于零。提交前请先设置非零数量。",
-    tx_err_post_only_no_cross: "市场为 PostOnly：无法穿过买卖价差。",
+    tx_err_post_only_no_cross: "市场处于仅挂单模式",
     tx_err_capability_denied: "交易账户缺少权限。请先在 app.phoenix.trade 使用邀请码注册。",
     tx_err_trader_frozen: "交易账户已冻结。请在 app.phoenix.trade 使用邀请码激活。",
     tx_err_withdraw_insufficient_margin: "取款被拒：保证金不足",

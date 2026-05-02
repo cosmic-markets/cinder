@@ -318,7 +318,7 @@ pub struct Strings {
     pub tx_err_balance_too_low: &'static str,
     /// Order size zero from RPC / simulation.
     pub tx_err_order_size_nonzero: &'static str,
-    /// Post-only order would cross the spread.
+    /// Market-wide post-only mode rejects crossing the spread (simulation / program logs).
     pub tx_err_post_only_no_cross: &'static str,
     /// On-chain `CapabilityDenied`.
     pub tx_err_capability_denied: &'static str,
