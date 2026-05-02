@@ -32,7 +32,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 use tracing::warn;
 
-use super::super::config::{rpc_http_url_from_env, ws_url_from_env, SplineConfig};
+use super::super::config::{rpc_http_url_from_env, SplineConfig};
 use super::super::data::fetch_top_positions;
 use super::super::data::GtiHandle;
 use super::super::data::{parse_l2_book_from_market_account, L2Level};
@@ -44,7 +44,7 @@ use super::super::trading::{
     fetch_phoenix_balance_and_position, OrderInfo, TopPositionEntry, TradingSide,
 };
 use super::super::tx::TxContext;
-use super::{TxCtxMsg, L2_EMIT_MIN_INTERVAL, L2_SNAPSHOT_DEPTH, WSS_RETRY_CAP, WSS_RETRY_INIT};
+use super::{TxCtxMsg, L2_SNAPSHOT_DEPTH, WSS_RETRY_CAP, WSS_RETRY_INIT};
 
 mod balances;
 mod connect_flow;
