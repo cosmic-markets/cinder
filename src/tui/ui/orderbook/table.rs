@@ -173,16 +173,12 @@ pub(super) fn render_side_table(
     f.render_widget(table, area);
 }
 
-/// Build the trader display string. A single quoter at a price level shows
-/// the full pubkey prefix (e.g. "mmmb"). When multiple traders share the
-/// level, collapse to first-letter initials joined by "/" with a hard cap of
-/// 4 traders (3 slashes) — extra traders past the cap are silently dropped to
-/// keep the column inside its 9-char allotment. Multi-trader rows are sorted
-/// alphabetically by prefix so the rendered order is stable across frames.
+/// Build the trader display string: first letter of each constituent trader's
+/// pubkey prefix, joined by "/" with a hard cap of 4 traders (3 slashes).
+/// Extra traders past the cap are silently dropped to keep the column inside
+/// its 9-char allotment. Traders are sorted alphabetically by prefix so the
+/// rendered order is stable across frames.
 fn render_trader_initials(traders: &[(String, RowSource)]) -> String {
-    if traders.len() == 1 {
-        return traders[0].0.clone();
-    }
     let mut sorted: Vec<&(String, RowSource)> = traders.iter().collect();
     sorted.sort_by(|a, b| a.0.cmp(&b.0));
     let mut out = String::new();
