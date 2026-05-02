@@ -23,6 +23,7 @@ use super::error::{log_tx_error, parse_phoenix_tx_error};
 /// trigger is keyed by the market's `asset_id` + `stop_direction`.
 pub struct CancelOrderEntry {
     pub symbol: String,
+    pub subaccount_index: u8,
     pub price_ticks: u64,
     pub order_sequence_number: u64,
     pub is_stop_loss: bool,
@@ -56,10 +57,11 @@ pub fn submit_cancel_orders(
 ) {
     tokio::spawn(async move {
         use phoenix_rise::ix::{
-            create_cancel_conditional_order_ix, create_cancel_stop_loss_ix,
-            CancelConditionalOrderParams, CancelStopLossParams,
+            create_cancel_conditional_order_ix, create_cancel_orders_by_id_ix,
+            create_cancel_stop_loss_ix, CancelConditionalOrderParams, CancelOrdersByIdParams,
+            CancelStopLossParams,
         };
-        use phoenix_rise::{CancelId, PhoenixTxBuilder};
+        use phoenix_rise::CancelId;
 
         let s = strings();
 
@@ -76,8 +78,6 @@ pub fn submit_cancel_orders(
             detail: String::new(),
         });
 
-        let builder = PhoenixTxBuilder::new(&ctx.metadata);
-
         // Split conditional rows first: position conditional orders live in the
         // trader conditional-orders account and cancel by account index +
         // trigger direction. Legacy stop-loss rows still route through
@@ -90,11 +90,11 @@ pub fn submit_cancel_orders(
 
         // Group limit cancels by symbol: each symbol becomes (at most ceil(n/100))
         // cancel-orders IXs.
-        let mut by_symbol: std::collections::BTreeMap<String, Vec<CancelId>> =
+        let mut by_symbol: std::collections::BTreeMap<(String, u8), Vec<CancelId>> =
             std::collections::BTreeMap::new();
         for e in limit_entries.into_iter() {
             by_symbol
-                .entry(e.symbol)
+                .entry((e.symbol, e.subaccount_index))
                 .or_default()
                 .push(CancelId::new(e.price_ticks, e.order_sequence_number));
         }
@@ -128,8 +128,9 @@ pub fn submit_cancel_orders(
                     continue;
                 }
             };
+            let trader_account = ctx.trader_pda_for_subaccount(e.subaccount_index);
             let params = match CancelConditionalOrderParams::builder()
-                .trader_account(ctx.trader_pda_v2)
+                .trader_account(trader_account)
                 .position_authority(ctx.authority_v2)
                 .orderbook(orderbook)
                 .conditional_order_index(order_index)
@@ -180,7 +181,7 @@ pub fn submit_cancel_orders(
             let asset_id = market.asset_id as u64;
             let params = match CancelStopLossParams::builder()
                 .funder(ctx.authority_v2)
-                .trader_account(ctx.trader_pda_v2)
+                .trader_account(ctx.trader_pda_for_subaccount(e.subaccount_index))
                 .position_authority(ctx.authority_v2)
                 .asset_id(asset_id)
                 .execution_direction(direction)
@@ -212,15 +213,28 @@ pub fn submit_cancel_orders(
             }
         }
 
-        for (symbol, cancel_ids) in by_symbol.into_iter() {
+        for ((symbol, subaccount_index), cancel_ids) in by_symbol.into_iter() {
             for chunk in cancel_ids.chunks(MAX_CANCELS_PER_IX) {
-                let phoenix_ixs = match builder.build_cancel_orders(
-                    ctx.authority_v2,
-                    ctx.trader_pda_v2,
-                    &symbol,
-                    chunk.to_vec(),
-                ) {
-                    Ok(v) => v,
+                let Some(addrs) = ctx.market_addrs_for_symbol(&symbol) else {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("Build error (cancel {}): unknown market", symbol),
+                        detail: String::new(),
+                    });
+                    continue;
+                };
+                let trader_account = ctx.trader_pda_for_subaccount(subaccount_index);
+                let params = match CancelOrdersByIdParams::builder()
+                    .trader(ctx.authority_v2)
+                    .trader_account(trader_account)
+                    .perp_asset_map(addrs.perp_asset_map)
+                    .orderbook(addrs.orderbook)
+                    .spline_collection(addrs.spline_collection)
+                    .global_trader_index(addrs.global_trader_index)
+                    .active_trader_buffer(addrs.active_trader_buffer)
+                    .order_ids(chunk.to_vec())
+                    .build()
+                {
+                    Ok(params) => params,
                     Err(e) => {
                         let _ = tx_status.send(TxStatusMsg::SetStatus {
                             title: format!("Build error (cancel {}): {}", symbol, e),
@@ -229,11 +243,19 @@ pub fn submit_cancel_orders(
                         continue;
                     }
                 };
-                let mapped = phoenix_ixs;
+                let ix: solana_instruction::Instruction =
+                    match create_cancel_orders_by_id_ix(params) {
+                        Ok(ix) => ix.into(),
+                        Err(e) => {
+                            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                                title: format!("IX build error (cancel {}): {}", symbol, e),
+                                detail: String::new(),
+                            });
+                            continue;
+                        }
+                    };
                 let label = format!("{} {}×{}", s.tx_cancel_label, symbol, chunk.len());
-                for ix in mapped {
-                    all_ixs.push((ix, label.clone()));
-                }
+                all_ixs.push((ix, label));
             }
         }
 

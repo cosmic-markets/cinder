@@ -81,6 +81,7 @@ mod tests {
     fn make_position(symbol: &str, side: TradingSide, size: f64, entry: f64) -> FullPositionInfo {
         FullPositionInfo {
             symbol: symbol.to_string(),
+            subaccount_index: 0,
             side,
             size,
             position_size_raw: None,

@@ -76,7 +76,7 @@ pub fn render_frame(
     orders_view: &OrdersView,
     top_positions_view: &TopPositionsView,
     liquidation_feed_view: &LiquidationFeedView,
-    order_chart_markers: &std::collections::HashMap<(String, u64), OrderChartMarker>,
+    order_chart_markers: &std::collections::HashMap<(String, u8, u64), OrderChartMarker>,
     rpc_host: &str,
     switching_to: &Option<String>,
 ) {

@@ -45,6 +45,7 @@ mod tests {
     fn make_order(symbol: &str) -> OrderInfo {
         OrderInfo {
             symbol: symbol.to_string(),
+            subaccount_index: 0,
             order_sequence_number: 1,
             side: TradingSide::Long,
             order_type: "LMT".to_string(),

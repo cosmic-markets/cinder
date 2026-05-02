@@ -11,6 +11,7 @@ pub mod stop_market_order;
 
 mod compute_budget;
 mod error;
+mod isolated_margin;
 
 pub use cancel::{submit_cancel_orders, CancelOrderEntry};
 pub use context::TxContext;

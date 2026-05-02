@@ -18,7 +18,7 @@ pub(super) fn render_price_chart(
     y_max: f64,
     trade_markers: &[TradeMarker],
     orders: &[OrderInfo],
-    order_chart_markers: &std::collections::HashMap<(String, u64), OrderChartMarker>,
+    order_chart_markers: &std::collections::HashMap<(String, u8, u64), OrderChartMarker>,
     symbol: &str,
     price_decimals: usize,
     chart_clock_hms: &str,
@@ -70,7 +70,7 @@ pub(super) fn render_price_chart(
     // and the Chart widget clips it once it leaves the visible range.
     let order_markers: Vec<(f64, f64)> = order_chart_markers
         .iter()
-        .filter(|((sym, _), m)| sym == symbol && m.price > 0.0)
+        .filter(|((sym, _, _), m)| sym == symbol && m.price > 0.0)
         .map(|(_, m)| (m.x, m.price))
         .collect();
 

@@ -42,6 +42,7 @@ pub struct TxContext {
     /// Confirmation still listens exclusively on `rpc_client`. `None` when the
     /// primary already targets the public mainnet-beta endpoint.
     pub secondary_send_rpc: Option<Arc<solana_rpc_client::nonblocking::rpc_client::RpcClient>>,
+    pub http_client: Arc<phoenix_rise::PhoenixHttpClient>,
     pub metadata: phoenix_rise::PhoenixMetadata,
     pub authority_v2: solana_pubkey::Pubkey,
     pub trader_pda_v2: solana_pubkey::Pubkey,
@@ -62,7 +63,7 @@ impl TxContext {
     pub async fn new(
         keypair: &Keypair,
         symbol: &str,
-        http: &phoenix_rise::PhoenixHttpClient,
+        http: Arc<phoenix_rise::PhoenixHttpClient>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
@@ -111,6 +112,7 @@ impl TxContext {
         Ok(Self {
             rpc_client,
             secondary_send_rpc,
+            http_client: http,
             metadata,
             authority_v2,
             trader_pda_v2,
@@ -163,5 +165,46 @@ impl TxContext {
             .map(|(hash, _)| hash)
             .map_err(|e| format!("{}", e))
         }
+    }
+
+    pub fn trader_pda_for_subaccount(&self, subaccount_index: u8) -> solana_pubkey::Pubkey {
+        phoenix_rise::TraderKey::derive_pda(&self.authority_v2, 0, subaccount_index)
+    }
+
+    pub fn market_isolated_only(&self, symbol: &str) -> bool {
+        self.metadata
+            .get_market(symbol)
+            .map(|market| market.isolated_only)
+            .unwrap_or(false)
+    }
+
+    pub fn max_leverage_for_symbol(&self, symbol: &str) -> Option<f64> {
+        self.metadata
+            .get_market(symbol)?
+            .leverage_tiers
+            .first()
+            .map(|tier| tier.max_leverage)
+    }
+
+    pub fn market_addrs_for_symbol(&self, symbol: &str) -> Option<MarketAddrs> {
+        let keys = self.metadata.keys();
+        let market = self.metadata.get_market(symbol)?;
+        Some(MarketAddrs {
+            perp_asset_map: solana_pubkey::Pubkey::from_str(&keys.perp_asset_map).ok()?,
+            orderbook: solana_pubkey::Pubkey::from_str(&market.market_pubkey).ok()?,
+            spline_collection: solana_pubkey::Pubkey::from_str(&market.spline_pubkey).ok()?,
+            global_trader_index: keys
+                .global_trader_index
+                .iter()
+                .map(|s| solana_pubkey::Pubkey::from_str(s))
+                .collect::<Result<Vec<_>, _>>()
+                .ok()?,
+            active_trader_buffer: keys
+                .active_trader_buffer
+                .iter()
+                .map(|s| solana_pubkey::Pubkey::from_str(s))
+                .collect::<Result<Vec<_>, _>>()
+                .ok()?,
+        })
     }
 }

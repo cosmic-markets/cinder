@@ -12,6 +12,7 @@ use super::compute_budget::build_compute_budget_ixs;
 use super::confirmation::{compile_and_sign, subscribe_send_confirm, ConfirmError};
 use super::context::TxContext;
 use super::error::{format_not_confirmed_error, log_tx_error, parse_phoenix_tx_error};
+use super::isolated_margin::estimate_collateral_transfer;
 
 /// Asynchronously constructs, signs, and dispatches a market order payload
 /// onto the network.
@@ -24,6 +25,10 @@ pub fn submit_market_order(
     reduce_only: bool,
     // Human size for status messages (same units as the TUI order line).
     display_size: f64,
+    subaccount_index: u8,
+    isolated_only: bool,
+    max_leverage: f64,
+    reference_price_usd: f64,
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
@@ -42,12 +47,126 @@ pub fn submit_market_order(
             order_summary
         };
 
-        let builder = PhoenixTxBuilder::new(&ctx.metadata);
-
         let phx_side = match side {
             TradingSide::Long => Side::Bid,
             TradingSide::Short => Side::Ask,
         };
+        let isolated_only = isolated_only || ctx.market_isolated_only(&symbol);
+        let max_leverage = ctx
+            .max_leverage_for_symbol(&symbol)
+            .filter(|lev| lev.is_finite() && *lev > 0.0)
+            .unwrap_or(max_leverage);
+
+        if isolated_only && reduce_only && subaccount_index == 0 {
+            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
+                detail: "isolated reduce-only orders require an isolated subaccount".to_string(),
+            });
+            return;
+        }
+
+        if isolated_only && !reduce_only {
+            let collateral =
+                match estimate_collateral_transfer(display_size, reference_price_usd, max_leverage)
+                {
+                    Ok(collateral) => collateral,
+                    Err(e) => {
+                        let _ = tx_status.send(TxStatusMsg::SetStatus {
+                            title: format!("{} — {}", s.tx_failed_build_params, order_summary),
+                            detail: e,
+                        });
+                        return;
+                    }
+                };
+            let (mut ixs, _) = match ctx
+                .http_client
+                .build_isolated_market_order_tx_enhanced(
+                    &ctx.authority_v2,
+                    &symbol,
+                    phx_side,
+                    num_base_lots,
+                    Some(collateral),
+                    false,
+                    None,
+                )
+                .await
+            {
+                Ok(ixs) => ixs,
+                Err(e) => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
+                        detail: format!("{}", e),
+                    });
+                    return;
+                }
+            };
+            let cu_positions = ixs.len().max(1) as u32;
+            ixs.extend(build_compute_budget_ixs(cu_positions));
+
+            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                title: format!("{} {}…", s.tx_broadcasting, order_summary),
+                detail: String::new(),
+            });
+
+            let (tx, sig) = match compile_and_sign(&ctx, &keypair, &ixs).await {
+                Ok(pair) => pair,
+                Err(e) => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_failed_prepare, order_summary),
+                        detail: e,
+                    });
+                    return;
+                }
+            };
+            let sig_str = sig.to_string();
+            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                title: format!("{} — {}…", s.tx_awaiting_confirm, order_summary),
+                detail: sig_str.clone(),
+            });
+
+            match subscribe_send_confirm(&ctx, &tx, &sig).await {
+                Ok(()) => {
+                    let _ = tx_status.send(TxStatusMsg::TradeMarker {
+                        is_buy: matches!(side, TradingSide::Long),
+                    });
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} {}", s.tx_order_confirmed, order_summary),
+                        detail: sig_str,
+                    });
+                }
+                Err(ConfirmError::Rejected(e)) => {
+                    log_tx_error(
+                        None,
+                        &format!("isolated market order rejected — {}", order_summary),
+                        &e,
+                    );
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_tx_rejected, order_summary),
+                        detail: parse_phoenix_tx_error(&e),
+                    });
+                }
+                Err(ConfirmError::NotConfirmed(e)) => {
+                    log_tx_error(
+                        Some(&sig_str),
+                        &format!("isolated market order not confirmed — {}", order_summary),
+                        &e,
+                    );
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!(
+                            "{} — {} ({})",
+                            s.tx_order_not_confirmed,
+                            order_summary,
+                            format_not_confirmed_error(&e)
+                        ),
+                        detail: sig_str,
+                    });
+                }
+            }
+            return;
+        }
+
+        let builder = PhoenixTxBuilder::new(&ctx.metadata);
+        let trader_account = ctx.trader_pda_for_subaccount(subaccount_index);
 
         let order_flags = if reduce_only {
             OrderFlags::ReduceOnly
@@ -57,7 +176,7 @@ pub fn submit_market_order(
 
         let params = match MarketOrderParams::builder()
             .trader(ctx.authority_v2)
-            .trader_account(ctx.trader_pda_v2)
+            .trader_account(trader_account)
             .perp_asset_map(ctx.market_addrs.perp_asset_map)
             .orderbook(ctx.market_addrs.orderbook)
             .spline_collection(ctx.market_addrs.spline_collection)
@@ -67,6 +186,7 @@ pub fn submit_market_order(
             .side(phx_side)
             .num_base_lots(num_base_lots)
             .order_flags(order_flags)
+            .subaccount_index(subaccount_index)
             .build()
         {
             Ok(p) => p,
@@ -91,11 +211,12 @@ pub fn submit_market_order(
         };
 
         let mut includes_register = false;
-        if !ctx
-            .trader_registered
-            .load(std::sync::atomic::Ordering::Relaxed)
+        if subaccount_index == 0
+            && !ctx
+                .trader_registered
+                .load(std::sync::atomic::Ordering::Relaxed)
         {
-            match ctx.rpc_client.get_account(&ctx.trader_pda_v2).await {
+            match ctx.rpc_client.get_account(&trader_account).await {
                 Ok(acc) if !acc.data.is_empty() => {
                     ctx.trader_registered
                         .store(true, std::sync::atomic::Ordering::Relaxed);

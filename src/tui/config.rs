@@ -266,6 +266,8 @@ pub struct SplineConfig {
     pub spline_collection: String,
     pub market_pubkey: String,
     pub symbol: String,
+    pub max_leverage: f64,
+    pub isolated_only: bool,
     /// Global asset index used as the key in on-chain per-market tables
     /// (e.g. ActiveTraderBuffer position ids). Needed to map an arbitrary
     /// on-chain position back to its market symbol.
@@ -369,6 +371,11 @@ pub fn build_spline_config(
     }
 
     let price_decimals = compute_price_decimals(market.tick_size, market.base_lots_decimals);
+    let max_leverage = market
+        .leverage_tiers
+        .first()
+        .map(|tier| tier.max_leverage)
+        .unwrap_or(1.0);
 
     // base_lot_decimals encodes the exponent in base_lots_to_units:
     //   units = lots / 10^bld
@@ -382,6 +389,8 @@ pub fn build_spline_config(
         spline_collection: derived_spline_pk.to_string(),
         market_pubkey: market.market_pubkey.clone(),
         symbol: market.symbol.clone(),
+        max_leverage,
+        isolated_only: market.isolated_only,
         asset_id: market.asset_id,
         price_decimals,
         size_decimals,
