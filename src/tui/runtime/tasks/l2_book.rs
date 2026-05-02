@@ -54,7 +54,7 @@ pub(in crate::tui::runtime) fn spawn_phoenix_l2_book_rpc(
     tokio::spawn(async move {
         let rpc = RpcClient::new_with_commitment(
             rpc_http_url_from_env(),
-            CommitmentConfig::confirmed(),
+            CommitmentConfig::processed(),
         );
 
         let mut cfg = cfg_rx.borrow().clone();
