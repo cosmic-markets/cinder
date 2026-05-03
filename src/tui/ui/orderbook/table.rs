@@ -178,20 +178,44 @@ pub(super) fn render_side_table(
     f.render_widget(table, area);
 }
 
-/// Build the trader display string. A single quoter at a price level shows
-/// the first 4 chars of the pubkey prefix (e.g. "mmmb"). When multiple
+/// Build the trader display as styled spans. A single quoter at a price level
+/// shows the first 4 chars of the pubkey prefix (e.g. "mmmb"). When multiple
 /// traders share the level, collapse to first-letter initials joined by "/"
 /// with a hard cap of 4 traders (3 slashes) — extra traders past the cap are
 /// silently dropped to keep the column inside its 9-char allotment.
 /// Multi-trader rows are sorted alphabetically by prefix so the rendered
 /// order is stable across frames.
 ///
+/// When `iceberg_trader_prefix` is `Some` (the row carries a 🧊 marker), the
+/// owner of the iceberg is highlighted blue: in single-quoter rows the whole
+/// 4-char prefix turns blue regardless of match (the marker implies hidden
+/// depth attributable to this level); in multi-quoter rows only the matching
+/// trader's letter turns blue, with non-matches kept in `base_color`. If no
+/// quoter matches the iceberg owner, every letter is colored blue as a
+/// fallback indication that hidden depth exists at this level.
+///
 /// Called per book row per frame; uses a stack-allocated array (cap 4 traders)
 /// instead of `Vec::collect` + `sort_by` to skip the per-row heap alloc.
-fn render_trader_initials(traders: &[(String, RowSource)]) -> String {
+fn render_trader_spans(
+    traders: &[(String, RowSource)],
+    iceberg_trader_prefix: Option<&str>,
+    base_color: Color,
+) -> Vec<Span<'static>> {
+    let iceberg_style = Style::default()
+        .fg(Color::LightBlue)
+        .add_modifier(Modifier::BOLD);
+    let base_style = Style::default().fg(base_color);
+
     if traders.len() == 1 {
-        return traders[0].0.chars().take(4).collect();
+        let text: String = traders[0].0.chars().take(4).collect();
+        let style = if iceberg_trader_prefix.is_some() {
+            iceberg_style
+        } else {
+            base_style
+        };
+        return vec![Span::styled(text, style)];
     }
+
     let mut top: [Option<&str>; 4] = [None; 4];
     let mut len = 0usize;
     for (prefix, _) in traders {
@@ -215,18 +239,34 @@ fn render_trader_initials(traders: &[(String, RowSource)]) -> String {
         }
     }
 
-    let mut out = String::with_capacity(7);
+    // Determine if the iceberg owner is among the visible quoters; if not,
+    // fall back to highlighting every letter so the marker still has a visual
+    // anchor in the trader column.
+    let owner_visible = iceberg_trader_prefix
+        .map(|owner| top.iter().take(len).any(|slot| matches!(slot, Some(p) if *p == owner)))
+        .unwrap_or(false);
+    let highlight_all = iceberg_trader_prefix.is_some() && !owner_visible;
+
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(len * 2);
     for (i, slot) in top.iter().take(len).enumerate() {
         if i > 0 {
-            out.push('/');
+            spans.push(Span::styled("/".to_string(), base_style));
         }
         if let Some(prefix) = slot {
             if let Some(c) = prefix.chars().next() {
-                out.push(c);
+                let is_owner = iceberg_trader_prefix
+                    .map(|owner| *prefix == owner)
+                    .unwrap_or(false);
+                let style = if is_owner || highlight_all {
+                    iceberg_style
+                } else {
+                    base_style
+                };
+                spans.push(Span::styled(c.to_string(), style));
             }
         }
     }
-    out
+    spans
 }
 
 fn build_row<'a>(
@@ -275,27 +315,25 @@ fn build_row<'a>(
     let price_str = format!("${}", fmt_price(row.price, price_decimals));
 
     let trader_color = FIRE_ORANGE;
-    let display_traders = render_trader_initials(&row.traders);
+    let trader_spans = render_trader_spans(
+        &row.traders,
+        row.iceberg_trader_prefix.as_deref(),
+        trader_color,
+    );
 
     let trader_cell = if has_user_order_here {
-        Cell::from(
-            Line::from(vec![
-                Span::styled(
-                    ">",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" {}", display_traders),
-                    Style::default().fg(trader_color),
-                ),
-            ])
-            .alignment(Alignment::Right),
-        )
+        let mut spans = Vec::with_capacity(trader_spans.len() + 2);
+        spans.push(Span::styled(
+            ">",
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(" ", Style::default().fg(trader_color)));
+        spans.extend(trader_spans);
+        Cell::from(Line::from(spans).alignment(Alignment::Right))
     } else {
-        Cell::from(Line::from(display_traders).alignment(Alignment::Right))
-            .style(Style::default().fg(trader_color))
+        Cell::from(Line::from(trader_spans).alignment(Alignment::Right))
     };
 
     let marker_cell = if row.has_hidden_fill {

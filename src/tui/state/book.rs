@@ -26,6 +26,12 @@ pub struct BookRow {
     /// adjacent outer row, signalling that the region behind/below it has
     /// hidden depth. Surfaced as a 🧊 marker in the book view.
     pub has_hidden_fill: bool,
+    /// Trader prefix (4-char) of the spline owning the hidden iceberg
+    /// projected onto this row. `None` when this row carries no marker.
+    /// Used by the renderer to color that trader's letter blue in the
+    /// Trader column. May not match any of `traders` if the iceberg's
+    /// owner isn't visibly quoting at this exact level.
+    pub iceberg_trader_prefix: Option<String>,
 }
 
 /// Sorted, coalesced (splines + CLOB) view of the active market's book.
