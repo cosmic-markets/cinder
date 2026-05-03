@@ -4,6 +4,7 @@ use solana_pubkey::Pubkey as PhoenixPubkey;
 
 use super::super::super::data::spline_book::SplineRow;
 use super::super::super::data::ParsedSplineData;
+use super::super::super::format::pubkey_trader_prefix;
 use super::super::super::trading::{OrderInfo, OrderKind, TradingSide};
 use super::*;
 
@@ -91,8 +92,8 @@ fn rebuild_merged_book_sorts_each_side_best_first() {
             spline_row(0xA3, 102.0, 102.5, 3.0),
             spline_row(0xA4, 101.0, 101.5, 4.0),
         ],
-        bid_iceberg_prices: vec![],
-        ask_iceberg_prices: vec![],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![],
         best_bid: Some(100.0),
         best_ask: Some(101.0),
     });
@@ -112,8 +113,8 @@ fn rebuild_merged_book_omits_clob_when_show_clob_is_false() {
     s.last_parsed = Some(ParsedSplineData {
         bid_rows: vec![spline_row(0xA1, 100.0, 100.5, 1.0)],
         ask_rows: vec![],
-        bid_iceberg_prices: vec![],
-        ask_iceberg_prices: vec![],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![],
         best_bid: Some(100.0),
         best_ask: None,
     });
@@ -161,8 +162,8 @@ fn rebuild_merged_book_abstracts_spline_range_to_point_quote() {
     s.last_parsed = Some(ParsedSplineData {
         bid_rows: vec![spline_row(0xA1, 100.0, 95.0, 50.0)],
         ask_rows: vec![],
-        bid_iceberg_prices: vec![],
-        ask_iceberg_prices: vec![],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![],
         best_bid: Some(100.0),
         best_ask: None,
     });
@@ -189,8 +190,11 @@ fn rebuild_merged_book_paints_iceberg_marker_on_outer_adjacent_row() {
             spline_row(0xA1, 80.01, 0.0, 5.0),
             spline_row(0xA2, 80.02, 0.0, 7.0),
         ],
-        bid_iceberg_prices: vec![],
-        ask_iceberg_prices: vec![80.02, 80.03],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![
+            (80.02, pda_with_prefix(0xA1)),
+            (80.03, pda_with_prefix(0xA2)),
+        ],
         best_bid: None,
         best_ask: Some(80.01),
     });
@@ -199,6 +203,12 @@ fn rebuild_merged_book_paints_iceberg_marker_on_outer_adjacent_row() {
     let row = |p: f64| asks.iter().find(|r| (r.price - p).abs() < 1e-9).unwrap();
     assert!(!row(80.01).has_hidden_fill);
     assert!(row(80.02).has_hidden_fill);
+    // Marker at $80.02 came from the spline owned by 0xA1, so the row picks
+    // up that owner's prefix for blue-letter highlighting in the renderer.
+    assert_eq!(
+        row(80.02).iceberg_trader_prefix.as_deref(),
+        Some(pubkey_trader_prefix(&pda_with_prefix(0xA1)).as_str())
+    );
     assert_eq!(asks.len(), 2);
 }
 
