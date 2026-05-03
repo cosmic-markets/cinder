@@ -19,10 +19,13 @@ pub(super) fn render_status_tray(
     rpc_host: &str,
 ) {
     let s = strings();
-    let status_label = Line::from(Span::styled(
-        format!(" {} ", s.status),
-        Style::default().fg(Color::White),
-    ))
+    let status_label = Line::from(vec![
+        Span::styled(
+            format!(" [Cinder {}] ", env!("CARGO_PKG_VERSION")),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(format!("{} ", s.status), Style::default().fg(Color::White)),
+    ])
     .left_aligned();
 
     // Ledger sits in the top-right of the status frame so the high-traffic
