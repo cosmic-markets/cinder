@@ -17,6 +17,7 @@ pub enum Language {
     English,
     Chinese,
     Russian,
+    Spanish,
 }
 
 impl Language {
@@ -25,6 +26,7 @@ impl Language {
             Self::English => "English",
             Self::Chinese => "中文",
             Self::Russian => "Русский",
+            Self::Spanish => "Español",
         }
     }
 
@@ -33,6 +35,7 @@ impl Language {
             Self::English => "en",
             Self::Chinese => "cn",
             Self::Russian => "ru",
+            Self::Spanish => "es",
         }
     }
 
@@ -40,6 +43,7 @@ impl Language {
         match s {
             "cn" | "zh" | "zh-CN" | "zh_CN" => Self::Chinese,
             "ru" | "ru-RU" | "ru_RU" => Self::Russian,
+            "es" | "es-ES" | "es_ES" | "es-419" | "es_419" => Self::Spanish,
             _ => Self::English,
         }
     }
@@ -48,7 +52,8 @@ impl Language {
         match self {
             Self::English => Self::Chinese,
             Self::Chinese => Self::Russian,
-            Self::Russian => Self::English,
+            Self::Russian => Self::Spanish,
+            Self::Spanish => Self::English,
         }
     }
 }
@@ -432,7 +437,12 @@ mod tests {
 
     #[test]
     fn language_round_trips_through_code() {
-        for lang in [Language::English, Language::Chinese, Language::Russian] {
+        for lang in [
+            Language::English,
+            Language::Chinese,
+            Language::Russian,
+            Language::Spanish,
+        ] {
             assert_eq!(Language::from_code(lang.code()), lang);
         }
     }
@@ -452,6 +462,15 @@ mod tests {
     }
 
     #[test]
+    fn language_from_code_accepts_es_aliases() {
+        assert_eq!(Language::from_code("es"), Language::Spanish);
+        assert_eq!(Language::from_code("es-ES"), Language::Spanish);
+        assert_eq!(Language::from_code("es_ES"), Language::Spanish);
+        assert_eq!(Language::from_code("es-419"), Language::Spanish);
+        assert_eq!(Language::from_code("es_419"), Language::Spanish);
+    }
+
+    #[test]
     fn language_from_code_falls_back_to_english() {
         assert_eq!(Language::from_code("fr"), Language::English);
         assert_eq!(Language::from_code(""), Language::English);
@@ -461,9 +480,10 @@ mod tests {
     fn language_toggle_cycles() {
         assert_eq!(Language::English.toggle(), Language::Chinese);
         assert_eq!(Language::Chinese.toggle(), Language::Russian);
-        assert_eq!(Language::Russian.toggle(), Language::English);
+        assert_eq!(Language::Russian.toggle(), Language::Spanish);
+        assert_eq!(Language::Spanish.toggle(), Language::English);
         assert_eq!(
-            Language::English.toggle().toggle().toggle(),
+            Language::English.toggle().toggle().toggle().toggle(),
             Language::English
         );
     }

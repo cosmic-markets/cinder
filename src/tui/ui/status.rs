@@ -78,6 +78,7 @@ pub(super) fn render_status_tray(
         ],
         super::super::config::Language::English => ["ord", "pos", "top", "liq", "mkt", "quit"],
         super::super::config::Language::Russian => ["орд", "поз", "топ", "лик", "рын", "вых"],
+        super::super::config::Language::Spanish => ["ord", "pos", "top", "liq", "mer", "sal"],
     };
 
     let build_quit_hint = |labels: &[&str; 6]| -> Line<'static> {

@@ -1,4 +1,5 @@
-//! Static UI string tables for English, Chinese (Simplified), and Russian.
+//! Static UI string tables for English, Chinese (Simplified), Russian, and
+//! Spanish.
 //!
 //! Call [`strings()`] to get the appropriate table based on the persisted
 //! `UserConfig::language`. The result is a `&'static Strings` — zero
@@ -394,10 +395,12 @@ pub struct Strings {
 }
 
 mod en;
+mod es;
 mod ru;
 mod zh;
 
 pub use en::EN;
+pub use es::ES;
 pub use ru::RU;
 pub use zh::CN;
 
@@ -408,5 +411,6 @@ pub fn strings() -> &'static Strings {
         Language::Chinese => &CN,
         Language::English => &EN,
         Language::Russian => &RU,
+        Language::Spanish => &ES,
     }
 }
