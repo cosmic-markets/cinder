@@ -58,7 +58,7 @@ pub(super) fn render_status_tray(
     // Hotkey row labels — full forms by default, with compact fallbacks for
     // narrow terminals (e.g. 80x24) where the full row would overflow and
     // truncate. Chinese labels are mostly already short; only the four-glyph
-    // "top positions" needs squeezing.
+    // "top positions" needs squeezing. Russian uses short Cyrillic abbrevs.
     let full_labels: [&str; 6] = [
         s.orders,
         s.positions,
@@ -77,6 +77,8 @@ pub(super) fn render_status_tray(
             s.quit,
         ],
         super::super::config::Language::English => ["ord", "pos", "top", "liq", "mkt", "quit"],
+        super::super::config::Language::Russian => ["орд", "поз", "топ", "лик", "рын", "вых"],
+        super::super::config::Language::Spanish => ["ord", "pos", "top", "liq", "mer", "sal"],
     };
 
     let build_quit_hint = |labels: &[&str; 6]| -> Line<'static> {

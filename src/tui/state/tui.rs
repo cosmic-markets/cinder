@@ -431,11 +431,7 @@ fn group_by_price(
 /// Matching uses integer tick keys (rounded to `price_decimals`) so spline
 /// prices computed from different mid values still collide cleanly with the
 /// row prices produced by `group_by_price`.
-fn apply_iceberg_markers(
-    rows: &mut [BookRow],
-    markers: &[(f64, String)],
-    price_decimals: usize,
-) {
+fn apply_iceberg_markers(rows: &mut [BookRow], markers: &[(f64, String)], price_decimals: usize) {
     if markers.is_empty() {
         return;
     }
