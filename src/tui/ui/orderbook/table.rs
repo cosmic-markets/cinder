@@ -243,7 +243,11 @@ fn render_trader_spans(
     // fall back to highlighting every letter so the marker still has a visual
     // anchor in the trader column.
     let owner_visible = iceberg_trader_prefix
-        .map(|owner| top.iter().take(len).any(|slot| matches!(slot, Some(p) if *p == owner)))
+        .map(|owner| {
+            top.iter()
+                .take(len)
+                .any(|slot| matches!(slot, Some(p) if *p == owner))
+        })
         .unwrap_or(false);
     let highlight_all = iceberg_trader_prefix.is_some() && !owner_visible;
 

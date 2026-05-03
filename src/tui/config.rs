@@ -16,6 +16,7 @@ pub enum Language {
     #[default]
     English,
     Chinese,
+    Russian,
 }
 
 impl Language {
@@ -23,6 +24,7 @@ impl Language {
         match self {
             Self::English => "English",
             Self::Chinese => "中文",
+            Self::Russian => "Русский",
         }
     }
 
@@ -30,12 +32,14 @@ impl Language {
         match self {
             Self::English => "en",
             Self::Chinese => "cn",
+            Self::Russian => "ru",
         }
     }
 
     pub fn from_code(s: &str) -> Self {
         match s {
             "cn" | "zh" | "zh-CN" | "zh_CN" => Self::Chinese,
+            "ru" | "ru-RU" | "ru_RU" => Self::Russian,
             _ => Self::English,
         }
     }
@@ -43,7 +47,8 @@ impl Language {
     pub fn toggle(self) -> Self {
         match self {
             Self::English => Self::Chinese,
-            Self::Chinese => Self::English,
+            Self::Chinese => Self::Russian,
+            Self::Russian => Self::English,
         }
     }
 }
@@ -427,7 +432,7 @@ mod tests {
 
     #[test]
     fn language_round_trips_through_code() {
-        for lang in [Language::English, Language::Chinese] {
+        for lang in [Language::English, Language::Chinese, Language::Russian] {
             assert_eq!(Language::from_code(lang.code()), lang);
         }
     }
@@ -440,15 +445,27 @@ mod tests {
     }
 
     #[test]
+    fn language_from_code_accepts_ru_aliases() {
+        assert_eq!(Language::from_code("ru"), Language::Russian);
+        assert_eq!(Language::from_code("ru-RU"), Language::Russian);
+        assert_eq!(Language::from_code("ru_RU"), Language::Russian);
+    }
+
+    #[test]
     fn language_from_code_falls_back_to_english() {
         assert_eq!(Language::from_code("fr"), Language::English);
         assert_eq!(Language::from_code(""), Language::English);
     }
 
     #[test]
-    fn language_toggle_is_involution() {
+    fn language_toggle_cycles() {
         assert_eq!(Language::English.toggle(), Language::Chinese);
-        assert_eq!(Language::English.toggle().toggle(), Language::English);
+        assert_eq!(Language::Chinese.toggle(), Language::Russian);
+        assert_eq!(Language::Russian.toggle(), Language::English);
+        assert_eq!(
+            Language::English.toggle().toggle().toggle(),
+            Language::English
+        );
     }
 
     #[test]
