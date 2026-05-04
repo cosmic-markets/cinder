@@ -6,7 +6,12 @@
 ![ratatui](https://img.shields.io/badge/ratatui-TUI-00ADD8?logo=terminal)
 ![Solana](https://img.shields.io/badge/Solana-RPC%20%2B%20WSS-9945FF?logo=solana)
 
-![Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet](assets/cinder-tui.png)
+<p align="center">
+  <img
+    src="assets/demo.gif"
+    alt="Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet"
+  />
+</p>
 
 ## Features
 
@@ -15,7 +20,7 @@
 - **CLOB Liquidity** — Optional merge of FIFO L2 levels from the market orderbook account (toggle in user config).
 - **Top positions** — Periodic scan of the protocol-wide Active Trader Buffer for a leaderboard-style modal (`T`).
 - **Trading** — Market / limit / stop-style flows with confirmation modals; deposits and withdrawals when a wallet is loaded.
-- **i18n** — UI strings in English and Chinese.
+- **i18n** — UI strings in English, Chinese, Spanish, and Russian.
 
 Quit with **`q`** (confirm) or **Ctrl+C**.
 
@@ -75,15 +80,11 @@ docker compose run --rm \
   cinder
 ```
 
-Or set a custom path:
+## Referral Funding
+Cinder is funded through Phoenix's referral program. New users connecting through Cinder are automatically registered, and receive a fee discount.
 
-```bash
-docker compose run --rm \
-  -v "/path/to/key.json:/wallet/id.json:ro" \
-  -e PHX_WALLET_PATH=/wallet/id.json \
-  cinder
-```
+# Donations
+❤️ Like the tool? Donations are greatly appreciated: cosmic.sol
 
 ## License
-
 MIT
