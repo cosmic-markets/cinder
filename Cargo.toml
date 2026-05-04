@@ -9,7 +9,7 @@ publish      = false
 readme       = "README.md"
 repository   = "https://github.com/cosmic-markets/cinder"
 rust-version = "1.94"
-version      = "0.1.6"
+version      = "0.1.7"
 
 [workspace]
 members  = [".", "crates/phoenix-eternal-types"]
