@@ -86,7 +86,7 @@ docker compose run --rm \
 Cinder is partially funded through Phoenix's referral program. New, unregistered Phoenix users connecting through Cinder are automatically registered into the private beta, and receive a 10% fee discount.
 
 # Donations
-❤️ Like the tool? Donations are greatly appreciated: cosmic.sol
+❤️ Donations are greatly appreciated: cosmic.sol
 
 ## License
 MIT
