@@ -65,6 +65,8 @@ cargo build --release
 RPC_URL=https://api.mainnet-beta.solana.com ./target/release/cinder
 ```
 
+Pre-compiled binaries for Windows and Linux are available in the Releases.
+
 ## Docker
 
 ```bash
