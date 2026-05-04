@@ -58,6 +58,7 @@ pub static CN: Strings = Strings {
     bid_abbrev: "买",
     ask_abbrev: "卖",
     no_spread: "无价差",
+    microprice_ema: "微价 EMA",
 
     select: "选择",
     back: "返回",
