@@ -220,8 +220,8 @@ pub static ES: Strings = Strings {
     tx_err_post_only_no_cross: "Mercado en modo solo post",
     tx_err_isolated_only_cross_margin: "Margen cruzado deshabilitado. Use aislado",
     tx_err_capability_denied: "La cuenta del trader carece de permisos. Regístrese en \
-                               app.phoenix.trade con un código de invitación.",
-    tx_err_trader_frozen: "La cuenta del trader está congelada. Regístrese en app.phoenix.trade \
+                               phoenix.trade con un código de invitación.",
+    tx_err_trader_frozen: "La cuenta del trader está congelada. Regístrese en phoenix.trade \
                            con un código de invitación para activarla.",
     tx_err_withdraw_insufficient_margin: "Solicitud de retiro rechazada: margen insuficiente",
     tx_err_insufficient_balance: "Saldo insuficiente.",
@@ -261,14 +261,26 @@ pub static ES: Strings = Strings {
     tx_registering_referral: "🐦‍🔥 Registrando con referido COSMIC (10% de descuento)…",
     tx_registered_referral: "🐦‍🔥 Registrado con referido COSMIC — 10% de descuento aplicado",
     tx_registration_failed: "❌ Registro de Phoenix fallido",
-    tx_referral_skipped: "🐦‍🔥 Referido omitido — regístrese en app.phoenix.trade antes de operar",
+    tx_referral_skipped: "🐦‍🔥 Referido omitido — regístrese en phoenix.trade antes de operar",
 
     referral_modal_title: "Código de Referido Personalizado",
     referral_modal_label: "Código de invitación / referido de Phoenix:",
     referral_modal_action: "registrar",
     referral_modal_skip: "omitir",
-    referral_modal_help:
-        "Deje vacío y presione Esc para omitir y registrarse en app.phoenix.trade.",
+    referral_modal_help: "Deje vacío y presione Esc para omitir y registrarse en phoenix.trade.",
     tx_registering_custom_prefix: "🐦‍🔥 Registrando con referido",
     tx_registered_custom_prefix: "🐦‍🔥 Registrado con referido",
+
+    referral_choice_title: "Elegir referido",
+    referral_choice_intro:
+        "Esta cartera aún no tiene cuenta en Phoenix. Elija un referido para registrarse:",
+    referral_choice_cosmic: "Usar referido COSMIC — 10% de descuento en comisiones",
+    referral_choice_cosmic_note:
+        "Cinder recibe una parte de las comisiones de las carteras registradas con COSMIC.",
+    referral_choice_custom: "Introducir un código de referido / invitación personalizado",
+    referral_choice_skip: "Omitir — me registraré manualmente en phoenix.trade",
+    referral_choice_nav: "seleccionar",
+    referral_choice_action: "elegir",
+    referral_choice_sticky_note:
+        "La atribución es permanente en Phoenix y no puede cambiarse después.",
 };

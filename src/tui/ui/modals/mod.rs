@@ -26,6 +26,7 @@ mod orders;
 mod position_leaderboard;
 mod positions;
 mod quit;
+mod referral_choice;
 mod referral_code;
 mod wallet_path;
 
@@ -38,5 +39,6 @@ pub(in crate::tui::ui) use orders::*;
 pub(in crate::tui::ui) use position_leaderboard::*;
 pub(in crate::tui::ui) use positions::*;
 pub(in crate::tui::ui) use quit::*;
+pub(in crate::tui::ui) use referral_choice::*;
 pub(in crate::tui::ui) use referral_code::*;
 pub(in crate::tui::ui) use wallet_path::*;

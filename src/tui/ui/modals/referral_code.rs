@@ -1,6 +1,7 @@
-//! Custom referral code modal — opened automatically when a wallet with no
-//! Phoenix account connects while `CINDER_SKIP_REFERRAL` is set.
+//! Custom referral code modal — reached from the first-run choice modal
+//! when the user picks "Enter a custom referral / invite code".
 
+use super::super::super::constants::MAX_REFERRAL_CODE_LEN;
 use super::*;
 
 pub(in crate::tui::ui) fn render_referral_code_modal(
@@ -85,6 +86,14 @@ pub(in crate::tui::ui) fn render_referral_code_modal(
         rows[0],
     );
 
+    let used = trading.referral_code_buffer.chars().count();
+    let counter_color = if used >= MAX_REFERRAL_CODE_LEN {
+        // Cap reached — flag the counter in warm-amber so the user sees why
+        // further keystrokes aren't echoing.
+        Color::Rgb(220, 150, 60)
+    } else {
+        Color::DarkGray
+    };
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::raw(" "),
@@ -93,6 +102,11 @@ pub(in crate::tui::ui) fn render_referral_code_modal(
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("{}/{}", used, MAX_REFERRAL_CODE_LEN),
+                Style::default().fg(counter_color),
             ),
         ])),
         rows[1],

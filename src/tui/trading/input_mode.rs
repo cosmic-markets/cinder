@@ -30,10 +30,14 @@ pub enum InputMode {
     /// path string seeded from `default_wallet_path()`; Enter attempts the
     /// load and closes on success.
     EditingWalletPath,
-    /// "Custom referral code" modal opened automatically after a wallet with
-    /// no Phoenix account connects while `CINDER_SKIP_REFERRAL` is set. Lets
-    /// the user type any Phoenix invite code (or leave empty / Esc to skip
-    /// and self-register at app.phoenix.trade).
+    /// First-run referral choice modal. Opens automatically after a wallet
+    /// with no Phoenix account connects. Three options: use the COSMIC
+    /// referral (10% fee discount, Cinder earns a share), enter a custom
+    /// code, or skip and self-register at phoenix.trade.
+    ChoosingReferral,
+    /// "Custom referral code" text-input modal. Reached from the
+    /// `ChoosingReferral` modal's "Use custom code" option. Empty + Enter or
+    /// Esc skips and points the user at phoenix.trade.
     EditingReferralCode,
     ConfirmQuit,
 }

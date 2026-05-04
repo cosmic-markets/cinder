@@ -414,10 +414,10 @@ pub struct Strings {
     /// "❌ Phoenix registration failed" — toast title on referral activation
     /// failure.
     pub tx_registration_failed: &'static str,
-    /// "🐦‍🔥 Referral skipped (CINDER_SKIP_REFERRAL=1) — register at
-    /// app.phoenix.trade before trading" — toast title when the user has set
-    /// CINDER_SKIP_REFERRAL and has no Phoenix account; trading will fail
-    /// until they self-register, so the message points them to the website.
+    /// "🐦‍🔥 Referral skipped — register at phoenix.trade before trading" —
+    /// toast title when the user picks "Skip" in the choice modal (or
+    /// presses Esc on either referral modal). Trading will fail until they
+    /// self-register, so the message points them to the website.
     pub tx_referral_skipped: &'static str,
 
     // ── Custom referral code modal ───────────────────────────────────────────
@@ -437,6 +437,29 @@ pub struct Strings {
     /// Status toast title shown after a custom-referral activation succeeds —
     /// prepended to the user-typed code.
     pub tx_registered_custom_prefix: &'static str,
+
+    // ── Referral choice modal (first-run opt-in) ─────────────────────────────
+    /// Modal title — "Choose Referral".
+    pub referral_choice_title: &'static str,
+    /// Header line above the three options summarizing what the choice
+    /// affects.
+    pub referral_choice_intro: &'static str,
+    /// Option 1: "Use COSMIC referral (10% fee discount)".
+    pub referral_choice_cosmic: &'static str,
+    /// Helper text under option 1 disclosing that Cinder earns a share of
+    /// fees from referred wallets.
+    pub referral_choice_cosmic_note: &'static str,
+    /// Option 2: "Enter a custom referral / invite code".
+    pub referral_choice_custom: &'static str,
+    /// Option 3: "Skip — register manually at phoenix.trade".
+    pub referral_choice_skip: &'static str,
+    /// Footer hint paired with ↑↓ — "select".
+    pub referral_choice_nav: &'static str,
+    /// Footer hint paired with Enter — "choose".
+    pub referral_choice_action: &'static str,
+    /// Disclosure note rendered at the bottom: attribution is permanent on
+    /// Phoenix's side and cannot be changed later.
+    pub referral_choice_sticky_note: &'static str,
 }
 
 mod en;

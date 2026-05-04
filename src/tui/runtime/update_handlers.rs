@@ -127,10 +127,11 @@ pub(super) fn handle_tx_status_update(
             state.trading.status_title = title;
             state.trading.status_detail = detail;
         }
-        TxStatusMsg::PromptReferralCode => {
+        TxStatusMsg::PromptReferralChoice => {
+            state.trading.referral_choice_index = 0;
             state.trading.referral_code_buffer.clear();
             state.trading.referral_code_error = None;
-            state.trading.input_mode = InputMode::EditingReferralCode;
+            state.trading.input_mode = InputMode::ChoosingReferral;
         }
     }
     if last_feed_paint.elapsed() >= FEED_REDRAW_MIN_INTERVAL {

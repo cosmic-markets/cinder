@@ -22,3 +22,9 @@ pub const ORDER_SIZE_PRESETS: &[f64] = &[
 ];
 /// The default index in the preset list (0.1 SOL).
 pub const DEFAULT_SIZE_INDEX: usize = 12;
+
+/// Maximum length of a Phoenix referral code accepted by the custom-code
+/// modal. Mirrors Phoenix's referral length cap so we reject obvious typos
+/// / pasted garbage at the keystroke boundary instead of letting the HTTP
+/// call fail.
+pub const MAX_REFERRAL_CODE_LEN: usize = 12;

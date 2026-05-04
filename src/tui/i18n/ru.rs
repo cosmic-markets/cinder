@@ -217,8 +217,8 @@ pub static RU: Strings = Strings {
     tx_err_post_only_no_cross: "Рынок в режиме только постинга",
     tx_err_isolated_only_cross_margin: "Кросс-маржа недоступна, используйте изолированную",
     tx_err_capability_denied:
-        "Нет прав у аккаунта. Зарегистрируйтесь на app.phoenix.trade с кодом приглашения.",
-    tx_err_trader_frozen: "Аккаунт заморожен. Активация на app.phoenix.trade с кодом приглашения.",
+        "Нет прав у аккаунта. Зарегистрируйтесь на phoenix.trade с кодом приглашения.",
+    tx_err_trader_frozen: "Аккаунт заморожен. Активация на phoenix.trade с кодом приглашения.",
     tx_err_withdraw_insufficient_margin: "Вывод отклонён: недостаточно маржи",
     tx_err_insufficient_balance: "Недостаточно средств на балансе.",
     tx_err_insufficient_funds: "Недостаточно средств.",
@@ -257,15 +257,27 @@ pub static RU: Strings = Strings {
     tx_registering_referral: "🐦‍🔥 Регистрация по реферальному коду COSMIC (скидка 10% на комиссии)…",
     tx_registered_referral: "🐦‍🔥 Зарегистрировано по коду COSMIC — скидка 10% на комиссии",
     tx_registration_failed: "❌ Регистрация в Phoenix не удалась",
-    tx_referral_skipped:
-        "🐦‍🔥 Реферал пропущен — зарегистрируйтесь на app.phoenix.trade перед торговлей",
+    tx_referral_skipped: "🐦‍🔥 Реферал пропущен — зарегистрируйтесь на phoenix.trade перед торговлей",
 
     referral_modal_title: "Свой реферальный код",
     referral_modal_label: "Код-приглашение Phoenix:",
     referral_modal_action: "регистрация",
     referral_modal_skip: "пропустить",
     referral_modal_help:
-        "Оставьте пустым и нажмите Esc, чтобы пропустить и зарегистрироваться на app.phoenix.trade.",
+        "Оставьте пустым и нажмите Esc, чтобы пропустить и зарегистрироваться на phoenix.trade.",
     tx_registering_custom_prefix: "🐦‍🔥 Регистрация по реферальному коду",
     tx_registered_custom_prefix: "🐦‍🔥 Зарегистрировано по реферальному коду",
+
+    referral_choice_title: "Выбор реферала",
+    referral_choice_intro:
+        "У этого кошелька ещё нет аккаунта Phoenix. Выберите реферала для регистрации:",
+    referral_choice_cosmic: "Использовать COSMIC — скидка 10% на комиссии",
+    referral_choice_cosmic_note:
+        "Cinder получает часть торговых комиссий с кошельков, зарегистрированных по COSMIC.",
+    referral_choice_custom: "Ввести свой реферальный / пригласительный код",
+    referral_choice_skip: "Пропустить — зарегистрируюсь вручную на phoenix.trade",
+    referral_choice_nav: "выбор",
+    referral_choice_action: "подтвердить",
+    referral_choice_sticky_note:
+        "Привязка реферала на стороне Phoenix постоянна и не может быть изменена позже.",
 };

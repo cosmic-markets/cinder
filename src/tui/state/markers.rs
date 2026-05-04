@@ -26,10 +26,12 @@ pub enum TxStatusMsg {
         title: String,
         detail: String,
     },
-    /// Open the "Custom referral code" modal. Sent by the connect flow when
-    /// `CINDER_SKIP_REFERRAL` is set and the connected wallet has no Phoenix
-    /// account, so the user can type their own invite code (or skip).
-    PromptReferralCode,
+    /// Open the first-run referral choice modal. Sent by the connect flow
+    /// when a wallet with no Phoenix account connects. The modal lets the
+    /// user pick between COSMIC, a custom code, or skipping; the
+    /// custom-code text input is reached by direct state transition from
+    /// the choice handler.
+    PromptReferralChoice,
 }
 
 /// One row in the ledger modal: a user-initiated action that produced a

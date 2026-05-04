@@ -217,9 +217,9 @@ pub static EN: Strings = Strings {
                                submitting.",
     tx_err_post_only_no_cross: "Market in post-only mode",
     tx_err_isolated_only_cross_margin: "Cross margin disabled. Use isolated",
-    tx_err_capability_denied: "Trader account lacks permissions. Register via app.phoenix.trade \
+    tx_err_capability_denied: "Trader account lacks permissions. Register via phoenix.trade \
                                with an invite code first.",
-    tx_err_trader_frozen: "Trader account is frozen. Register at app.phoenix.trade with an invite \
+    tx_err_trader_frozen: "Trader account is frozen. Register at phoenix.trade with an invite \
                             code to activate.",
     tx_err_withdraw_insufficient_margin: "Withdrawal request rejected: InsufficientMargin",
     tx_err_insufficient_balance: "Insufficient balance.",
@@ -259,13 +259,26 @@ pub static EN: Strings = Strings {
     tx_registering_referral: "🐦‍🔥 Registering with COSMIC referral (10% fee discount)…",
     tx_registered_referral: "🐦‍🔥 Registered with COSMIC referral — 10% fee discount applied",
     tx_registration_failed: "❌ Phoenix registration failed",
-    tx_referral_skipped: "🐦‍🔥 Referral skipped — register at app.phoenix.trade before trading",
+    tx_referral_skipped: "🐦‍🔥 Referral skipped — register at phoenix.trade before trading",
 
     referral_modal_title: "Custom Referral Code",
     referral_modal_label: "Phoenix invite / referral code:",
     referral_modal_action: "register",
     referral_modal_skip: "skip",
-    referral_modal_help: "Leave empty + Esc to skip and self-register at app.phoenix.trade.",
+    referral_modal_help: "Leave empty + Esc to skip and self-register at phoenix.trade.",
     tx_registering_custom_prefix: "🐦‍🔥 Registering with referral",
     tx_registered_custom_prefix: "🐦‍🔥 Registered with referral",
+
+    referral_choice_title: "Choose Referral",
+    referral_choice_intro:
+        "This wallet has no Phoenix account yet. Pick a referral to register with:",
+    referral_choice_cosmic: "Use COSMIC referral — 10% fee discount",
+    referral_choice_cosmic_note:
+        "Cinder earns a share of trading fees from wallets that register with COSMIC.",
+    referral_choice_custom: "Enter a custom referral / invite code",
+    referral_choice_skip: "Skip — I'll register manually at phoenix.trade",
+    referral_choice_nav: "select",
+    referral_choice_action: "choose",
+    referral_choice_sticky_note:
+        "Attribution is permanent on Phoenix's side and cannot be changed later.",
 };

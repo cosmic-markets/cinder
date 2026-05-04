@@ -1,10 +1,11 @@
-//! "Custom referral code" modal handler. Opens automatically when a wallet
-//! with no Phoenix account connects while `CINDER_SKIP_REFERRAL` is set.
+//! Referral modal handlers — both the first-run choice modal
+//! (`ChoosingReferral`) and the custom-code text input (`EditingReferralCode`)
+//! it can lead into.
 //!
-//! Empty input + Enter (or Esc at any time) skips activation; trading will
-//! fail until the user self-registers at app.phoenix.trade. A non-empty code
-//! spawns a background task that calls Phoenix's `activate-with-referral`
-//! endpoint with the typed code.
+//! Choice modal opens automatically when a wallet with no Phoenix account
+//! connects. The user picks between the COSMIC referral (Cinder's funding
+//! model — see README), a custom code they were given by someone else, or
+//! skipping entirely.
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -15,8 +16,85 @@ use solana_signer::Signer;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
 
+use super::super::super::constants::MAX_REFERRAL_CODE_LEN;
 use super::super::super::state::TxStatusMsg;
 use super::*;
+
+/// Phoenix referral code Cinder is funded through. Activation happens in
+/// `spawn_referral_activation` when the user picks "Use COSMIC" in the
+/// choice modal.
+const COSMIC_REFERRAL_CODE: &str = "COSMIC";
+
+/// Number of options in the first-run referral choice modal.
+const CHOICE_COUNT: usize = 3;
+const CHOICE_COSMIC: usize = 0;
+const CHOICE_CUSTOM: usize = 1;
+/// Index 2 is the skip option — handled by the wildcard arm in the choice
+/// match, since any out-of-range index also collapses to "skip" as the safe
+/// default.
+const _CHOICE_SKIP: usize = 2;
+
+pub(in crate::tui::runtime) fn handle_choosing_referral(
+    code: KeyCode,
+    state: &mut TuiState,
+    channels: &Channels,
+    http: Arc<PhoenixHttpClient>,
+) -> KeyAction {
+    let s = strings();
+    match code {
+        KeyCode::Up => {
+            if state.trading.referral_choice_index > 0 {
+                state.trading.referral_choice_index -= 1;
+            } else {
+                state.trading.referral_choice_index = CHOICE_COUNT - 1;
+            }
+            KeyAction::Redraw
+        }
+        KeyCode::Down | KeyCode::Tab => {
+            state.trading.referral_choice_index =
+                (state.trading.referral_choice_index + 1) % CHOICE_COUNT;
+            KeyAction::Redraw
+        }
+        KeyCode::Enter => match state.trading.referral_choice_index {
+            CHOICE_COSMIC => {
+                let Some(kp) = state.trading.keypair.as_ref().cloned() else {
+                    state.trading.input_mode = InputMode::Normal;
+                    return KeyAction::Redraw;
+                };
+                spawn_referral_activation(
+                    http,
+                    kp,
+                    COSMIC_REFERRAL_CODE.to_string(),
+                    s.tx_registered_referral.to_string(),
+                    channels.tx_status.clone(),
+                );
+                state.trading.set_status_title(s.tx_registering_referral);
+                state.trading.input_mode = InputMode::Normal;
+                KeyAction::Redraw
+            }
+            CHOICE_CUSTOM => {
+                state.trading.referral_code_buffer.clear();
+                state.trading.referral_code_error = None;
+                state.trading.input_mode = InputMode::EditingReferralCode;
+                KeyAction::Redraw
+            }
+            // CHOICE_SKIP and any out-of-range index fall here.
+            _ => {
+                state.trading.input_mode = InputMode::Normal;
+                state.trading.set_status_title(s.tx_referral_skipped);
+                KeyAction::Redraw
+            }
+        },
+        KeyCode::Esc => {
+            // Esc = skip. Keeps the choice modal cancellable without forcing
+            // the user through the down-arrow path.
+            state.trading.input_mode = InputMode::Normal;
+            state.trading.set_status_title(s.tx_referral_skipped);
+            KeyAction::Redraw
+        }
+        _ => KeyAction::Nothing,
+    }
+}
 
 pub(in crate::tui::runtime) fn handle_editing_referral_code(
     code: KeyCode,
@@ -43,7 +121,14 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
                 state.trading.referral_code_error = Some("wallet not loaded".to_string());
                 return KeyAction::Redraw;
             };
-            spawn_referral_activation(http, kp, trimmed.clone(), channels.tx_status.clone());
+            let success_title = format!("{} {}", s.tx_registered_custom_prefix, trimmed);
+            spawn_referral_activation(
+                http,
+                kp,
+                trimmed.clone(),
+                success_title,
+                channels.tx_status.clone(),
+            );
             state
                 .trading
                 .set_status_title(format!("{} {}…", s.tx_registering_custom_prefix, trimmed));
@@ -65,6 +150,12 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
             KeyAction::Redraw
         }
         KeyCode::Char(c) if !c.is_control() && !c.is_whitespace() => {
+            if state.trading.referral_code_buffer.chars().count() >= MAX_REFERRAL_CODE_LEN {
+                // Silently ignore further input rather than flashing an
+                // error: the underline cursor stops advancing, which is the
+                // visual signal users expect from a bounded text field.
+                return KeyAction::Nothing;
+            }
             state.trading.referral_code_buffer.push(c);
             state.trading.referral_code_error = None;
             KeyAction::Redraw
@@ -73,10 +164,16 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
     }
 }
 
+/// Spawn the Phoenix `activate-with-referral` call as a background task and
+/// fan results back through the shared `tx_status` channel. `success_title`
+/// is the toast shown on success — callers parameterize this so the COSMIC
+/// path can show the discount-mentioning message while the custom-code path
+/// shows a generic prefix + the typed code.
 fn spawn_referral_activation(
     http: Arc<PhoenixHttpClient>,
     kp: Arc<Keypair>,
     referral_code: String,
+    success_title: String,
     tx_status: UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
@@ -84,7 +181,7 @@ fn spawn_referral_activation(
         let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
             Ok(pk) => pk,
             Err(e) => {
-                warn!(error = %e, "failed to convert wallet pubkey for custom referral activation");
+                warn!(error = %e, "failed to convert wallet pubkey for referral activation");
                 let _ = tx_status.send(TxStatusMsg::SetStatus {
                     title: s.tx_registration_failed.to_string(),
                     detail: format!("{}", e),
@@ -99,12 +196,12 @@ fn spawn_referral_activation(
         {
             Ok(_) => {
                 let _ = tx_status.send(TxStatusMsg::SetStatus {
-                    title: format!("{} {}", s.tx_registered_custom_prefix, referral_code),
+                    title: success_title,
                     detail: String::new(),
                 });
             }
             Err(e) => {
-                warn!(error = %e, code = %referral_code, "custom activate_referral failed");
+                warn!(error = %e, code = %referral_code, "activate_referral failed");
                 let _ = tx_status.send(TxStatusMsg::SetStatus {
                     title: s.tx_registration_failed.to_string(),
                     detail: format!("{}", e),

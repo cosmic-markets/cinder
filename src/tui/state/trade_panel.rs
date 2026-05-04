@@ -46,6 +46,9 @@ pub struct TradingState {
     /// Last activation error from the referral modal, rendered below the
     /// input until the user types again.
     pub referral_code_error: Option<String>,
+    /// Selected row in the first-run referral choice modal:
+    /// 0 = use COSMIC, 1 = enter custom code, 2 = skip.
+    pub referral_choice_index: usize,
     pub custom_size: Option<f64>,
     /// Currently selected order kind. `[t]` cycles Market → Limit → StopMarket;
     /// `[e]` edits the attached price for Limit/StopMarket. The next `[Enter]`
@@ -87,6 +90,7 @@ impl TradingState {
             wallet_path_error: None,
             referral_code_buffer: String::new(),
             referral_code_error: None,
+            referral_choice_index: 0,
             custom_size: None,
             order_kind: OrderKind::Market,
             usdc_balance: None,

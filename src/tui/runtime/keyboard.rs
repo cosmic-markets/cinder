@@ -59,6 +59,9 @@ pub(super) fn handle_key_press(
             tx_ctx_task,
             awaiting_first_tx_ctx,
         ),
+        InputMode::ChoosingReferral => {
+            input::handle_choosing_referral(key.code, state, channels, http)
+        }
         InputMode::EditingReferralCode => {
             input::handle_editing_referral_code(key.code, state, channels, http)
         }
