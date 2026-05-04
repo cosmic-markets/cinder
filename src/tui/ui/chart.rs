@@ -29,7 +29,7 @@ pub(super) fn render_price_chart(
         .unwrap_or_default();
 
     let title_line = Line::from(vec![
-        Span::styled(format!(" {}", symbol), Style::default().fg(Color::DarkGray)),
+        Span::styled(" Microprice EMA", Style::default().fg(Color::DarkGray)),
         Span::styled(current_price, Style::default().fg(Color::White)),
     ]);
     let clock_title = Line::from(vec![Span::styled(

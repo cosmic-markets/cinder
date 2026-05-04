@@ -31,6 +31,11 @@ pub struct ParsedSplineData {
     pub ask_iceberg_markers: Vec<(f64, PhoenixPubkey)>,
     pub best_bid: Option<f64>,
     pub best_ask: Option<f64>,
+    /// Total visible size at the best-bid / best-ask tick, summed across
+    /// every spline row quoting that exact price. Used by the chart to
+    /// compute microprice instead of a half-tick-quantized mid.
+    pub best_bid_size: Option<f64>,
+    pub best_ask_size: Option<f64>,
 }
 
 /// `SplineCollection::try_from_account_bytes` inside `catch_unwind` so bad data
@@ -199,6 +204,24 @@ pub fn parse_spline_data(
     let best_bid = bid_rows.first().map(|r| r.1);
     let best_ask = ask_rows.first().map(|r| r.1);
 
+    // Bit-identical price comparison is safe: every row at a given tick goes
+    // through the same `ticks_to_price(offset, tick_size, bld)` call, so two
+    // rows on the same level produce identical f64 bits.
+    let best_bid_size = best_bid.map(|p| {
+        bid_rows
+            .iter()
+            .take_while(|r| r.1 == p)
+            .map(|r| r.2)
+            .sum::<f64>()
+    });
+    let best_ask_size = best_ask.map(|p| {
+        ask_rows
+            .iter()
+            .take_while(|r| r.1 == p)
+            .map(|r| r.2)
+            .sum::<f64>()
+    });
+
     Some(ParsedSplineData {
         bid_rows,
         ask_rows,
@@ -206,6 +229,8 @@ pub fn parse_spline_data(
         ask_iceberg_markers,
         best_bid,
         best_ask,
+        best_bid_size,
+        best_ask_size,
     })
 }
 
