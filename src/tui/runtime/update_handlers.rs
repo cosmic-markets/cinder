@@ -57,7 +57,24 @@ pub(super) async fn handle_spline_account_update(
         state.complete_market_switch();
     }
     if let (Some(bid), Some(ask)) = (parsed.best_bid, parsed.best_ask) {
-        state.push_price((bid + ask) / 2.0);
+        // Microprice for sub-cent positioning within the spread, then a
+        // one-pole EMA so touch-shift jumps decay over a few samples instead
+        // of cliff-jumping the chart by a full tick. ALPHA = 0.2 → half-life
+        // ~3 samples; at WSS cadence that's a few hundred ms of visual
+        // decay. price_history.back() carries the prior smoothed value;
+        // `complete_market_switch` already clears it on market change.
+        let raw = match (parsed.best_bid_size, parsed.best_ask_size) {
+            (Some(b_sz), Some(a_sz)) if b_sz + a_sz > 0.0 => {
+                (b_sz * ask + a_sz * bid) / (b_sz + a_sz)
+            }
+            _ => (bid + ask) / 2.0,
+        };
+        const ALPHA: f64 = 0.2;
+        let mark = match state.price_history.back() {
+            Some(&prev) => ALPHA * raw + (1.0 - ALPHA) * prev,
+            None => raw,
+        };
+        state.push_price(mark);
     }
     state.last_parsed = Some(parsed);
     state.last_slot = wss_slot;

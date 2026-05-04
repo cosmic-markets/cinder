@@ -58,6 +58,7 @@ pub static EN: Strings = Strings {
     bid_abbrev: "B",
     ask_abbrev: "A",
     no_spread: "no spread",
+    microprice_ema: "Microprice EMA",
 
     select: "select",
     back: "back",

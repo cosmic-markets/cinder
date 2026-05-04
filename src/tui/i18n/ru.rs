@@ -58,6 +58,7 @@ pub static RU: Strings = Strings {
     bid_abbrev: "Б",
     ask_abbrev: "А",
     no_spread: "нет спреда",
+    microprice_ema: "EMA микроцены",
 
     select: "выбрать",
     back: "назад",

@@ -70,6 +70,11 @@ pub struct Strings {
     pub ask_abbrev: &'static str,
     pub no_spread: &'static str,
 
+    // ── Chart panel ──────────────────────────────────────────────────────────
+    /// Title-bar label on the price-chart frame (e.g. "Microprice EMA").
+    /// Identifies the smoothed size-weighted touch the chart plots.
+    pub microprice_ema: &'static str,
+
     // ── Common modal navigation hints ────────────────────────────────────────
     pub select: &'static str,
     pub back: &'static str,

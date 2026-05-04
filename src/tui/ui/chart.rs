@@ -7,6 +7,7 @@ use ratatui::widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Paragrap
 use ratatui::{symbols, Frame};
 
 use super::super::format::{fmt_price, fmt_size};
+use super::super::i18n::strings;
 use super::super::state::{OrderChartMarker, TradeMarker};
 use super::super::trading::{OrderInfo, TradingSide};
 
@@ -29,7 +30,10 @@ pub(super) fn render_price_chart(
         .unwrap_or_default();
 
     let title_line = Line::from(vec![
-        Span::styled(format!(" {}", symbol), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!(" {}", strings().microprice_ema),
+            Style::default().fg(Color::DarkGray),
+        ),
         Span::styled(current_price, Style::default().fg(Color::White)),
     ]);
     let clock_title = Line::from(vec![Span::styled(

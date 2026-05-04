@@ -96,6 +96,8 @@ fn rebuild_merged_book_sorts_each_side_best_first() {
         ask_iceberg_markers: vec![],
         best_bid: Some(100.0),
         best_ask: Some(101.0),
+        best_bid_size: Some(2.0),
+        best_ask_size: Some(4.0),
     });
     s.rebuild_merged_book("BTC", false, None, 2);
     let bids: Vec<f64> = s.merged_book.bid_rows.iter().map(|r| r.price).collect();
@@ -117,6 +119,8 @@ fn rebuild_merged_book_omits_clob_when_show_clob_is_false() {
         ask_iceberg_markers: vec![],
         best_bid: Some(100.0),
         best_ask: None,
+        best_bid_size: Some(1.0),
+        best_ask_size: None,
     });
     s.clob_bids = vec![(100.5, 1.0, "Z".to_string())];
     s.rebuild_merged_book("BTC", false, None, 2);
@@ -166,6 +170,8 @@ fn rebuild_merged_book_abstracts_spline_range_to_point_quote() {
         ask_iceberg_markers: vec![],
         best_bid: Some(100.0),
         best_ask: None,
+        best_bid_size: Some(50.0),
+        best_ask_size: None,
     });
     s.rebuild_merged_book("BTC", false, None, 2);
     assert_eq!(s.merged_book.bid_rows.len(), 1);
@@ -197,6 +203,8 @@ fn rebuild_merged_book_paints_iceberg_marker_on_outer_adjacent_row() {
         ],
         best_bid: None,
         best_ask: Some(80.01),
+        best_bid_size: None,
+        best_ask_size: Some(5.0),
     });
     s.rebuild_merged_book("BTC", false, None, 2);
     let asks = &s.merged_book.ask_rows;
