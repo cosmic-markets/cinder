@@ -14,6 +14,8 @@ use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
 use tokio::sync::oneshot;
 
+use super::i18n::strings;
+
 const BANNER: &[&str] = &[
     " ██████╗██╗███╗   ██╗██████╗ ███████╗██████╗ ",
     "██╔════╝██║████╗  ██║██╔══██╗██╔════╝██╔══██╗",
@@ -132,6 +134,16 @@ fn build_frame(time: f32) -> Vec<Line<'static>> {
         credit_text,
         Style::default()
             .fg(Color::Rgb(170, 110, 70))
+            .add_modifier(Modifier::ITALIC),
+    )));
+
+    // Risk disclaimer — dim, italic, left-aligned so it reads as fine print
+    // rather than competing with the banner.
+    let disclaimer = strings().splash_risk_disclaimer;
+    lines.push(Line::from(Span::styled(
+        disclaimer,
+        Style::default()
+            .fg(Color::Rgb(110, 70, 50))
             .add_modifier(Modifier::ITALIC),
     )));
     lines

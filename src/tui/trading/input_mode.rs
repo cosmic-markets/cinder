@@ -30,5 +30,10 @@ pub enum InputMode {
     /// path string seeded from `default_wallet_path()`; Enter attempts the
     /// load and closes on success.
     EditingWalletPath,
+    /// "Custom referral code" modal opened automatically after a wallet with
+    /// no Phoenix account connects while `CINDER_SKIP_REFERRAL` is set. Lets
+    /// the user type any Phoenix invite code (or leave empty / Esc to skip
+    /// and self-register at app.phoenix.trade).
+    EditingReferralCode,
     ConfirmQuit,
 }

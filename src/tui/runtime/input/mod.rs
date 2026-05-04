@@ -25,6 +25,7 @@ mod clipboard;
 mod forms;
 mod market;
 mod normal;
+mod referral;
 mod settings;
 mod views;
 
@@ -33,5 +34,6 @@ pub(in crate::tui::runtime) use clipboard::*;
 pub(in crate::tui::runtime) use forms::*;
 pub(in crate::tui::runtime) use market::*;
 pub(in crate::tui::runtime) use normal::*;
+pub(in crate::tui::runtime) use referral::*;
 pub(in crate::tui::runtime) use settings::*;
 pub(in crate::tui::runtime) use views::*;

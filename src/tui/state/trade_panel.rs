@@ -40,6 +40,12 @@ pub struct TradingState {
     /// Last load error from the "Load Wallet" modal, rendered below the
     /// input until the user types again.
     pub wallet_path_error: Option<String>,
+    /// Editable code for the "Custom referral code" modal. Empty string
+    /// means the user wants to skip and self-register.
+    pub referral_code_buffer: String,
+    /// Last activation error from the referral modal, rendered below the
+    /// input until the user types again.
+    pub referral_code_error: Option<String>,
     pub custom_size: Option<f64>,
     /// Currently selected order kind. `[t]` cycles Market → Limit → StopMarket;
     /// `[e]` edits the attached price for Limit/StopMarket. The next `[Enter]`
@@ -79,6 +85,8 @@ impl TradingState {
             withdraw_buffer: String::new(),
             wallet_path_buffer: String::new(),
             wallet_path_error: None,
+            referral_code_buffer: String::new(),
+            referral_code_error: None,
             custom_size: None,
             order_kind: OrderKind::Market,
             usdc_balance: None,

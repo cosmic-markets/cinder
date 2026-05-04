@@ -197,6 +197,10 @@ pub fn render_frame(
         modals::render_wallet_path_modal(f, area, trading);
     }
 
+    if trading.input_mode == InputMode::EditingReferralCode {
+        modals::render_referral_code_modal(f, area, trading);
+    }
+
     if let Some(sym) = switching_to {
         modals::render_switching_modal(f, area, sym);
     }

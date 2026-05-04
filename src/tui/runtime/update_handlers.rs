@@ -127,6 +127,11 @@ pub(super) fn handle_tx_status_update(
             state.trading.status_title = title;
             state.trading.status_detail = detail;
         }
+        TxStatusMsg::PromptReferralCode => {
+            state.trading.referral_code_buffer.clear();
+            state.trading.referral_code_error = None;
+            state.trading.input_mode = InputMode::EditingReferralCode;
+        }
     }
     if last_feed_paint.elapsed() >= FEED_REDRAW_MIN_INTERVAL {
         redraw_tui(terminal, state, cfg, rpc_host);
