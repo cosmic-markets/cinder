@@ -94,6 +94,46 @@ fn build_frame(time: f32) -> Vec<Line<'static>> {
         tagline,
         Style::default().fg(Color::Rgb(ember.0, ember.1, ember.2)),
     )));
+
+    // Progress bar — we don't know the total setup duration up-front, so fill
+    // asymptotically toward 100% (1 - exp(-t/τ)). Reads as steady forward
+    // motion without ever falsely claiming "done".
+    let banner_w = BANNER[0].chars().count();
+    let progress = 1.0 - (-time / 1.0).exp();
+    let filled = (progress * banner_w as f32).round() as usize;
+    let filled = filled.min(banner_w);
+    let mut bar_spans: Vec<Span<'static>> = Vec::with_capacity(banner_w);
+    for col in 0..banner_w {
+        if col < filled {
+            let row_p = (col as f32 / banner_w.max(1) as f32).clamp(0.0, 1.0);
+            bar_spans.push(Span::styled(
+                "█",
+                Style::default().fg(fire_color(time, row_p, col as f32)),
+            ));
+        } else {
+            bar_spans.push(Span::styled(
+                "░",
+                Style::default().fg(Color::Rgb(60, 30, 15)),
+            ));
+        }
+    }
+    lines.push(Line::from(bar_spans));
+
+    // Credit — right-aligned via leading padding so it lines up with the
+    // banner's right edge regardless of banner width.
+    let credit = "powered by Cosmic Markets";
+    let pad = banner_w.saturating_sub(credit.chars().count());
+    let mut credit_text = String::with_capacity(pad + credit.len());
+    for _ in 0..pad {
+        credit_text.push(' ');
+    }
+    credit_text.push_str(credit);
+    lines.push(Line::from(Span::styled(
+        credit_text,
+        Style::default()
+            .fg(Color::Rgb(170, 110, 70))
+            .add_modifier(Modifier::ITALIC),
+    )));
     lines
 }
 
