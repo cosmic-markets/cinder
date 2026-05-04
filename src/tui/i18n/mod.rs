@@ -397,6 +397,46 @@ pub struct Strings {
     pub tx_failed_prepare_cancel_batch: &'static str,
     /// "✅ Cancel complete" — final cancel success
     pub tx_cancel_complete: &'static str,
+
+    // ── Splash screen ────────────────────────────────────────────────────────
+    /// One-line risk disclaimer rendered under the splash credit. Must fit
+    /// within the 45-column banner width.
+    pub splash_risk_disclaimer: &'static str,
+
+    // ── Connect flow / referral disclosure ───────────────────────────────────
+    /// "🐦‍🔥 No Phoenix account — registering with COSMIC referral
+    /// (10% fee discount)…" — toast title shown while the referral activation
+    /// HTTP call is in flight.
+    pub tx_registering_referral: &'static str,
+    /// "🐦‍🔥 Registered with COSMIC referral — 10% fee discount applied" —
+    /// toast title on successful referral activation.
+    pub tx_registered_referral: &'static str,
+    /// "❌ Phoenix registration failed" — toast title on referral activation
+    /// failure.
+    pub tx_registration_failed: &'static str,
+    /// "🐦‍🔥 Referral skipped (CINDER_SKIP_REFERRAL=1) — register at
+    /// app.phoenix.trade before trading" — toast title when the user has set
+    /// CINDER_SKIP_REFERRAL and has no Phoenix account; trading will fail
+    /// until they self-register, so the message points them to the website.
+    pub tx_referral_skipped: &'static str,
+
+    // ── Custom referral code modal ───────────────────────────────────────────
+    /// Modal title — "Custom Referral Code".
+    pub referral_modal_title: &'static str,
+    /// Field label above the input — "Phoenix invite / referral code:".
+    pub referral_modal_label: &'static str,
+    /// Footer hint paired with Enter — "register".
+    pub referral_modal_action: &'static str,
+    /// Footer hint paired with Esc — "skip".
+    pub referral_modal_skip: &'static str,
+    /// Helper line below the input describing the empty-input behavior.
+    pub referral_modal_help: &'static str,
+    /// Status toast title shown while a custom-referral activation is in
+    /// flight — prepended to the user-typed code.
+    pub tx_registering_custom_prefix: &'static str,
+    /// Status toast title shown after a custom-referral activation succeeds —
+    /// prepended to the user-typed code.
+    pub tx_registered_custom_prefix: &'static str,
 }
 
 mod en;

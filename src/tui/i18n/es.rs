@@ -255,4 +255,19 @@ pub static ES: Strings = Strings {
     tx_confirming_cancel_batch: "Confirmando lote de cancelación",
     tx_failed_prepare_cancel_batch: "❌ Error al preparar lote de cancelación",
     tx_cancel_complete: "✅ Cancelación completada",
+
+    splash_risk_disclaimer: "Los perpetuos son riesgosos — opere bajo su riesgo",
+
+    tx_registering_referral: "🐦‍🔥 Registrando con referido COSMIC (10% de descuento)…",
+    tx_registered_referral: "🐦‍🔥 Registrado con referido COSMIC — 10% de descuento aplicado",
+    tx_registration_failed: "❌ Registro de Phoenix fallido",
+    tx_referral_skipped: "🐦‍🔥 Referido omitido — regístrese en app.phoenix.trade antes de operar",
+
+    referral_modal_title: "Código de Referido Personalizado",
+    referral_modal_label: "Código de invitación / referido de Phoenix:",
+    referral_modal_action: "registrar",
+    referral_modal_skip: "omitir",
+    referral_modal_help: "Deje vacío y presione Esc para omitir y registrarse en app.phoenix.trade.",
+    tx_registering_custom_prefix: "🐦‍🔥 Registrando con referido",
+    tx_registered_custom_prefix: "🐦‍🔥 Registrado con referido",
 };

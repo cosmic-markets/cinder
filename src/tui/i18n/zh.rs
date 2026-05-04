@@ -249,4 +249,19 @@ pub static CN: Strings = Strings {
     tx_confirming_cancel_batch: "确认取消批次",
     tx_failed_prepare_cancel_batch: "❌ 取消批次准备失败",
     tx_cancel_complete: "✅ 取消完成",
+
+    splash_risk_disclaimer: "永续合约有风险 — 自负风险",
+
+    tx_registering_referral: "🐦‍🔥 正在使用 COSMIC 邀请码注册（10% 手续费折扣）…",
+    tx_registered_referral: "🐦‍🔥 已通过 COSMIC 邀请码注册 — 已享 10% 手续费折扣",
+    tx_registration_failed: "❌ Phoenix 注册失败",
+    tx_referral_skipped: "🐦‍🔥 已跳过邀请码 — 交易前请在 app.phoenix.trade 注册",
+
+    referral_modal_title: "自定义邀请码",
+    referral_modal_label: "Phoenix 邀请码：",
+    referral_modal_action: "注册",
+    referral_modal_skip: "跳过",
+    referral_modal_help: "留空并按 Esc 跳过，并在 app.phoenix.trade 自行注册。",
+    tx_registering_custom_prefix: "🐦‍🔥 正在使用邀请码注册",
+    tx_registered_custom_prefix: "🐦‍🔥 已通过邀请码注册",
 };

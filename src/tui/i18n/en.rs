@@ -253,4 +253,19 @@ pub static EN: Strings = Strings {
     tx_confirming_cancel_batch: "Confirming cancel batch",
     tx_failed_prepare_cancel_batch: "❌ Failed to prepare cancel batch",
     tx_cancel_complete: "✅ Cancel complete",
+
+    splash_risk_disclaimer: "Perpetuals are risky — trade at your own risk",
+
+    tx_registering_referral: "🐦‍🔥 Registering with COSMIC referral (10% fee discount)…",
+    tx_registered_referral: "🐦‍🔥 Registered with COSMIC referral — 10% fee discount applied",
+    tx_registration_failed: "❌ Phoenix registration failed",
+    tx_referral_skipped: "🐦‍🔥 Referral skipped — register at app.phoenix.trade before trading",
+
+    referral_modal_title: "Custom Referral Code",
+    referral_modal_label: "Phoenix invite / referral code:",
+    referral_modal_action: "register",
+    referral_modal_skip: "skip",
+    referral_modal_help: "Leave empty + Esc to skip and self-register at app.phoenix.trade.",
+    tx_registering_custom_prefix: "🐦‍🔥 Registering with referral",
+    tx_registered_custom_prefix: "🐦‍🔥 Registered with referral",
 };
