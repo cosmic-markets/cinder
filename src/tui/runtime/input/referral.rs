@@ -32,9 +32,7 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
                 state.trading.input_mode = InputMode::Normal;
                 state.trading.referral_code_buffer.clear();
                 state.trading.referral_code_error = None;
-                state
-                    .trading
-                    .set_status_title(s.tx_referral_skipped);
+                state.trading.set_status_title(s.tx_referral_skipped);
                 return KeyAction::Redraw;
             }
             // Spawn the activation task; the modal closes immediately so the
@@ -42,8 +40,7 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
             // Status toasts (registering / registered / failed) flow back via
             // the same tx_status channel the connect flow uses.
             let Some(kp) = state.trading.keypair.as_ref().cloned() else {
-                state.trading.referral_code_error =
-                    Some("wallet not loaded".to_string());
+                state.trading.referral_code_error = Some("wallet not loaded".to_string());
                 return KeyAction::Redraw;
             };
             spawn_referral_activation(http, kp, trimmed.clone(), channels.tx_status.clone());
@@ -59,9 +56,7 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
             state.trading.input_mode = InputMode::Normal;
             state.trading.referral_code_buffer.clear();
             state.trading.referral_code_error = None;
-            state
-                .trading
-                .set_status_title(s.tx_referral_skipped);
+            state.trading.set_status_title(s.tx_referral_skipped);
             KeyAction::Redraw
         }
         KeyCode::Backspace => {

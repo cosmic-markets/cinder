@@ -19,8 +19,13 @@ pub struct OrderChartMarker {
 
 #[derive(Clone, Debug)]
 pub enum TxStatusMsg {
-    TradeMarker { is_buy: bool },
-    SetStatus { title: String, detail: String },
+    TradeMarker {
+        is_buy: bool,
+    },
+    SetStatus {
+        title: String,
+        detail: String,
+    },
     /// Open the "Custom referral code" modal. Sent by the connect flow when
     /// `CINDER_SKIP_REFERRAL` is set and the connected wallet has no Phoenix
     /// account, so the user can type their own invite code (or skip).

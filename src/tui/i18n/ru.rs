@@ -257,13 +257,15 @@ pub static RU: Strings = Strings {
     tx_registering_referral: "🐦‍🔥 Регистрация по реферальному коду COSMIC (скидка 10% на комиссии)…",
     tx_registered_referral: "🐦‍🔥 Зарегистрировано по коду COSMIC — скидка 10% на комиссии",
     tx_registration_failed: "❌ Регистрация в Phoenix не удалась",
-    tx_referral_skipped: "🐦‍🔥 Реферал пропущен — зарегистрируйтесь на app.phoenix.trade перед торговлей",
+    tx_referral_skipped:
+        "🐦‍🔥 Реферал пропущен — зарегистрируйтесь на app.phoenix.trade перед торговлей",
 
     referral_modal_title: "Свой реферальный код",
     referral_modal_label: "Код-приглашение Phoenix:",
     referral_modal_action: "регистрация",
     referral_modal_skip: "пропустить",
-    referral_modal_help: "Оставьте пустым и нажмите Esc, чтобы пропустить и зарегистрироваться на app.phoenix.trade.",
+    referral_modal_help:
+        "Оставьте пустым и нажмите Esc, чтобы пропустить и зарегистрироваться на app.phoenix.trade.",
     tx_registering_custom_prefix: "🐦‍🔥 Регистрация по реферальному коду",
     tx_registered_custom_prefix: "🐦‍🔥 Зарегистрировано по реферальному коду",
 };

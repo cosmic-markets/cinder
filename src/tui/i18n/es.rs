@@ -267,7 +267,8 @@ pub static ES: Strings = Strings {
     referral_modal_label: "Código de invitación / referido de Phoenix:",
     referral_modal_action: "registrar",
     referral_modal_skip: "omitir",
-    referral_modal_help: "Deje vacío y presione Esc para omitir y registrarse en app.phoenix.trade.",
+    referral_modal_help:
+        "Deje vacío y presione Esc para omitir y registrarse en app.phoenix.trade.",
     tx_registering_custom_prefix: "🐦‍🔥 Registrando con referido",
     tx_registered_custom_prefix: "🐦‍🔥 Registrado con referido",
 };
