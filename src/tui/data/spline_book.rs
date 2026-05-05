@@ -9,11 +9,18 @@ use super::super::math::{base_lots_to_units, ticks_to_price};
 
 /// One row at a single tick: trader PDA (the spline's owning trader account;
 /// resolve to the wallet authority via `GtiCache::resolve_pda` at display
-/// time), tick price, and the available size at that tick (density minus any
+/// time), tick price, the available size at that tick (density minus any
 /// per-region fill that's already consumed this tick or the ones in front of
-/// it). Splines are pre-expanded into one row per tick inside their regions
-/// so the displayed book reads as a normal CLOB.
-pub type SplineRow = (PhoenixPubkey, f64, f64);
+/// it), and the parent region's full remaining depth (`total_size -
+/// filled_size`, in display units; identical for every row expanded from the
+/// same region). Splines are pre-expanded into one row per tick inside their
+/// regions so the displayed book reads as a normal CLOB. The region-level
+/// remaining depth tags every row so the crossed-book trim heuristic can
+/// compare *region* size, not just per-tick size — comparing only the front
+/// tick's size lets a stale ghost (full density at its only tick) outweigh a
+/// genuine partly-filled region (whose front tick is the small `partial`
+/// leftover).
+pub type SplineRow = (PhoenixPubkey, f64, f64, f64);
 
 #[derive(Clone)]
 pub struct ParsedSplineData {
@@ -105,6 +112,9 @@ fn expand_region<F>(
     if unfilled_lots == 0 || region.density == 0 {
         return;
     }
+    // Tag every emitted row with the region's full remaining depth so the
+    // crossed-book trim heuristic can compare regions, not just front ticks.
+    let region_remaining_units = base_lots_to_units(unfilled_lots, bld);
     let mut remaining = unfilled_lots;
     for offset in (region.start_offset..region.end_offset).rev() {
         if remaining == 0 {
@@ -116,6 +126,7 @@ fn expand_region<F>(
             trader,
             price_at_offset(offset),
             base_lots_to_units(take, bld),
+            region_remaining_units,
         ));
     }
 }
@@ -125,9 +136,19 @@ fn expand_region<F>(
 ///
 /// Phoenix splines don't auto-match maker-vs-maker, so two splines with
 /// different `mid_price` can sit STRICTLY crossed (best bid > best ask) until
-/// a taker resolves them. Heuristic: stale-ghost quotes are usually tiny next
-/// to the genuine touch, so on each crossed iteration we drop whichever side
-/// has less per-tick visible size at the front row and re-check.
+/// a taker resolves them. Heuristic: stale-ghost quotes are usually thin next
+/// to the genuine touch *at the region level*, so on each crossed iteration
+/// we drop whichever side's front row belongs to the region with less total
+/// remaining depth and re-check.
+///
+/// We compare REGION-level remaining depth (field `.3`), not the front row's
+/// per-tick visible size (`.2`). The most-aggressive tick of a partly-filled
+/// region carries the small `partial` leftover, so a healthy real region's
+/// front row can be tiny while a stale ghost region's only/inner-most tick
+/// shows full density — comparing per-tick sizes flips the heuristic and
+/// trims the wrong side. Region-level remaining depth (`total_size -
+/// filled_size`) reflects the whole region's commitment and survives
+/// `partial`.
 ///
 /// A LOCKED book (best bid == best ask) is intentionally left alone — it's a
 /// valid 0-spread touch that the renderer should display as-is. Treating
@@ -145,7 +166,7 @@ fn compute_cross_trim_skip(bid_rows: &[SplineRow], ask_rows: &[SplineRow]) -> (u
         if b.1 <= a.1 {
             break;
         }
-        if b.2 < a.2 {
+        if b.3 < a.3 {
             bid_skip += 1;
         } else {
             ask_skip += 1;
@@ -468,15 +489,29 @@ mod tests {
     use super::*;
     use solana_pubkey::Pubkey as PhoenixPubkey;
 
+    /// Build a row with `region_depth = size`, i.e. modeling a single-tick
+    /// region whose only row carries the entire region's remaining depth.
+    /// Use [`row_with_region_depth`] when the per-tick size and the parent
+    /// region's total remaining depth differ (e.g. a partial leftover or a
+    /// ghost region with a thick inner-most tick).
     fn row(tag: u8, price: f64, size: f64) -> SplineRow {
-        (PhoenixPubkey::from([tag; 32]), price, size)
+        (PhoenixPubkey::from([tag; 32]), price, size, size)
+    }
+
+    fn row_with_region_depth(tag: u8, price: f64, size: f64, region_remaining: f64) -> SplineRow {
+        (
+            PhoenixPubkey::from([tag; 32]),
+            price,
+            size,
+            region_remaining,
+        )
     }
 
     #[test]
     fn cross_trim_keeps_locked_book_intact() {
         // Locked book at $56 with identical sizes on both sides. Previous
         // logic treated this as a cross and unconditionally dropped the ask
-        // (the `else` branch picks ask when `b.2 < a.2` is false on
+        // (the `else` branch picks ask when `b.3 < a.3` is false on
         // equality), making the rendered spread jump to 56→57. The fix
         // breaks on `bid <= ask` so locked books are displayed as-is.
         let bids = vec![row(0xA1, 56.0, 5.0), row(0xA2, 55.0, 50.0)];
@@ -499,8 +534,9 @@ mod tests {
     #[test]
     fn cross_trim_drops_ghost_bid_above_real_ask() {
         // Stale ghost bid at 57 sits above a real ask at 56. The ghost is
-        // tiny vs. the real ask depth, so the heuristic drops the bid side
-        // and the touch resolves to 55 / 56.
+        // a single-tick region (depth = 1), the ask is a multi-tick region
+        // (depth = 30). The heuristic drops the bid side and the touch
+        // resolves to 55 / 56.
         let bids = vec![row(0xA1, 57.0, 1.0), row(0xA2, 55.0, 50.0)];
         let asks = vec![row(0xB1, 56.0, 10.0), row(0xB2, 57.0, 20.0)];
         let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
@@ -511,8 +547,9 @@ mod tests {
     #[test]
     fn cross_trim_drops_ghost_ask_below_real_bid() {
         // Stale ghost ask at 54 sits below a real bid at 55. The ghost is
-        // tiny vs. the real bid depth, so the heuristic drops the ask side
-        // and the touch resolves to 55 / 56.
+        // a single-tick region (depth = 1), the bid is a multi-tick region
+        // (depth = 60). The heuristic drops the ask side and the touch
+        // resolves to 55 / 56.
         let bids = vec![row(0xA1, 55.0, 10.0), row(0xA2, 54.0, 50.0)];
         let asks = vec![row(0xB1, 54.0, 1.0), row(0xB2, 56.0, 20.0)];
         let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
@@ -532,5 +569,44 @@ mod tests {
         let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &[]);
         assert_eq!(bid_skip, 0);
         assert_eq!(ask_skip, 0);
+    }
+
+    #[test]
+    fn cross_trim_uses_region_depth_not_front_tick_size() {
+        // Pathological case the per-row heuristic regressed on:
+        //   - Real bid is a healthy multi-tick region (e.g. total
+        //     remaining = 100). Its most-aggressive tick is the small
+        //     `partial` leftover (size 1) — `expand_region` allocates the
+        //     unfilled budget from the rear inward, so any partial lands
+        //     at the front.
+        //   - Stale ghost ask is a single-tick region with full density
+        //     (size 50, region_remaining = 50). Its only/inner-most tick
+        //     is fat.
+        // Per-tick comparison: bid front size (1) < ask front size (50)
+        //   → drops the *real* bid. WRONG.
+        // Region-depth comparison: bid region (100) > ask region (50)
+        //   → drops the ghost ask. CORRECT.
+        let bids = vec![
+            // `partial` leftover at the most-aggressive tick of a region
+            // whose total remaining is 100.
+            row_with_region_depth(0xA1, 57.0, 1.0, 100.0),
+            row_with_region_depth(0xA2, 56.0, 33.0, 100.0),
+            row_with_region_depth(0xA3, 55.0, 33.0, 100.0),
+            row_with_region_depth(0xA4, 54.0, 33.0, 100.0),
+        ];
+        let asks = vec![
+            // Stale ghost: single-tick region, full density at its only
+            // tick.
+            row_with_region_depth(0xB1, 56.0, 50.0, 50.0),
+        ];
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
+        assert_eq!(
+            bid_skip, 0,
+            "real bid region (depth 100) should outweigh ghost ask region (depth 50)"
+        );
+        assert_eq!(
+            ask_skip, 1,
+            "ghost ask should be trimmed, leaving touch at 57/(beyond ghost)"
+        );
     }
 }
