@@ -468,7 +468,7 @@ pub(in crate::tui::ui) fn render_config_modal(
     );
 
     // When no override is set, the resolved CU price is whatever the auto
-    // priority-fee task last produced (p75 of recent network fees). Surface
+    // priority-fee task last produced (p90 of recent network fees). Surface
     // that value inline as "<auto / N>" so the user can see what they're
     // about to pay; fall back to "<default>  N" before the first sample
     // arrives.

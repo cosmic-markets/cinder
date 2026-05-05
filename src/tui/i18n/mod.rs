@@ -136,7 +136,7 @@ pub struct Strings {
     /// Placeholder shown for CU price/limit fields when no override is set —
     /// "<default>" / etc.
     pub cu_default: &'static str,
-    /// Bare label for the auto-derived CU price (network p75). Wrapped at
+    /// Bare label for the auto-derived CU price (network p90). Wrapped at
     /// render time as e.g. `<auto / 150>` — the value is appended to make the
     /// active fee visible inline.
     pub cu_auto: &'static str,

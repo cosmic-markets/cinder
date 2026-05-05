@@ -138,7 +138,7 @@ fn compute_unit_limit_from_env() -> Option<u32> {
 }
 
 /// Resolved `SetComputeUnitPrice` value:
-/// user override → env override → auto-derived (p75 of recent network fees) →
+/// user override → env override → auto-derived (p90 of recent network fees) →
 /// built-in default. The auto value is `None` until the background refresh
 /// task in `tui::tx::priority_fees` produces its first sample.
 pub fn current_compute_unit_price_micro_lamports() -> u64 {
