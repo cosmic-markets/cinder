@@ -39,6 +39,13 @@ pub(super) fn connect_wallet_with_keypair(
     state.trading.wallet_loaded = true;
     let kp_arc = Arc::new(kp);
     state.trading.keypair = Some(Arc::clone(&kp_arc));
+    // Reset the "modal already shown" flag on every (re)connect — without
+    // this, a user who pressed Esc out of the choice modal during a
+    // previous session of the same TUI would never see it again even
+    // after a full disconnect/reconnect of the same or a different
+    // wallet. The connect flow below re-evaluates and re-prompts when
+    // the new authority has no Phoenix account.
+    state.trading.referral_choice_shown = false;
     state.trading.set_status_title(strings().st_loading_ctx);
 
     let tx_ctx = spawn_tx_context_task(
@@ -118,6 +125,7 @@ pub(super) fn disconnect_wallet(
     state.trading.wallet_label.clear();
     state.trading.keypair = None;
     state.trading.tx_context = None;
+    state.trading.referral_choice_shown = false;
     state.trading.position = None;
     state.trading.usdc_balance = None;
     state.trading.phoenix_balance = None;

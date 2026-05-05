@@ -128,15 +128,22 @@ pub(super) fn handle_tx_status_update(
             state.trading.status_detail = detail;
         }
         TxStatusMsg::PromptReferralChoice => {
-            // Default-select "Use COSMIC" (index 0 — CHOICE_COSMIC in
-            // runtime/input/referral.rs). It's also the user's best option
-            // (10% fee discount), and the modal carries an explicit
-            // funding-share disclosure plus a permanence warning, so a fast
-            // Enter-press is still an informed choice.
-            state.trading.referral_choice_index = 0;
-            state.trading.referral_code_buffer.clear();
-            state.trading.referral_code_error = None;
-            state.trading.input_mode = InputMode::ChoosingReferral;
+            // Don't re-prompt if the user already saw and dismissed the
+            // modal during this wallet session. The flag is cleared on
+            // (re)connect, so a fresh wallet load gets a fresh prompt.
+            if !state.trading.referral_choice_shown {
+                // Default-select "Use COSMIC" (index 0 — CHOICE_COSMIC in
+                // runtime/input/referral.rs). It's also the user's best
+                // option (10% fee discount), and the modal carries an
+                // explicit funding-share disclosure plus a permanence
+                // warning, so a fast Enter-press is still an informed
+                // choice.
+                state.trading.referral_choice_index = 0;
+                state.trading.referral_code_buffer.clear();
+                state.trading.referral_code_error = None;
+                state.trading.input_mode = InputMode::ChoosingReferral;
+                state.trading.referral_choice_shown = true;
+            }
         }
     }
     if last_feed_paint.elapsed() >= FEED_REDRAW_MIN_INTERVAL {

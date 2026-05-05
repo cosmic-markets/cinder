@@ -119,53 +119,12 @@ pub fn submit_stop_market_order(
         };
         ixs.append(&mut bracket_ixs);
 
-        let mut includes_register = false;
-        if subaccount_index == 0
-            && !ctx
-                .trader_registered
-                .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            let builder = PhoenixTxBuilder::new(&ctx.metadata);
-            match ctx.rpc_client.get_account(&trader_account).await {
-                Ok(acc) if !acc.data.is_empty() => {
-                    ctx.trader_registered
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                _ => {
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
-                        title: format!("{} ({})…", s.tx_registering_trader, order_summary),
-                        detail: String::new(),
-                    });
-                    match builder.build_register_trader(ctx.authority_v2, 0, 0) {
-                        Ok(mut reg_ixs) => {
-                            reg_ixs.extend(ixs);
-                            ixs = reg_ixs;
-                            includes_register = true;
-                        }
-                        Err(e) => {
-                            let _ = tx_status.send(TxStatusMsg::SetStatus {
-                                title: format!("{} — {}", s.tx_failed_build_reg, order_summary),
-                                detail: format!("{}", e),
-                            });
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        let mapped_ixs = ixs;
-
         let mut cu_mul = 1u32;
-        if includes_register {
-            cu_mul += 1;
-        }
         if prepended_conditional_create {
             cu_mul += 1;
         }
-        let mut final_ixs = mapped_ixs;
-        final_ixs.extend(build_compute_budget_ixs(cu_mul));
-        let mapped_ixs = final_ixs;
+        let mut mapped_ixs = ixs;
+        mapped_ixs.extend(build_compute_budget_ixs(cu_mul));
 
         let _ = tx_status.send(TxStatusMsg::SetStatus {
             title: format!("{} {}…", s.tx_broadcasting, order_summary),
@@ -190,8 +149,6 @@ pub fn submit_stop_market_order(
 
         match subscribe_send_confirm(&ctx, &tx, &sig).await {
             Ok(()) => {
-                ctx.trader_registered
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 let _ = tx_status.send(TxStatusMsg::SetStatus {
                     title: format!("{} {}", s.tx_order_confirmed, order_summary),
                     detail: sig_str,

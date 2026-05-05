@@ -113,6 +113,10 @@ pub struct Strings {
     pub language: &'static str,
     pub clob_orders: &'static str,
     pub clob_orders_note: &'static str,
+    /// Config-modal label — "Fan-out to public RPC".
+    pub fanout_public_rpc: &'static str,
+    /// Helper text shown next to the toggle to disclose what the option does.
+    pub fanout_public_rpc_note: &'static str,
     pub on: &'static str,
     pub off: &'static str,
     pub save_reconnect: &'static str,
@@ -236,6 +240,8 @@ pub struct Strings {
     pub st_language_set: &'static str,
     /// "CLOB orders" — append "On" or "Off"
     pub st_clob_set: &'static str,
+    /// "Public-RPC fan-out" — append "On" or "Off"
+    pub st_fanout_set: &'static str,
     /// "Reconnecting to" — append URL
     pub st_reconnecting: &'static str,
     /// "Failed to save config:" — append error
@@ -295,14 +301,10 @@ pub struct Strings {
     // ── Transaction status messages ──────────────────────────────────────────
     /// "(reduce-only)" suffix appended to order summary when reduce_only is set
     pub tx_reduce_only: &'static str,
-    /// "Registering trader" — progress when trader account creation is needed
-    pub tx_registering_trader: &'static str,
     /// "Failed to build order params" — order params error prefix
     pub tx_failed_build_params: &'static str,
     /// "Failed to build order instruction" — order IX build error prefix
     pub tx_failed_build_ix: &'static str,
-    /// "Failed to build trader registration" — registration error prefix
-    pub tx_failed_build_reg: &'static str,
     /// "Preparing transaction" — before compile/sign (append " {summary}…")
     pub tx_broadcasting: &'static str,
     /// "❌ Failed to prepare" — compile/sign failure prefix
@@ -414,11 +416,6 @@ pub struct Strings {
     /// "❌ Phoenix registration failed" — toast title on referral activation
     /// failure.
     pub tx_registration_failed: &'static str,
-    /// "🐦‍🔥 Referral skipped — register at phoenix.trade before trading" —
-    /// toast title when the user picks "Skip" in the choice modal (or
-    /// presses Esc on either referral modal). Trading will fail until they
-    /// self-register, so the message points them to the website.
-    pub tx_referral_skipped: &'static str,
 
     // ── Custom referral code modal ───────────────────────────────────────────
     /// Modal title — "Custom Referral Code".

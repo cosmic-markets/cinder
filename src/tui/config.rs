@@ -68,6 +68,12 @@ pub struct UserConfig {
     /// `true`. When `false`, no websocket is opened for the CLOB feed and
     /// the order book shows only spline rows.
     pub show_clob: bool,
+    /// When `true` (default), every signed transaction is also fanned out to
+    /// the public mainnet-beta RPC for delivery reliability — even if the
+    /// primary RPC is a private/paid endpoint. The primary RPC remains
+    /// authoritative for confirmation. Turn off if you want submissions to
+    /// stay solely on your configured RPC.
+    pub fanout_public_rpc: bool,
 }
 
 impl Default for UserConfig {
@@ -76,7 +82,23 @@ impl Default for UserConfig {
             rpc_url: String::new(),
             language: Language::default(),
             show_clob: true,
+            fanout_public_rpc: default_fanout_public_rpc_from_env(),
         }
+    }
+}
+
+/// Reads the env-var override for the public-RPC fan-out toggle.
+/// `CINDER_FANOUT_PUBLIC_RPC=0|false|off|no` disables; anything else (or unset)
+/// keeps the default `true`. The env var is only consulted as the seed for a
+/// fresh `UserConfig::default()`; once the user toggles it in the config modal,
+/// the persisted value wins.
+fn default_fanout_public_rpc_from_env() -> bool {
+    match env::var("CINDER_FANOUT_PUBLIC_RPC") {
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "off" | "no"
+        ),
+        Err(_) => true,
     }
 }
 
@@ -231,6 +253,10 @@ fn load_user_config_from_disk() -> UserConfig {
             .to_string(),
         language: Language::from_code(v.get("language").and_then(|x| x.as_str()).unwrap_or("en")),
         show_clob: v.get("show_clob").and_then(|x| x.as_bool()).unwrap_or(true),
+        fanout_public_rpc: v
+            .get("fanout_public_rpc")
+            .and_then(|x| x.as_bool())
+            .unwrap_or_else(default_fanout_public_rpc_from_env),
     }
 }
 
@@ -258,6 +284,7 @@ pub fn save_user_config(cfg: &UserConfig) -> std::io::Result<()> {
         "rpc_url": cfg.rpc_url,
         "language": cfg.language.code(),
         "show_clob": cfg.show_clob,
+        "fanout_public_rpc": cfg.fanout_public_rpc,
     });
     let content = serde_json::to_string_pretty(&value).map_err(std::io::Error::other)?;
     std::fs::write(user_config_path(), content)?;

@@ -28,9 +28,9 @@ pub enum TxStatusMsg {
     },
     /// Open the first-run referral choice modal. Sent by the connect flow
     /// when a wallet with no Phoenix account connects. The modal lets the
-    /// user pick between COSMIC, a custom code, or skipping; the
-    /// custom-code text input is reached by direct state transition from
-    /// the choice handler.
+    /// user pick between COSMIC, a custom code, or continuing without one;
+    /// the custom-code text input is reached by direct state transition
+    /// from the choice handler.
     PromptReferralChoice,
 }
 

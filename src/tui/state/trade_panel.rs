@@ -60,8 +60,13 @@ pub struct TradingState {
     /// Persisted user settings (RPC URL, language). Modified in-memory while
     /// the config modal is open and flushed to disk on save.
     pub config: UserConfig,
-    /// Selected row in the config modal (0 = RPC URL, 1 = language).
+    /// Selected row in the config modal (0 = RPC URL, 1 = language,
+    /// 2 = CLOB orders, 3 = public-RPC fan-out).
     pub config_selected_field: usize,
+    /// Whether the first-run referral choice modal has already been shown
+    /// (and dismissed) for the currently-loaded wallet. Reset on connect
+    /// so a fresh wallet load re-evaluates from scratch.
+    pub referral_choice_shown: bool,
     /// Recent user actions and their txids, newest-first.
     pub ledger: VecDeque<LedgerEntry>,
     /// Selected row in the ledger modal.
@@ -102,6 +107,7 @@ impl TradingState {
             sol_balance: None,
             config: current_user_config(),
             config_selected_field: 0,
+            referral_choice_shown: false,
             ledger: VecDeque::with_capacity(LEDGER_CAPACITY),
             ledger_selected: 0,
         }

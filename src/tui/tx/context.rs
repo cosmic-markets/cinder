@@ -12,10 +12,12 @@ use solana_keypair::Keypair;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_signer::Signer;
 
-use super::super::config::{rpc_http_url_from_env, ws_url_from_env};
+use super::super::config::{current_user_config, rpc_http_url_from_env, ws_url_from_env};
 
-/// Public Solana mainnet-beta RPC. Every send is fanned out here in addition
-/// to the configured primary RPC (unless the primary already is this URL).
+/// Public Solana mainnet-beta RPC. When the user opts in (config setting
+/// `fanout_public_rpc`, default on), every signed send is fanned out here in
+/// addition to the configured primary RPC — unless the primary already is
+/// this URL, or fan-out is disabled.
 const PUBLIC_SOLANA_RPC_URL: &str = "https://api.mainnet-beta.solana.com";
 
 /// Bound transaction preparation on slow/stalled RPCs. Without this, an empty
@@ -47,7 +49,6 @@ pub struct TxContext {
     pub authority_v2: solana_pubkey::Pubkey,
     pub trader_pda_v2: solana_pubkey::Pubkey,
     pub market_addrs: MarketAddrs,
-    pub trader_registered: std::sync::atomic::AtomicBool,
     pub blockhash_pool: tokio::sync::Mutex<VecDeque<[u8; 32]>>,
     /// Cached WS URL for signature confirmations.
     pub(super) ws_url: String,
@@ -68,7 +69,8 @@ impl TxContext {
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
         let rpc_url = rpc_http_url_from_env();
-        let secondary_send_rpc = if is_public_mainnet_rpc(&rpc_url) {
+        let fanout_enabled = current_user_config().fanout_public_rpc;
+        let secondary_send_rpc = if !fanout_enabled || is_public_mainnet_rpc(&rpc_url) {
             None
         } else {
             Some(Arc::new(RpcClient::new_with_commitment(
@@ -104,11 +106,6 @@ impl TxContext {
         let authority_v2 = solana_pubkey::Pubkey::from_str(&keypair.pubkey().to_string())?;
         let trader_pda_v2 = phoenix_rise::TraderKey::derive_pda(&authority_v2, 0, 0);
 
-        let registered = matches!(
-            rpc_client.get_account(&trader_pda_v2).await,
-            Ok(acc) if !acc.data.is_empty()
-        );
-
         Ok(Self {
             rpc_client,
             secondary_send_rpc,
@@ -117,7 +114,6 @@ impl TxContext {
             authority_v2,
             trader_pda_v2,
             market_addrs,
-            trader_registered: std::sync::atomic::AtomicBool::new(registered),
             blockhash_pool: tokio::sync::Mutex::new(VecDeque::with_capacity(30)),
             ws_url: ws_url_from_env(),
             sig_pubsub: tokio::sync::Mutex::new(None),

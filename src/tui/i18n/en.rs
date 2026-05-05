@@ -92,6 +92,8 @@ pub static EN: Strings = Strings {
     language: "Language",
     clob_orders: "Show CLOB orders",
     clob_orders_note: "uses extra bandwidth",
+    fanout_public_rpc: "Public RPC fanout",
+    fanout_public_rpc_note: "also sends txs to api.mainnet-beta.solana.com",
     on: "On",
     off: "Off",
     save_reconnect: "save & reconnect",
@@ -170,6 +172,7 @@ pub static EN: Strings = Strings {
     st_size_set: "Size manually set to",
     st_language_set: "Language set to",
     st_clob_set: "CLOB orders",
+    st_fanout_set: "Public RPC fanout",
     st_reconnecting: "Reconnecting to",
     st_failed_save: "Failed to save config:",
     st_cannot_close: "Cannot close",
@@ -199,10 +202,8 @@ pub static EN: Strings = Strings {
     st_usdc_withdraw_noun: "USDC withdrawal",
 
     tx_reduce_only: "(reduce-only)",
-    tx_registering_trader: "Registering trader",
     tx_failed_build_params: "Failed to build order params",
     tx_failed_build_ix: "Failed to build order instruction",
-    tx_failed_build_reg: "Failed to build trader registration",
     tx_broadcasting: "Preparing transaction",
     tx_failed_prepare: "❌ Failed to prepare",
     tx_awaiting_confirm: "Broadcast sent; awaiting confirmation",
@@ -259,7 +260,6 @@ pub static EN: Strings = Strings {
     tx_registering_referral: "🐦‍🔥 Registering with COSMIC referral (10% fee discount)…",
     tx_registered_referral: "🐦‍🔥 Registered with COSMIC referral — 10% fee discount applied",
     tx_registration_failed: "❌ Phoenix registration failed",
-    tx_referral_skipped: "🐦‍🔥 Referral skipped — register at phoenix.trade before trading",
 
     referral_modal_title: "Custom Referral Code",
     referral_modal_label: "Phoenix invite / referral code:",
@@ -275,9 +275,9 @@ pub static EN: Strings = Strings {
         "This wallet has no Phoenix account yet. Pick a referral to register with:",
     referral_choice_cosmic: "Use COSMIC referral — 10% fee discount 🔥",
     referral_choice_cosmic_note:
-        "Cinder earns a share of trading fees from wallets that register with COSMIC.",
+        "Cinder earns a share of fees from COSMIC-referred wallets.",
     referral_choice_custom: "Enter a custom referral / invite code",
-    referral_choice_skip: "Skip — I'll register manually at phoenix.trade",
+    referral_choice_skip: "Skip — continue without a referral",
     referral_choice_nav: "select",
     referral_choice_action: "choose",
     referral_choice_sticky_note:

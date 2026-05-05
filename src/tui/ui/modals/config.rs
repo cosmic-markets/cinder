@@ -10,7 +10,7 @@ pub(in crate::tui::ui) fn render_config_modal(
     let cfg_s = strings();
     const LABEL_W: u16 = 20;
     let popup_w: u16 = 80.min(area.width.saturating_sub(4));
-    let popup_h: u16 = 8.min(area.height.saturating_sub(2));
+    let popup_h: u16 = 9.min(area.height.saturating_sub(2));
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
     let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
     let popup_area = ratatui::layout::Rect::new(x, y, popup_w, popup_h);
@@ -109,6 +109,7 @@ pub(in crate::tui::ui) fn render_config_modal(
             Constraint::Length(1), // rpc url
             Constraint::Length(1), // language
             Constraint::Length(1), // clob orders
+            Constraint::Length(1), // public RPC fan-out
             Constraint::Min(0),
         ])
         .split(inner);
@@ -117,6 +118,7 @@ pub(in crate::tui::ui) fn render_config_modal(
     let rpc_selected = trading.config_selected_field == 0 || editing_rpc;
     let lang_selected = trading.config_selected_field == 1 && !editing_rpc;
     let clob_selected = trading.config_selected_field == 2 && !editing_rpc;
+    let fanout_selected = trading.config_selected_field == 3 && !editing_rpc;
 
     let rpc_cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -268,5 +270,59 @@ pub(in crate::tui::ui) fn render_config_modal(
             ),
         ])),
         clob_cols[1],
+    );
+
+    let fanout_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(LABEL_W), Constraint::Min(0)])
+        .split(rows[4]);
+
+    let fanout_cursor = if fanout_selected { "▸ " } else { "  " };
+    let fanout_label_style = if fanout_selected {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(fanout_cursor, fanout_label_style),
+            Span::styled(cfg_s.fanout_public_rpc, fanout_label_style),
+        ])),
+        fanout_cols[0],
+    );
+
+    let (fanout_arrow_style, fanout_value_style) = if fanout_selected {
+        (
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        (
+            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Color::White),
+        )
+    };
+    let fanout_label = if trading.config.fanout_public_rpc {
+        cfg_s.on
+    } else {
+        cfg_s.off
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("◀ ", fanout_arrow_style),
+            Span::styled(fanout_label, fanout_value_style),
+            Span::styled(" ▶", fanout_arrow_style),
+            Span::styled(
+                format!("  ({})", cfg_s.fanout_public_rpc_note),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ])),
+        fanout_cols[1],
     );
 }

@@ -5,7 +5,8 @@
 //! Choice modal opens automatically when a wallet with no Phoenix account
 //! connects. The user picks between the COSMIC referral (Cinder's funding
 //! model — see README), a custom code they were given by someone else, or
-//! skipping entirely.
+//! skipping entirely. Skip / Esc just closes the modal — Phoenix account
+//! creation is handled separately on Phoenix's side.
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -80,16 +81,15 @@ pub(in crate::tui::runtime) fn handle_choosing_referral(
             }
             // CHOICE_SKIP and any out-of-range index fall here.
             _ => {
-                state.trading.input_mode = InputMode::Normal;
-                state.trading.set_status_title(s.tx_referral_skipped);
+                close_with_connected_status(state);
                 KeyAction::Redraw
             }
         },
         KeyCode::Esc => {
-            // Esc = skip. Keeps the choice modal cancellable without forcing
-            // the user through the down-arrow path.
-            state.trading.input_mode = InputMode::Normal;
-            state.trading.set_status_title(s.tx_referral_skipped);
+            // Esc = skip. Closes the modal without registering any
+            // referral; the wallet stays in whatever state Phoenix already
+            // has it in.
+            close_with_connected_status(state);
             KeyAction::Redraw
         }
         _ => KeyAction::Nothing,
@@ -107,10 +107,9 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
         KeyCode::Enter => {
             let trimmed = state.trading.referral_code_buffer.trim().to_string();
             if trimmed.is_empty() {
-                state.trading.input_mode = InputMode::Normal;
                 state.trading.referral_code_buffer.clear();
                 state.trading.referral_code_error = None;
-                state.trading.set_status_title(s.tx_referral_skipped);
+                close_with_connected_status(state);
                 return KeyAction::Redraw;
             }
             // Spawn the activation task; the modal closes immediately so the
@@ -138,10 +137,9 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
             KeyAction::Redraw
         }
         KeyCode::Esc => {
-            state.trading.input_mode = InputMode::Normal;
             state.trading.referral_code_buffer.clear();
             state.trading.referral_code_error = None;
-            state.trading.set_status_title(s.tx_referral_skipped);
+            close_with_connected_status(state);
             KeyAction::Redraw
         }
         KeyCode::Backspace => {
@@ -161,6 +159,21 @@ pub(in crate::tui::runtime) fn handle_editing_referral_code(
             KeyAction::Redraw
         }
         _ => KeyAction::Nothing,
+    }
+}
+
+/// Close the referral modal without registering any referral and restore
+/// the standard "wallet connected" status line. Used for Skip and Esc.
+fn close_with_connected_status(state: &mut TuiState) {
+    state.trading.input_mode = InputMode::Normal;
+    let s = strings();
+    let pk = state.trading.wallet_label.clone();
+    if pk.is_empty() {
+        state.trading.set_status_title(s.st_wallet_connected);
+    } else {
+        state
+            .trading
+            .set_status_title(format!("{} {}", s.st_wallet_connected_as, pk));
     }
 }
 

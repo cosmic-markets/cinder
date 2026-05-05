@@ -24,8 +24,30 @@ fn toggle_show_clob(trading: &mut TradingState) -> KeyAction {
     }
 }
 
+fn toggle_fanout_public_rpc(trading: &mut TradingState) -> KeyAction {
+    let prev = trading.config.fanout_public_rpc;
+    trading.config.fanout_public_rpc = !prev;
+    match save_user_config(&trading.config) {
+        Ok(()) => {
+            let s = strings();
+            let state = if trading.config.fanout_public_rpc {
+                s.on
+            } else {
+                s.off
+            };
+            trading.set_status_title(format!("{} {}", s.st_fanout_set, state));
+        }
+        Err(e) => {
+            trading.config.fanout_public_rpc = prev;
+            trading.set_status_title(format!("{} {}", strings().st_failed_save, e));
+        }
+    }
+    KeyAction::Redraw
+}
+
 /// Modal-level navigation for the config view (before entering edit mode).
-/// Row 0 = RPC URL, Row 1 = language, Row 2 = CLOB orders.
+/// Row 0 = RPC URL, Row 1 = language, Row 2 = CLOB orders, Row 3 = public-RPC
+/// fan-out.
 pub(in crate::tui::runtime) fn handle_config_view_key(
     code: KeyCode,
     trading: &mut TradingState,
@@ -38,7 +60,7 @@ pub(in crate::tui::runtime) fn handle_config_view_key(
             KeyAction::Redraw
         }
         KeyCode::Down => {
-            if trading.config_selected_field < 2 {
+            if trading.config_selected_field < 3 {
                 trading.config_selected_field += 1;
             }
             KeyAction::Redraw
@@ -47,11 +69,8 @@ pub(in crate::tui::runtime) fn handle_config_view_key(
             if trading.config_selected_field == 0 {
                 trading.input_buffer = trading.config.rpc_url.clone();
                 trading.input_mode = InputMode::EditingRpcUrl;
-            } else if trading.config_selected_field == 1 {
-                // Language: Enter closes the modal (Left/Right to toggle).
-                trading.input_mode = InputMode::Normal;
             } else {
-                // CLOB orders: Enter closes the modal (Left/Right to toggle).
+                // Non-text rows close the modal on Enter; Left/Right toggles them.
                 trading.input_mode = InputMode::Normal;
             }
             KeyAction::Redraw
@@ -76,6 +95,8 @@ pub(in crate::tui::runtime) fn handle_config_view_key(
                 }
             } else if trading.config_selected_field == 2 {
                 return toggle_show_clob(trading);
+            } else if trading.config_selected_field == 3 {
+                return toggle_fanout_public_rpc(trading);
             }
             KeyAction::Redraw
         }

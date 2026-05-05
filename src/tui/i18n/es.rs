@@ -92,6 +92,8 @@ pub static ES: Strings = Strings {
     language: "Idioma",
     clob_orders: "Mostrar CLOB",
     clob_orders_note: "usa más ancho de banda",
+    fanout_public_rpc: "Difusión a RPC pública",
+    fanout_public_rpc_note: "también envía a api.mainnet-beta.solana.com",
     on: "Sí",
     off: "No",
     save_reconnect: "guardar y reconectar",
@@ -172,6 +174,7 @@ pub static ES: Strings = Strings {
     st_size_set: "Tamaño fijado manualmente en",
     st_language_set: "Idioma:",
     st_clob_set: "Órdenes CLOB",
+    st_fanout_set: "Difusión a RPC pública",
     st_reconnecting: "Reconectando a",
     st_failed_save: "No se pudo guardar la config:",
     st_cannot_close: "No se puede cerrar",
@@ -201,10 +204,8 @@ pub static ES: Strings = Strings {
     st_usdc_withdraw_noun: "retiro de USDC",
 
     tx_reduce_only: "(solo reducir)",
-    tx_registering_trader: "Registrando trader",
     tx_failed_build_params: "No se pudieron construir los parámetros de la orden",
     tx_failed_build_ix: "No se pudo construir la instrucción de la orden",
-    tx_failed_build_reg: "No se pudo construir el registro del trader",
     tx_broadcasting: "Preparando transacción",
     tx_failed_prepare: "❌ Error al preparar",
     tx_awaiting_confirm: "Enviada; esperando confirmación",
@@ -261,7 +262,6 @@ pub static ES: Strings = Strings {
     tx_registering_referral: "🐦‍🔥 Registrando con referido COSMIC (10% de descuento)…",
     tx_registered_referral: "🐦‍🔥 Registrado con referido COSMIC — 10% de descuento aplicado",
     tx_registration_failed: "❌ Registro de Phoenix fallido",
-    tx_referral_skipped: "🐦‍🔥 Referido omitido — regístrese en phoenix.trade antes de operar",
 
     referral_modal_title: "Código de Referido Personalizado",
     referral_modal_label: "Código de invitación / referido de Phoenix:",
@@ -277,9 +277,9 @@ pub static ES: Strings = Strings {
         "Esta cartera aún no tiene cuenta en Phoenix. Elija un referido para registrarse:",
     referral_choice_cosmic: "Usar referido COSMIC — 10% de descuento en comisiones 🔥",
     referral_choice_cosmic_note:
-        "Cinder recibe una parte de las comisiones de las carteras registradas con COSMIC.",
+        "Cinder recibe parte de las comisiones de las carteras registradas con COSMIC.",
     referral_choice_custom: "Introducir un código de referido / invitación personalizado",
-    referral_choice_skip: "Omitir — me registraré manualmente en phoenix.trade",
+    referral_choice_skip: "Omitir — continuar sin referido",
     referral_choice_nav: "seleccionar",
     referral_choice_action: "elegir",
     referral_choice_sticky_note:

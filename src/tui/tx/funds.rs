@@ -36,7 +36,7 @@ pub fn submit_funds_transfer(
 
         let builder = PhoenixTxBuilder::new(&ctx.metadata);
 
-        let mut ixs = if is_deposit {
+        let ixs = if is_deposit {
             match builder.build_deposit_funds(ctx.authority_v2, ctx.trader_pda_v2, amount) {
                 Ok(instructions) => instructions,
                 Err(e) => {
@@ -60,46 +60,8 @@ pub fn submit_funds_transfer(
             }
         };
 
-        let mut includes_register = false;
-        if is_deposit
-            && !ctx
-                .trader_registered
-                .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            match ctx.rpc_client.get_account(&ctx.trader_pda_v2).await {
-                Ok(acc) if !acc.data.is_empty() => {
-                    ctx.trader_registered
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                _ => {
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
-                        title: format!("{} ({})…", s.tx_registering_trader, fund_scope),
-                        detail: String::new(),
-                    });
-                    match builder.build_register_trader(ctx.authority_v2, 0, 0) {
-                        Ok(mut reg_ixs) => {
-                            reg_ixs.extend(ixs);
-                            ixs = reg_ixs;
-                            includes_register = true;
-                        }
-                        Err(e) => {
-                            let _ = tx_status.send(TxStatusMsg::SetStatus {
-                                title: format!("{} — {}", s.tx_failed_build_reg, fund_scope),
-                                detail: format!("{}", e),
-                            });
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        let mapped_ixs = ixs;
-
-        let base_cu: u32 = if includes_register { 300_000 } else { 100_000 };
-        let mut final_ixs = mapped_ixs;
-        final_ixs.extend(build_compute_budget_ixs_raw(base_cu));
-        let mapped_ixs = final_ixs;
+        let mut mapped_ixs = ixs;
+        mapped_ixs.extend(build_compute_budget_ixs_raw(100_000));
 
         let _ = tx_status.send(TxStatusMsg::SetStatus {
             title: format!("{} {}…", s.tx_broadcasting, fund_scope),
@@ -124,8 +86,6 @@ pub fn submit_funds_transfer(
 
         match subscribe_send_confirm(&ctx, &tx, &sig).await {
             Ok(()) => {
-                ctx.trader_registered
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 let confirmed_prefix = if is_deposit {
                     s.tx_deposit_confirmed
                 } else {

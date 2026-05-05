@@ -92,6 +92,8 @@ pub static RU: Strings = Strings {
     language: "Язык",
     clob_orders: "Показывать CLOB",
     clob_orders_note: "доп. трафик",
+    fanout_public_rpc: "Дублировать в публичный RPC",
+    fanout_public_rpc_note: "также шлёт в api.mainnet-beta.solana.com",
     on: "Вкл",
     off: "Выкл",
     save_reconnect: "сохранить и переподключиться",
@@ -170,6 +172,7 @@ pub static RU: Strings = Strings {
     st_size_set: "Размер установлен:",
     st_language_set: "Язык:",
     st_clob_set: "CLOB",
+    st_fanout_set: "Публичный RPC",
     st_reconnecting: "Переподключение к",
     st_failed_save: "Не удалось сохранить настройки:",
     st_cannot_close: "Нельзя закрыть",
@@ -199,10 +202,8 @@ pub static RU: Strings = Strings {
     st_usdc_withdraw_noun: "вывод USDC",
 
     tx_reduce_only: "(только уменьшение)",
-    tx_registering_trader: "Регистрация трейдера",
     tx_failed_build_params: "Не удалось собрать параметры ордера",
     tx_failed_build_ix: "Не удалось собрать инструкцию ордера",
-    tx_failed_build_reg: "Не удалось собрать регистрацию трейдера",
     tx_broadcasting: "Подготовка транзакции",
     tx_failed_prepare: "❌ Ошибка подготовки",
     tx_awaiting_confirm: "Отправлено, ожидание подтверждения",
@@ -254,10 +255,9 @@ pub static RU: Strings = Strings {
 
     splash_risk_disclaimer: "Бессрочные рискованны — на свой страх и риск",
 
-    tx_registering_referral: "🐦‍🔥 Регистрация по реферальному коду COSMIC (скидка 10% на комиссии)…",
+    tx_registering_referral: "🐦‍🔥 Регистрация по коду COSMIC (скидка 10% на комиссии)…",
     tx_registered_referral: "🐦‍🔥 Зарегистрировано по коду COSMIC — скидка 10% на комиссии",
     tx_registration_failed: "❌ Регистрация в Phoenix не удалась",
-    tx_referral_skipped: "🐦‍🔥 Реферал пропущен — зарегистрируйтесь на phoenix.trade перед торговлей",
 
     referral_modal_title: "Свой реферальный код",
     referral_modal_label: "Код-приглашение Phoenix:",
@@ -274,9 +274,9 @@ pub static RU: Strings = Strings {
         "У этого кошелька ещё нет аккаунта Phoenix. Выберите реферала для регистрации:",
     referral_choice_cosmic: "Использовать COSMIC — скидка 10% на комиссии 🔥",
     referral_choice_cosmic_note:
-        "Cinder получает часть торговых комиссий с кошельков, зарегистрированных по COSMIC.",
+        "Cinder получает часть комиссий с кошельков, зарегистрированных по COSMIC.",
     referral_choice_custom: "Ввести свой реферальный / пригласительный код",
-    referral_choice_skip: "Пропустить — зарегистрируюсь вручную на phoenix.trade",
+    referral_choice_skip: "Пропустить — продолжить без реферала",
     referral_choice_nav: "выбор",
     referral_choice_action: "подтвердить",
     referral_choice_sticky_note:

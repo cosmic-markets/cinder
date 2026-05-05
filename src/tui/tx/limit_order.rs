@@ -32,7 +32,6 @@ pub fn submit_limit_order(
     tokio::spawn(async move {
         use phoenix_rise::ix::{create_place_limit_order_ix, LimitOrderParams, OrderFlags, Side};
         use phoenix_rise::math::WrapperNum;
-        use phoenix_rise::PhoenixTxBuilder;
 
         let s = strings();
         let side_lbl = match side {
@@ -151,8 +150,6 @@ pub fn submit_limit_order(
             return;
         }
 
-        let builder = PhoenixTxBuilder::new(&ctx.metadata);
-
         let calc = match ctx.metadata.get_market_calculator(&symbol) {
             Some(c) => c,
             None => {
@@ -200,7 +197,7 @@ pub fn submit_limit_order(
             }
         };
 
-        let mut ixs = match create_place_limit_order_ix(params) {
+        let ixs = match create_place_limit_order_ix(params) {
             Ok(ix) => vec![ix.into()],
             Err(e) => {
                 let _ = tx_status.send(TxStatusMsg::SetStatus {
@@ -211,45 +208,8 @@ pub fn submit_limit_order(
             }
         };
 
-        let mut includes_register = false;
-        if !ctx
-            .trader_registered
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            match ctx.rpc_client.get_account(&ctx.trader_pda_v2).await {
-                Ok(acc) if !acc.data.is_empty() => {
-                    ctx.trader_registered
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                _ => {
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
-                        title: format!("{} ({})…", s.tx_registering_trader, order_summary),
-                        detail: String::new(),
-                    });
-                    match builder.build_register_trader(ctx.authority_v2, 0, 0) {
-                        Ok(mut reg_ixs) => {
-                            reg_ixs.extend(ixs);
-                            ixs = reg_ixs;
-                            includes_register = true;
-                        }
-                        Err(e) => {
-                            let _ = tx_status.send(TxStatusMsg::SetStatus {
-                                title: format!("{} — {}", s.tx_failed_build_reg, order_summary),
-                                detail: format!("{}", e),
-                            });
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        let mapped_ixs = ixs;
-
-        let cu_positions = if includes_register { 2 } else { 1 };
-        let mut final_ixs = mapped_ixs;
-        final_ixs.extend(build_compute_budget_ixs(cu_positions));
-        let mapped_ixs = final_ixs;
+        let mut mapped_ixs = ixs;
+        mapped_ixs.extend(build_compute_budget_ixs(1));
 
         let _ = tx_status.send(TxStatusMsg::SetStatus {
             title: format!("{} {}…", s.tx_broadcasting, order_summary),
@@ -274,8 +234,6 @@ pub fn submit_limit_order(
 
         match subscribe_send_confirm(&ctx, &tx, &sig).await {
             Ok(()) => {
-                ctx.trader_registered
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 // No TradeMarker for the placement itself — the price-level wall on the chart
                 // is now driven by `state.orders_view.orders` and appears as soon as the WS
                 // trader-state snapshot includes the new order.
