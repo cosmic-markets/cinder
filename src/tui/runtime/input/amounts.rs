@@ -1,5 +1,8 @@
 //! Wallet and transfer form handlers.
 
+use tracing::warn;
+
+use super::super::super::config::current_user_config;
 use super::*;
 
 fn parse_checked_usdc_amount(input: &str) -> Result<f64, &'static str> {
@@ -106,6 +109,18 @@ pub(in crate::tui::runtime) fn handle_editing_wallet_path(
             let result = resolve_wallet_modal_input(&input);
             match result {
                 Ok(kp) => {
+                    // Persist the path when the user loaded from a real file
+                    // so the modal is pre-populated next time. Skip raw-base58
+                    // and inline-JSON inputs (neither resolves to a real path).
+                    if !input.starts_with('[') && std::path::Path::new(&input).is_file() {
+                        let mut cfg_to_save = current_user_config();
+                        if cfg_to_save.wallet_path != input {
+                            cfg_to_save.wallet_path = input.clone();
+                            if let Err(e) = save_user_config(&cfg_to_save) {
+                                warn!(error = %e, "failed to persist wallet_path to user config");
+                            }
+                        }
+                    }
                     let handles = connect_wallet_with_keypair(
                         state, kp, cfg, configs, channels, ws_url, http,
                     );

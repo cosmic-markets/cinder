@@ -89,6 +89,10 @@ pub struct UserConfig {
     /// (the multiplier applied to position counts in CU-scaled flows). `None`
     /// = fall back to env / built-in default.
     pub compute_unit_limit_per_position: Option<u32>,
+    /// Last keypair file path successfully loaded via the wallet modal. Used
+    /// to pre-populate the modal on next open. Empty = never connected from
+    /// a file (fall back to the discovery candidates).
+    pub wallet_path: String,
 }
 
 impl Default for UserConfig {
@@ -100,6 +104,7 @@ impl Default for UserConfig {
             fanout_public_rpc: default_fanout_public_rpc_from_env(),
             compute_unit_price_micro_lamports: None,
             compute_unit_limit_per_position: None,
+            wallet_path: String::new(),
         }
     }
 }
@@ -174,11 +179,16 @@ fn wallet_path_candidates() -> Vec<String> {
     .collect()
 }
 
-/// Best-guess wallet path to seed the load-wallet modal: prefer the first
-/// candidate that already exists on disk; otherwise fall back to the
-/// standard `~/.config/solana/id.json` location so the user can edit from
-/// a sensible default.
+/// Best-guess wallet path to seed the load-wallet modal: prefer the path the
+/// user previously connected with (persisted in the user config), else the
+/// first discovery candidate that already exists on disk; otherwise fall back
+/// to the standard `~/.config/solana/id.json` location so the user can edit
+/// from a sensible default.
 pub fn default_wallet_path() -> String {
+    let saved = current_user_config().wallet_path;
+    if !saved.trim().is_empty() {
+        return saved;
+    }
     let candidates = wallet_path_candidates();
     for p in &candidates {
         if std::path::Path::new(p).exists() {
@@ -320,6 +330,11 @@ fn load_user_config_from_disk() -> UserConfig {
             .get("compute_unit_limit_per_position")
             .and_then(|x| x.as_u64())
             .and_then(|n| u32::try_from(n).ok()),
+        wallet_path: v
+            .get("wallet_path")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
     }
 }
 
@@ -350,6 +365,7 @@ pub fn save_user_config(cfg: &UserConfig) -> std::io::Result<()> {
         "fanout_public_rpc": cfg.fanout_public_rpc,
         "compute_unit_price_micro_lamports": cfg.compute_unit_price_micro_lamports,
         "compute_unit_limit_per_position": cfg.compute_unit_limit_per_position,
+        "wallet_path": cfg.wallet_path,
     });
     let content = serde_json::to_string_pretty(&value).map_err(std::io::Error::other)?;
     std::fs::write(user_config_path(), content)?;
