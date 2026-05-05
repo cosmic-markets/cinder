@@ -13,7 +13,7 @@ pub(in crate::tui::ui) fn render_config_modal(
     let cfg_s = strings();
     const LABEL_W: u16 = 22;
     let popup_w: u16 = 88.min(area.width.saturating_sub(4));
-    let popup_h: u16 = 12.min(area.height.saturating_sub(2));
+    let popup_h: u16 = 13.min(area.height.saturating_sub(2));
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
     let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
     let popup_area = ratatui::layout::Rect::new(x, y, popup_w, popup_h);
@@ -126,6 +126,7 @@ pub(in crate::tui::ui) fn render_config_modal(
             Constraint::Length(1), // clob orders
             Constraint::Length(1), // public RPC fan-out
             Constraint::Length(1), // skip order confirmation
+            Constraint::Length(1), // skip preflight
             Constraint::Length(1), // CU price
             Constraint::Length(1), // CU limit
             Constraint::Min(0),
@@ -141,10 +142,11 @@ pub(in crate::tui::ui) fn render_config_modal(
     let clob_selected = trading.config_selected_field == 2 && !any_text_edit;
     let fanout_selected = trading.config_selected_field == 3 && !any_text_edit;
     let skip_confirm_selected = trading.config_selected_field == 4 && !any_text_edit;
+    let skip_preflight_selected = trading.config_selected_field == 5 && !any_text_edit;
     let cu_price_selected =
-        (trading.config_selected_field == 5 && !any_text_edit) || editing_cu_price;
+        (trading.config_selected_field == 6 && !any_text_edit) || editing_cu_price;
     let cu_limit_selected =
-        (trading.config_selected_field == 6 && !any_text_edit) || editing_cu_limit;
+        (trading.config_selected_field == 7 && !any_text_edit) || editing_cu_limit;
 
     let rpc_cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -406,9 +408,63 @@ pub(in crate::tui::ui) fn render_config_modal(
         skip_confirm_cols[1],
     );
 
+    let skip_preflight_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(LABEL_W), Constraint::Min(0)])
+        .split(rows[6]);
+
+    let skip_preflight_cursor = if skip_preflight_selected { "▸ " } else { "  " };
+    let skip_preflight_label_style = if skip_preflight_selected {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(skip_preflight_cursor, skip_preflight_label_style),
+            Span::styled(cfg_s.skip_preflight, skip_preflight_label_style),
+        ])),
+        skip_preflight_cols[0],
+    );
+
+    let (skip_preflight_arrow_style, skip_preflight_value_style) = if skip_preflight_selected {
+        (
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        (
+            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Color::White),
+        )
+    };
+    let skip_preflight_label = if trading.config.skip_preflight {
+        cfg_s.on
+    } else {
+        cfg_s.off
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("◀ ", skip_preflight_arrow_style),
+            Span::styled(skip_preflight_label, skip_preflight_value_style),
+            Span::styled(" ▶", skip_preflight_arrow_style),
+            Span::styled(
+                format!("  ({})", cfg_s.skip_preflight_note),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ])),
+        skip_preflight_cols[1],
+    );
+
     render_cu_field_row(
         f,
-        rows[6],
+        rows[7],
         LABEL_W,
         cfg_s.cu_price,
         cfg_s.cu_price_note,
@@ -425,7 +481,7 @@ pub(in crate::tui::ui) fn render_config_modal(
 
     render_cu_field_row(
         f,
-        rows[7],
+        rows[8],
         LABEL_W,
         cfg_s.cu_limit,
         cfg_s.cu_limit_note,

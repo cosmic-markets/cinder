@@ -15,14 +15,19 @@ use solana_signature::Signature;
 use solana_signer::Signer;
 
 use super::context::TxContext;
+use crate::tui::config::current_user_config;
 
-pub(super) const SEND_CFG: RpcSendTransactionConfig = RpcSendTransactionConfig {
-    skip_preflight: false,
-    preflight_commitment: Some(CommitmentLevel::Processed),
-    encoding: None,
-    max_retries: Some(2),
-    min_context_slot: None,
-};
+/// Build the per-send RPC config, honoring the user's `skip_preflight` toggle.
+/// Read fresh on each send so toggling the config takes effect on the next tx.
+fn send_cfg() -> RpcSendTransactionConfig {
+    RpcSendTransactionConfig {
+        skip_preflight: current_user_config().skip_preflight,
+        preflight_commitment: Some(CommitmentLevel::Processed),
+        encoding: None,
+        max_retries: Some(2),
+        min_context_slot: None,
+    }
+}
 
 /// Hard ceiling on how long the RPC send may block.
 pub(super) const SEND_TIMEOUT: Duration = Duration::from_secs(8);
@@ -108,17 +113,18 @@ pub(super) async fn send_and_confirm_on_stream(
     if let Some(secondary) = ctx.secondary_send_rpc.as_ref() {
         let secondary = Arc::clone(secondary);
         let tx_clone = tx.clone();
+        let cfg = send_cfg();
         tokio::spawn(async move {
             let _ = tokio::time::timeout(
                 SEND_TIMEOUT,
-                secondary.send_transaction_with_config(&tx_clone, SEND_CFG),
+                secondary.send_transaction_with_config(&tx_clone, cfg),
             )
             .await;
         });
     }
 
     let send_result = tokio::time::timeout(SEND_TIMEOUT, {
-        ctx.rpc_client.send_transaction_with_config(tx, SEND_CFG)
+        ctx.rpc_client.send_transaction_with_config(tx, send_cfg())
     })
     .await;
 

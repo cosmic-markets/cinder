@@ -55,6 +55,7 @@ flowchart TB
 | `PHX_WALLET_PATH` or `KEYPAIR_PATH` | No | Keypair file path (see [Wallet path resolution](#wallet-path-resolution) below) |
 | `CINDER_FANOUT_PUBLIC_RPC` | No | `0`/`false`/`off`/`no` disables the public-RPC fan-out (see below). Anything else (or unset) keeps the default `on`. The setting is also user-toggleable in the in-app config modal (`[c]`); the persisted value wins once toggled. |
 | `CINDER_SKIP_ORDER_CONFIRMATION` | No | `1`/`true`/`on`/`yes` makes new orders submit immediately on Enter, bypassing the `[Y/N]` prompt. Anything else (or unset) keeps the default `off` (prompt required). The setting is also user-toggleable in the in-app config modal (`[c]`); the persisted value wins once toggled. Only affects placing new orders — closes, cancels, deposits, and withdrawals still prompt. |
+| `CINDER_SKIP_PREFLIGHT` | No | `1`/`true`/`on`/`yes` sets `skip_preflight: true` on every transaction Cinder broadcasts. Anything else (or unset) keeps the default `off`. Faster on slow/congested RPCs but loses the early simulation-failure signal — bad transactions still land and burn fees. The setting is also user-toggleable in the in-app config modal (`[c]`); the persisted value wins once toggled. |
 | `RUST_LOG` | No | e.g. `info` or `cinder=debug,phoenix_rise=warn` |
 | `CINDER_LOG_DIR` | No | Directory for transaction error logs (default `~/.config/phoenix-cinder/logs`) |
 

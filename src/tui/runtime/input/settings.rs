@@ -66,15 +66,36 @@ fn toggle_skip_order_confirmation(trading: &mut TradingState) -> KeyAction {
     KeyAction::Redraw
 }
 
+fn toggle_skip_preflight(trading: &mut TradingState) -> KeyAction {
+    let prev = trading.config.skip_preflight;
+    trading.config.skip_preflight = !prev;
+    match save_user_config(&trading.config) {
+        Ok(()) => {
+            let s = strings();
+            let state = if trading.config.skip_preflight {
+                s.on
+            } else {
+                s.off
+            };
+            trading.set_status_title(format!("{} {}", s.st_skip_preflight_set, state));
+        }
+        Err(e) => {
+            trading.config.skip_preflight = prev;
+            trading.set_status_title(format!("{} {}", strings().st_failed_save, e));
+        }
+    }
+    KeyAction::Redraw
+}
+
 /// Modal-level navigation for the config view (before entering edit mode).
 /// Row 0 = RPC URL, Row 1 = language, Row 2 = CLOB orders, Row 3 = public-RPC
-/// fan-out, Row 4 = skip order confirmation, Row 5 = CU price, Row 6 = CU
-/// limit per position.
+/// fan-out, Row 4 = skip order confirmation, Row 5 = skip preflight, Row 6 =
+/// CU price, Row 7 = CU limit per position.
 pub(in crate::tui::runtime) fn handle_config_view_key(
     code: KeyCode,
     trading: &mut TradingState,
 ) -> KeyAction {
-    const LAST_FIELD: usize = 6;
+    const LAST_FIELD: usize = 7;
     match code {
         KeyCode::Up => {
             if trading.config_selected_field > 0 {
@@ -94,7 +115,7 @@ pub(in crate::tui::runtime) fn handle_config_view_key(
                     trading.input_buffer = trading.config.rpc_url.clone();
                     trading.input_mode = InputMode::EditingRpcUrl;
                 }
-                5 => {
+                6 => {
                     trading.input_buffer = trading
                         .config
                         .compute_unit_price_micro_lamports
@@ -102,7 +123,7 @@ pub(in crate::tui::runtime) fn handle_config_view_key(
                         .unwrap_or_default();
                     trading.input_mode = InputMode::EditingComputeUnitPrice;
                 }
-                6 => {
+                7 => {
                     trading.input_buffer = trading
                         .config
                         .compute_unit_limit_per_position
@@ -141,6 +162,8 @@ pub(in crate::tui::runtime) fn handle_config_view_key(
                 return toggle_fanout_public_rpc(trading);
             } else if trading.config_selected_field == 4 {
                 return toggle_skip_order_confirmation(trading);
+            } else if trading.config_selected_field == 5 {
+                return toggle_skip_preflight(trading);
             }
             KeyAction::Redraw
         }

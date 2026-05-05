@@ -121,6 +121,10 @@ pub struct Strings {
     pub skip_order_confirmation: &'static str,
     /// Helper text shown next to the skip-confirmation toggle.
     pub skip_order_confirmation_note: &'static str,
+    /// Config-modal label — "Skip preflight" (RPC `skip_preflight: true`).
+    pub skip_preflight: &'static str,
+    /// Helper text shown next to the skip-preflight toggle.
+    pub skip_preflight_note: &'static str,
     /// Config-modal label — "Compute unit price" (microlamports per CU).
     pub cu_price: &'static str,
     /// Helper text next to the CU price field disclosing units.
@@ -267,6 +271,8 @@ pub struct Strings {
     pub st_fanout_set: &'static str,
     /// "Skip order confirmation" — append "On" or "Off"
     pub st_skip_order_confirmation_set: &'static str,
+    /// "Skip preflight" — append "On" or "Off"
+    pub st_skip_preflight_set: &'static str,
     /// "Reconnecting to" — append URL
     pub st_reconnecting: &'static str,
     /// "Failed to save config:" — append error
