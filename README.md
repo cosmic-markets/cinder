@@ -54,6 +54,7 @@ flowchart TB
 | `RPC_WS_URL` or `SOLANA_WS_URL` | No | WebSocket endpoint (inferred from HTTP when omitted) |
 | `PHX_WALLET_PATH` or `KEYPAIR_PATH` | No | Keypair file path (see [Wallet path resolution](#wallet-path-resolution) below) |
 | `CINDER_FANOUT_PUBLIC_RPC` | No | `0`/`false`/`off`/`no` disables the public-RPC fan-out (see below). Anything else (or unset) keeps the default `on`. The setting is also user-toggleable in the in-app config modal (`[c]`); the persisted value wins once toggled. |
+| `CINDER_SKIP_ORDER_CONFIRMATION` | No | `1`/`true`/`on`/`yes` makes new orders submit immediately on Enter, bypassing the `[Y/N]` prompt. Anything else (or unset) keeps the default `off` (prompt required). The setting is also user-toggleable in the in-app config modal (`[c]`); the persisted value wins once toggled. Only affects placing new orders — closes, cancels, deposits, and withdrawals still prompt. |
 | `RUST_LOG` | No | e.g. `info` or `cinder=debug,phoenix_rise=warn` |
 | `CINDER_LOG_DIR` | No | Directory for transaction error logs (default `~/.config/phoenix-cinder/logs`) |
 

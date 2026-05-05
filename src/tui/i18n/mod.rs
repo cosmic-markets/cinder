@@ -117,6 +117,10 @@ pub struct Strings {
     pub fanout_public_rpc: &'static str,
     /// Helper text shown next to the toggle to disclose what the option does.
     pub fanout_public_rpc_note: &'static str,
+    /// Config-modal label — "Skip order confirm" (place-order [Y/N] bypass).
+    pub skip_order_confirmation: &'static str,
+    /// Helper text shown next to the skip-confirmation toggle.
+    pub skip_order_confirmation_note: &'static str,
     /// Config-modal label — "Compute unit price" (microlamports per CU).
     pub cu_price: &'static str,
     /// Helper text next to the CU price field disclosing units.
@@ -261,6 +265,8 @@ pub struct Strings {
     pub st_clob_set: &'static str,
     /// "Public-RPC fan-out" — append "On" or "Off"
     pub st_fanout_set: &'static str,
+    /// "Skip order confirmation" — append "On" or "Off"
+    pub st_skip_order_confirmation_set: &'static str,
     /// "Reconnecting to" — append URL
     pub st_reconnecting: &'static str,
     /// "Failed to save config:" — append error

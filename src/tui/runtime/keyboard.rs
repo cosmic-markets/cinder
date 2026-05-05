@@ -5,9 +5,9 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent};
 use phoenix_rise::PhoenixHttpClient;
 
-use super::super::config::SplineConfig;
+use super::super::config::{current_user_config, SplineConfig};
 use super::super::state::TuiState;
-use super::super::trading::InputMode;
+use super::super::trading::{InputMode, PendingAction};
 use super::{input, submit, Channels, KeyAction};
 
 #[allow(clippy::too_many_arguments)]
@@ -95,17 +95,43 @@ pub(super) fn handle_key_press(
                 _ => KeyAction::Nothing,
             }
         }
-        InputMode::Normal => input::handle_normal_key(
-            key,
-            state,
-            cfg,
-            wallet_wss_handle,
-            blockhash_refresh_handle,
-            balance_fetch_handle,
-            trader_orders_handle,
-            tx_ctx_task,
-            awaiting_first_tx_ctx,
-        ),
+        InputMode::Normal => {
+            let action = input::handle_normal_key(
+                key,
+                state,
+                cfg,
+                wallet_wss_handle,
+                blockhash_refresh_handle,
+                balance_fetch_handle,
+                trader_orders_handle,
+                tx_ctx_task,
+                awaiting_first_tx_ctx,
+            );
+            // If the trade panel just queued a place-order confirmation and the
+            // user has opted into bypassing the [Y/N] prompt, execute it
+            // immediately. Skipping is gated to PlaceOrder; closes, cancels,
+            // and transfers still require explicit confirmation.
+            if current_user_config().skip_order_confirmation {
+                if let InputMode::Confirming(PendingAction::PlaceOrder { .. }) =
+                    &state.trading.input_mode
+                {
+                    let pending = match &state.trading.input_mode {
+                        InputMode::Confirming(a) => a.clone(),
+                        _ => unreachable!(),
+                    };
+                    submit::execute_confirmed_action(
+                        &pending,
+                        state,
+                        cfg,
+                        configs,
+                        &channels.tx_status,
+                    );
+                    state.trading.input_mode = InputMode::Normal;
+                    return KeyAction::Redraw;
+                }
+            }
+            action
+        }
         InputMode::ViewingOrders => input::handle_orders_view_key(key.code, state),
         InputMode::ViewingLedger => input::handle_ledger_view_key(key.code, &mut state.trading),
         InputMode::ConfirmQuit => match key.code {

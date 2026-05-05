@@ -93,6 +93,10 @@ pub struct UserConfig {
     /// to pre-populate the modal on next open. Empty = never connected from
     /// a file (fall back to the discovery candidates).
     pub wallet_path: String,
+    /// When `true`, place-order submissions skip the `[Y/N]` confirmation
+    /// prompt and execute as soon as Enter is pressed in the trade panel.
+    /// Defaults to `false` (Y prompt required) for safety.
+    pub skip_order_confirmation: bool,
 }
 
 impl Default for UserConfig {
@@ -105,6 +109,7 @@ impl Default for UserConfig {
             compute_unit_price_micro_lamports: None,
             compute_unit_limit_per_position: None,
             wallet_path: String::new(),
+            skip_order_confirmation: default_skip_order_confirmation_from_env(),
         }
     }
 }
@@ -154,6 +159,21 @@ fn default_fanout_public_rpc_from_env() -> bool {
             "0" | "false" | "off" | "no"
         ),
         Err(_) => true,
+    }
+}
+
+/// Reads the env-var override for the place-order confirmation bypass.
+/// `CINDER_SKIP_ORDER_CONFIRMATION=1|true|on|yes` enables the bypass; anything
+/// else (or unset) keeps the default `false` (Y prompt required). The env var
+/// is only consulted as the seed for a fresh `UserConfig::default()`; once the
+/// user toggles it in the config modal, the persisted value wins.
+fn default_skip_order_confirmation_from_env() -> bool {
+    match env::var("CINDER_SKIP_ORDER_CONFIRMATION") {
+        Ok(v) => matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "on" | "yes"
+        ),
+        Err(_) => false,
     }
 }
 
@@ -335,6 +355,10 @@ fn load_user_config_from_disk() -> UserConfig {
             .and_then(|x| x.as_str())
             .unwrap_or("")
             .to_string(),
+        skip_order_confirmation: v
+            .get("skip_order_confirmation")
+            .and_then(|x| x.as_bool())
+            .unwrap_or_else(default_skip_order_confirmation_from_env),
     }
 }
 
@@ -366,6 +390,7 @@ pub fn save_user_config(cfg: &UserConfig) -> std::io::Result<()> {
         "compute_unit_price_micro_lamports": cfg.compute_unit_price_micro_lamports,
         "compute_unit_limit_per_position": cfg.compute_unit_limit_per_position,
         "wallet_path": cfg.wallet_path,
+        "skip_order_confirmation": cfg.skip_order_confirmation,
     });
     let content = serde_json::to_string_pretty(&value).map_err(std::io::Error::other)?;
     std::fs::write(user_config_path(), content)?;
