@@ -8,7 +8,7 @@
 
 <p align="center">
   <img
-    src="assets/demo.gif"
+    src="../assets/demo.gif"
     alt="Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet"
   />
 </p>

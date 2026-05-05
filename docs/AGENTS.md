@@ -290,7 +290,7 @@ The `[profile.release]` settings (`codegen-units=1`, `lto=thin`, `opt-level="s"`
 
 The crate sees Phoenix Eternal in three flavours, each with a distinct decoder:
 
-1. **Spline collection account** (per market) — the per-market spline-bid/ask account. Decoded by `phoenix_rise::types::accounts::SplineCollection::try_from_account_bytes` in [src/tui/data/spline_book.rs](src/tui/data/spline_book.rs). The decoder iterates `active_splines()` and emits `(trader_pda, price_start, price_end, density, filled, total_size)` rows. We wrap the call in `catch_unwind` to isolate panicky bytemuck mismatches.
+1. **Spline collection account** (per market) — the per-market spline-bid/ask account. Decoded by `phoenix_rise::types::accounts::SplineCollection::try_from_account_bytes` in [src/tui/data/spline_book.rs](../src/tui/data/spline_book.rs). The decoder iterates `active_splines()` and emits `(trader_pda, price_start, price_end, density, filled, total_size)` rows. We wrap the call in `catch_unwind` to isolate panicky bytemuck mismatches.
 2. **Phoenix CLOB market account** (the `Orderbook`) — decoded in `data::spline_book::parse_l2_book_from_market_account`. Yields `L2Level { trader_id: u32, price: f64, qty: f64 }`. `trader_id` is a sokoban pointer into the `GlobalTraderIndex`, **not** a wallet pubkey.
 3. **GlobalTraderIndex (GTI) + Trader accounts** — `tui::data::trader_index` builds two maps in one refresh pass:
    - `node_addr (u32) → wallet authority pubkey` — for CLOB rows.
@@ -376,7 +376,7 @@ Status messages are localized through `tui::i18n::strings()`. New status strings
 
 ### TxContext (per wallet × symbol)
 
-[src/tui/tx/context.rs](src/tui/tx/context.rs) holds the per-session state needed to send transactions:
+[src/tui/tx/context.rs](../src/tui/tx/context.rs) holds the per-session state needed to send transactions:
 
 - Primary `RpcClient` at the configured URL with `CommitmentConfig::processed()`.
 - `secondary_send_rpc`: an extra `Arc<RpcClient>` pointed at `https://api.mainnet-beta.solana.com` purely for `send_transaction` fan-out, **only** when the primary isn't already that URL (so we don't double-send to the same host). Confirmation always listens on the primary.

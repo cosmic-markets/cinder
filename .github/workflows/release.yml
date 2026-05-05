@@ -53,7 +53,7 @@ jobs:
           mkdir -p "${package_dir}" dist
 
           cp "target/release/${BINARY_NAME}${{ matrix.binary_suffix }}" "${package_dir}/"
-          cp README.md LICENSE "${package_dir}/"
+          cp docs/README.md LICENSE "${package_dir}/"
 
           if [[ "${{ matrix.archive }}" == *.zip ]]; then
             powershell -NoProfile -Command "Compress-Archive -Path '${package_dir}' -DestinationPath 'dist/${{ matrix.archive }}' -Force"
