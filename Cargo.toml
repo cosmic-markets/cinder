@@ -9,7 +9,7 @@ publish      = false
 readme       = "README.md"
 repository   = "https://github.com/cosmic-markets/cinder"
 rust-version = "1.94"
-version      = "0.1.8"
+version      = "0.1.9"
 
 [workspace]
 members  = [".", "crates/phoenix-eternal-types"]
@@ -49,13 +49,14 @@ tracing                 = "0.1.44"
 tracing-subscriber      = { version = "0.3.23", default-features = false, features = ["std", "fmt"] }
 
 [profile.release]
-# Size-focused defaults for production binaries.
+# Speed-focused defaults for production binaries.
 codegen-units = 1
 debug         = 0
-lto           = "thin"
-opt-level     = "s"
+lto           = "fat"
+opt-level     = 3
 panic         = "abort"
 strip         = true
+overflow-checks = false
 
 [profile.release-size]
 # Optional "smallest binary" profile (slower build/runtime than release).
