@@ -358,6 +358,8 @@ pub struct Strings {
     pub tx_err_insufficient_balance: &'static str,
     /// Generic insufficient funds (margin simulation, etc.).
     pub tx_err_insufficient_funds: &'static str,
+    /// BPF meter / simulation exceeded compute budget (RPC error substring).
+    pub tx_err_insufficient_compute_units: &'static str,
     /// Prefix before raw RPC error when unmapped (`"Tx Failed: "`).
     pub tx_err_failed_prefix: &'static str,
     /// "deposit" — flow noun in "{amount} USDC deposit" fund scope

@@ -234,6 +234,7 @@ pub static EN: Strings = Strings {
     tx_err_withdraw_insufficient_margin: "Withdrawal request rejected: InsufficientMargin",
     tx_err_insufficient_balance: "Insufficient balance.",
     tx_err_insufficient_funds: "Insufficient funds.",
+    tx_err_insufficient_compute_units: "Insufficient compute units.",
     tx_err_failed_prefix: "Tx Failed: ",
     tx_flow_deposit: "deposit",
     tx_flow_withdraw: "withdraw",

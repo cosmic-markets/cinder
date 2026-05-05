@@ -63,6 +63,9 @@ pub(super) fn log_tx_error(sig: Option<&str>, context: &str, error: &str) {
 pub(super) fn format_not_confirmed_error(e: &str) -> String {
     let s = strings();
     let lower = e.to_lowercase();
+    if is_compute_units_meter_error(e) {
+        return s.tx_err_insufficient_compute_units.to_string();
+    }
     if lower.contains("custom program error: 0x1") {
         return s.tx_err_not_enough_sol.to_string();
     }
@@ -103,8 +106,20 @@ fn is_isolated_only_cross_margin_error(text: &str) -> bool {
             && lower.contains("reject"))
 }
 
+/// Substring in Solana RPC errors when a transaction exceeds its compute budget.
+const EXCEEDED_CUS_METER_AT_BPF: &str = "exceeded cus meter at bpf instruction";
+
+/// RPC simulation / send path when the transaction exceeds its compute budget.
+fn is_compute_units_meter_error(text: &str) -> bool {
+    text.to_lowercase().contains(EXCEEDED_CUS_METER_AT_BPF)
+}
+
 fn parse_phoenix_tx_error_with_table(error: &str, s: &Strings) -> String {
     let lower = error.to_lowercase();
+
+    if lower.contains(EXCEEDED_CUS_METER_AT_BPF) {
+        return s.tx_err_insufficient_compute_units.to_string();
+    }
 
     if lower.contains("custom program error: 0x1") {
         return s.tx_err_not_enough_sol.to_string();
@@ -209,6 +224,15 @@ mod tests {
         assert_eq!(
             parse_phoenix_tx_error_with_table(raw, &EN),
             EN.tx_err_insufficient_funds
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_compute_units_meter() {
+        let raw = r#"InstructionError(0, Custom(ProgramErrorWithOrigin { program_error: InstructionError(0, ComputationalBudgetExceeded), origin: Some("... exceeded CUs meter at BPF instruction ...") }))"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_insufficient_compute_units
         );
     }
 }

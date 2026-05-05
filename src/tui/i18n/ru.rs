@@ -232,6 +232,7 @@ pub static RU: Strings = Strings {
     tx_err_withdraw_insufficient_margin: "Вывод отклонён: недостаточно маржи",
     tx_err_insufficient_balance: "Недостаточно средств на балансе.",
     tx_err_insufficient_funds: "Недостаточно средств.",
+    tx_err_insufficient_compute_units: "Недостаточно compute units.",
     tx_err_failed_prefix: "Ошибка tx: ",
     tx_flow_deposit: "ввод",
     tx_flow_withdraw: "вывод",

@@ -230,6 +230,7 @@ pub static CN: Strings = Strings {
     tx_err_withdraw_insufficient_margin: "取款被拒：保证金不足",
     tx_err_insufficient_balance: "余额不足。",
     tx_err_insufficient_funds: "资金不足。",
+    tx_err_insufficient_compute_units: "计算单元不足。",
     tx_err_failed_prefix: "交易失败：",
     tx_flow_deposit: "存入",
     tx_flow_withdraw: "取出",
