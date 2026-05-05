@@ -108,7 +108,7 @@ fn percentile(samples: &mut [u64], pct: usize) -> Option<u64> {
     samples.sort_unstable();
     // Nearest-rank percentile: index = ceil(pct/100 * n) - 1, clamped.
     let n = samples.len();
-    let idx = ((pct * n) + 99) / 100;
+    let idx = (pct * n).div_ceil(100);
     let idx = idx.saturating_sub(1).min(n - 1);
     Some(samples[idx])
 }
