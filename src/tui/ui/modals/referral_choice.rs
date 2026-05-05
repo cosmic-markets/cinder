@@ -21,14 +21,21 @@ pub(in crate::tui::ui) fn render_referral_choice_modal(
 
     f.render_widget(ratatui::widgets::Clear, popup_area);
 
+    // "Phoenix" is rendered in FIRE_ORANGE between the localized prefix
+    // and suffix. Languages where the proper noun comes first (EN, ZH)
+    // leave prefix empty; languages where it comes last (ES, RU) leave
+    // suffix empty.
+    let bold_white = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+    let bold_orange = Style::default()
+        .fg(FIRE_ORANGE)
+        .add_modifier(Modifier::BOLD);
     let title = Line::from(vec![
         Span::raw(" 🐦‍🔥 "),
-        Span::styled(
-            format!("{} ", s.referral_choice_title),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(s.referral_choice_title_prefix, bold_white),
+        Span::styled("Phoenix", bold_orange),
+        Span::styled(format!("{} ", s.referral_choice_title_suffix), bold_white),
     ]);
 
     let footer = Line::from(vec![

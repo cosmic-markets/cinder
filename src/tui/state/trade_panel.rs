@@ -90,6 +90,10 @@ impl TradingState {
             wallet_path_error: None,
             referral_code_buffer: String::new(),
             referral_code_error: None,
+            // Default to "Use COSMIC" (index 0). The prompt handler resets
+            // this each time the modal opens, but we keep the initial value
+            // aligned so a fast reader of the state struct sees the same
+            // default both places.
             referral_choice_index: 0,
             custom_size: None,
             order_kind: OrderKind::Market,

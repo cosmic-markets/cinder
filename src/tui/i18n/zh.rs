@@ -265,9 +265,10 @@ pub static CN: Strings = Strings {
     tx_registering_custom_prefix: "🐦‍🔥 正在使用邀请码注册",
     tx_registered_custom_prefix: "🐦‍🔥 已通过邀请码注册",
 
-    referral_choice_title: "选择邀请方",
+    referral_choice_title_prefix: "",
+    referral_choice_title_suffix: " 注册",
     referral_choice_intro: "此钱包尚未注册 Phoenix 账户。请选择邀请方式：",
-    referral_choice_cosmic: "使用 COSMIC 邀请码 — 10% 手续费折扣",
+    referral_choice_cosmic: "使用 COSMIC 邀请码 — 10% 手续费折扣 🔥",
     referral_choice_cosmic_note: "通过 COSMIC 注册的钱包，Cinder 将获得部分交易手续费分成。",
     referral_choice_custom: "输入自定义邀请码",
     referral_choice_skip: "跳过 — 我将在 phoenix.trade 自行注册",

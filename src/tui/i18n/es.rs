@@ -271,10 +271,11 @@ pub static ES: Strings = Strings {
     tx_registering_custom_prefix: "🐦‍🔥 Registrando con referido",
     tx_registered_custom_prefix: "🐦‍🔥 Registrado con referido",
 
-    referral_choice_title: "Elegir referido",
+    referral_choice_title_prefix: "Registro ",
+    referral_choice_title_suffix: "",
     referral_choice_intro:
         "Esta cartera aún no tiene cuenta en Phoenix. Elija un referido para registrarse:",
-    referral_choice_cosmic: "Usar referido COSMIC — 10% de descuento en comisiones",
+    referral_choice_cosmic: "Usar referido COSMIC — 10% de descuento en comisiones 🔥",
     referral_choice_cosmic_note:
         "Cinder recibe una parte de las comisiones de las carteras registradas con COSMIC.",
     referral_choice_custom: "Introducir un código de referido / invitación personalizado",

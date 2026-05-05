@@ -128,6 +128,11 @@ pub(super) fn handle_tx_status_update(
             state.trading.status_detail = detail;
         }
         TxStatusMsg::PromptReferralChoice => {
+            // Default-select "Use COSMIC" (index 0 — CHOICE_COSMIC in
+            // runtime/input/referral.rs). It's also the user's best option
+            // (10% fee discount), and the modal carries an explicit
+            // funding-share disclosure plus a permanence warning, so a fast
+            // Enter-press is still an informed choice.
             state.trading.referral_choice_index = 0;
             state.trading.referral_code_buffer.clear();
             state.trading.referral_code_error = None;

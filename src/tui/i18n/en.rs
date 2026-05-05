@@ -269,10 +269,11 @@ pub static EN: Strings = Strings {
     tx_registering_custom_prefix: "🐦‍🔥 Registering with referral",
     tx_registered_custom_prefix: "🐦‍🔥 Registered with referral",
 
-    referral_choice_title: "Choose Referral",
+    referral_choice_title_prefix: "",
+    referral_choice_title_suffix: " Registration",
     referral_choice_intro:
         "This wallet has no Phoenix account yet. Pick a referral to register with:",
-    referral_choice_cosmic: "Use COSMIC referral — 10% fee discount",
+    referral_choice_cosmic: "Use COSMIC referral — 10% fee discount 🔥",
     referral_choice_cosmic_note:
         "Cinder earns a share of trading fees from wallets that register with COSMIC.",
     referral_choice_custom: "Enter a custom referral / invite code",

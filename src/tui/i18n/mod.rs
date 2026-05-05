@@ -439,8 +439,15 @@ pub struct Strings {
     pub tx_registered_custom_prefix: &'static str,
 
     // ── Referral choice modal (first-run opt-in) ─────────────────────────────
-    /// Modal title — "Choose Referral".
-    pub referral_choice_title: &'static str,
+    /// Modal title — text rendered before the orange "Phoenix" word.
+    /// Empty for languages that put "Phoenix" first (e.g. EN, ZH); set for
+    /// languages where the noun follows (e.g. ES "Registro ", RU
+    /// "Регистрация в ").
+    pub referral_choice_title_prefix: &'static str,
+    /// Modal title — text rendered after the orange "Phoenix" word
+    /// (e.g. EN " Registration", ZH " 注册"). Empty when "Phoenix" comes
+    /// last in the language's word order.
+    pub referral_choice_title_suffix: &'static str,
     /// Header line above the three options summarizing what the choice
     /// affects.
     pub referral_choice_intro: &'static str,

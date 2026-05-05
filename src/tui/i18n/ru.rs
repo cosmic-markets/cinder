@@ -268,10 +268,11 @@ pub static RU: Strings = Strings {
     tx_registering_custom_prefix: "🐦‍🔥 Регистрация по реферальному коду",
     tx_registered_custom_prefix: "🐦‍🔥 Зарегистрировано по реферальному коду",
 
-    referral_choice_title: "Выбор реферала",
+    referral_choice_title_prefix: "Регистрация в ",
+    referral_choice_title_suffix: "",
     referral_choice_intro:
         "У этого кошелька ещё нет аккаунта Phoenix. Выберите реферала для регистрации:",
-    referral_choice_cosmic: "Использовать COSMIC — скидка 10% на комиссии",
+    referral_choice_cosmic: "Использовать COSMIC — скидка 10% на комиссии 🔥",
     referral_choice_cosmic_note:
         "Cinder получает часть торговых комиссий с кошельков, зарегистрированных по COSMIC.",
     referral_choice_custom: "Ввести свой реферальный / пригласительный код",
