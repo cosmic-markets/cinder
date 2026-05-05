@@ -120,6 +120,40 @@ fn expand_region<F>(
     }
 }
 
+/// Decide how many rows to drop from the front of each side to clean up a
+/// crossed spline book.
+///
+/// Phoenix splines don't auto-match maker-vs-maker, so two splines with
+/// different `mid_price` can sit STRICTLY crossed (best bid > best ask) until
+/// a taker resolves them. Heuristic: stale-ghost quotes are usually tiny next
+/// to the genuine touch, so on each crossed iteration we drop whichever side
+/// has less per-tick visible size at the front row and re-check.
+///
+/// A LOCKED book (best bid == best ask) is intentionally left alone — it's a
+/// valid 0-spread touch that the renderer should display as-is. Treating
+/// locked as crossed used to asymmetrically drop the ask side on every
+/// tied-size locked tick (the `else` branch picks ask when sizes are equal),
+/// making a stable locked book flicker with the displayed spread popping up
+/// to the next ask above the touch.
+///
+/// Inputs must be pre-sorted: `bid_rows` descending by price, `ask_rows`
+/// ascending. Returns `(bid_skip, ask_skip)`.
+fn compute_cross_trim_skip(bid_rows: &[SplineRow], ask_rows: &[SplineRow]) -> (usize, usize) {
+    let mut bid_skip = 0usize;
+    let mut ask_skip = 0usize;
+    while let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) {
+        if b.1 <= a.1 {
+            break;
+        }
+        if b.2 < a.2 {
+            bid_skip += 1;
+        } else {
+            ask_skip += 1;
+        }
+    }
+    (bid_skip, ask_skip)
+}
+
 pub fn parse_spline_data(
     data: &[u8],
     tick_size: u64,
@@ -178,26 +212,7 @@ pub fn parse_spline_data(
     bid_rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     ask_rows.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Trim crossed rows at the touch. Phoenix splines don't auto-match
-    // maker-vs-maker, so two splines with different `mid_price` can sit
-    // crossed until a taker resolves them. Heuristic: stale-ghost quotes are
-    // usually tiny next to the genuine touch, so when the bid/ask cross we
-    // drop whichever side has less per-tick size and re-check. The dropped
-    // rows are also pulled out of `bid_rows`/`ask_rows` so the chart's
-    // `best_bid`/`best_ask` reflect the cleaned touch (otherwise the
-    // mid-price would jitter as a tiny stale region flickered in and out).
-    let mut bid_skip = 0usize;
-    let mut ask_skip = 0usize;
-    while let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) {
-        if b.1 < a.1 {
-            break;
-        }
-        if b.2 < a.2 {
-            bid_skip += 1;
-        } else {
-            ask_skip += 1;
-        }
-    }
+    let (bid_skip, ask_skip) = compute_cross_trim_skip(&bid_rows, &ask_rows);
     let bid_rows: Vec<SplineRow> = bid_rows.into_iter().skip(bid_skip).collect();
     let ask_rows: Vec<SplineRow> = ask_rows.into_iter().skip(ask_skip).collect();
 
@@ -446,4 +461,76 @@ pub fn parse_l2_book_from_market_account(
         Some((bids, asks))
     }))
     .ok()?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_pubkey::Pubkey as PhoenixPubkey;
+
+    fn row(tag: u8, price: f64, size: f64) -> SplineRow {
+        (PhoenixPubkey::from([tag; 32]), price, size)
+    }
+
+    #[test]
+    fn cross_trim_keeps_locked_book_intact() {
+        // Locked book at $56 with identical sizes on both sides. Previous
+        // logic treated this as a cross and unconditionally dropped the ask
+        // (the `else` branch picks ask when `b.2 < a.2` is false on
+        // equality), making the rendered spread jump to 56→57. The fix
+        // breaks on `bid <= ask` so locked books are displayed as-is.
+        let bids = vec![row(0xA1, 56.0, 5.0), row(0xA2, 55.0, 50.0)];
+        let asks = vec![row(0xB1, 56.0, 5.0), row(0xB2, 57.0, 30.0)];
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
+        assert_eq!(bid_skip, 0);
+        assert_eq!(ask_skip, 0);
+    }
+
+    #[test]
+    fn cross_trim_keeps_normal_book_intact() {
+        // Standard non-crossed book: bid=55, ask=56. No trim should happen.
+        let bids = vec![row(0xA1, 55.0, 10.0), row(0xA2, 54.0, 20.0)];
+        let asks = vec![row(0xB1, 56.0, 10.0), row(0xB2, 57.0, 20.0)];
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
+        assert_eq!(bid_skip, 0);
+        assert_eq!(ask_skip, 0);
+    }
+
+    #[test]
+    fn cross_trim_drops_ghost_bid_above_real_ask() {
+        // Stale ghost bid at 57 sits above a real ask at 56. The ghost is
+        // tiny vs. the real ask depth, so the heuristic drops the bid side
+        // and the touch resolves to 55 / 56.
+        let bids = vec![row(0xA1, 57.0, 1.0), row(0xA2, 55.0, 50.0)];
+        let asks = vec![row(0xB1, 56.0, 10.0), row(0xB2, 57.0, 20.0)];
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
+        assert_eq!(bid_skip, 1);
+        assert_eq!(ask_skip, 0);
+    }
+
+    #[test]
+    fn cross_trim_drops_ghost_ask_below_real_bid() {
+        // Stale ghost ask at 54 sits below a real bid at 55. The ghost is
+        // tiny vs. the real bid depth, so the heuristic drops the ask side
+        // and the touch resolves to 55 / 56.
+        let bids = vec![row(0xA1, 55.0, 10.0), row(0xA2, 54.0, 50.0)];
+        let asks = vec![row(0xB1, 54.0, 1.0), row(0xB2, 56.0, 20.0)];
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &asks);
+        assert_eq!(bid_skip, 0);
+        assert_eq!(ask_skip, 1);
+    }
+
+    #[test]
+    fn cross_trim_handles_empty_sides() {
+        // No rows on either side → nothing to trim.
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&[], &[]);
+        assert_eq!(bid_skip, 0);
+        assert_eq!(ask_skip, 0);
+        // One side empty → loop exits on the missing side without touching
+        // skip counters.
+        let bids = vec![row(0xA1, 55.0, 10.0)];
+        let (bid_skip, ask_skip) = compute_cross_trim_skip(&bids, &[]);
+        assert_eq!(bid_skip, 0);
+        assert_eq!(ask_skip, 0);
+    }
 }
