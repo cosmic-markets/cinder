@@ -3,11 +3,11 @@
 Vendored read-only account layouts and helper types for Phoenix Eternal
 perpetuals on Solana.
 
-This crate is included in Cinder as a local workspace member. It is not
-published independently from this repository; Cinder depends on it through:
+Published on crates.io as `cosmic-phoenix-eternal-types`. Cinder consumes it
+under the historical local ident via Cargo's `package =` rename:
 
 ```toml
-phoenix-eternal-types = { version = "0.1.0", path = "crates/phoenix-eternal-types" }
+phoenix-eternal-types = { version = "0.1.0", package = "cosmic-phoenix-eternal-types" }
 ```
 
 ## What It Provides

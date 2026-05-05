@@ -1,15 +1,27 @@
 [package]
 authors      = ["Cosmic Markets"]
+categories   = ["command-line-utilities", "finance", "cryptography::cryptocurrencies"]
 description  = "Rust terminal UI for Phoenix perpetuals on Solana"
 edition      = "2021"
 homepage     = "https://cosmic.markets/phoenix/trade"
+keywords     = ["solana", "phoenix", "trading", "tui", "perpetuals"]
 license      = "MIT"
-name         = "cinder"
-publish      = false
+name         = "cosmic-cinder"
+publish      = true
 readme       = "docs/README.md"
 repository   = "https://github.com/cosmic-markets/cinder"
 rust-version = "1.94"
 version      = "0.1.9"
+
+# Keep the on-disk crate ident (`cinder::run`) and CLI binary name decoupled from the
+# crates.io package name so existing imports and the published `cinder` command stay stable.
+[lib]
+name = "cinder"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cinder"
+path = "src/main.rs"
 
 [workspace]
 members  = [".", "crates/phoenix-eternal-types"]
@@ -24,7 +36,7 @@ chrono                  = { version = "0.4.44", default-features = false, featur
 crossterm               = { version = "0.29.0", features = ["event-stream"] }
 dotenvy                 = "0.15.7"
 futures-util            = { version = "0.3.32", default-features = false, features = ["std"] }
-phoenix-eternal-types   = { version = "0.1.0", path = "crates/phoenix-eternal-types" }
+phoenix-eternal-types   = { version = "0.1.0", package = "cosmic-phoenix-eternal-types", path = "crates/phoenix-eternal-types" }
 phoenix-rise            = "0.1.2"
 ratatui                 = { version = "0.30.0", default-features = false, features = ["crossterm"] }
 # Unify rustls features: tungstenite (via pubsub) uses rustls with no ring/aws-lc-rs; WSS needs a CryptoProvider.

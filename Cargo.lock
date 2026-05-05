@@ -836,40 +836,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cinder"
-version = "0.1.9"
-dependencies = [
- "arboard",
- "bs58",
- "chrono",
- "crossterm",
- "dotenvy",
- "futures-util",
- "phoenix-eternal-types",
- "phoenix-rise",
- "ratatui",
- "rustls 0.23.40",
- "serde_json",
- "solana-account-decoder-client-types",
- "solana-commitment-config",
- "solana-hash",
- "solana-instruction",
- "solana-keypair",
- "solana-message",
- "solana-pubkey",
- "solana-pubsub-client",
- "solana-rpc-client",
- "solana-rpc-client-types",
- "solana-signature",
- "solana-signer",
- "solana-transaction",
- "solana-transaction-status-client-types",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1064,6 +1030,71 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "cosmic-cinder"
+version = "0.1.9"
+dependencies = [
+ "arboard",
+ "bs58",
+ "chrono",
+ "cosmic-phoenix-eternal-types",
+ "crossterm",
+ "dotenvy",
+ "futures-util",
+ "phoenix-rise",
+ "ratatui",
+ "rustls 0.23.40",
+ "serde_json",
+ "solana-account-decoder-client-types",
+ "solana-commitment-config",
+ "solana-hash",
+ "solana-instruction",
+ "solana-keypair",
+ "solana-message",
+ "solana-pubkey",
+ "solana-pubsub-client",
+ "solana-rpc-client",
+ "solana-rpc-client-types",
+ "solana-signature",
+ "solana-signer",
+ "solana-transaction",
+ "solana-transaction-status-client-types",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "cosmic-phoenix-eternal-types"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "borsh 0.10.4",
+ "bs58",
+ "bytemuck",
+ "clap",
+ "dirs-next",
+ "futures",
+ "num-derive",
+ "num-traits",
+ "serde",
+ "serde-big-array",
+ "serde_json",
+ "sha2 0.10.9",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-instruction",
+ "solana-pubkey",
+ "solana-sdk",
+ "solana-transaction-status",
+ "static_assertions",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "yellowstone-grpc-client",
+ "yellowstone-grpc-proto",
+]
 
 [[package]]
 name = "cpufeatures"
@@ -3279,37 +3310,6 @@ dependencies = [
  "fixedbitset",
  "hashbrown 0.15.5",
  "indexmap 2.14.0",
-]
-
-[[package]]
-name = "phoenix-eternal-types"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "borsh 0.10.4",
- "bs58",
- "bytemuck",
- "clap",
- "dirs-next",
- "futures",
- "num-derive",
- "num-traits",
- "serde",
- "serde-big-array",
- "serde_json",
- "sha2 0.10.9",
- "solana-account-decoder",
- "solana-client",
- "solana-instruction",
- "solana-pubkey",
- "solana-sdk",
- "solana-transaction-status",
- "static_assertions",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "yellowstone-grpc-client",
- "yellowstone-grpc-proto",
 ]
 
 [[package]]
