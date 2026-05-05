@@ -7,12 +7,41 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use phoenix_eternal_types::program_ids;
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_signer::Signer;
+use tracing::warn;
 
 use super::super::config::{current_user_config, rpc_http_url_from_env, ws_url_from_env};
+
+/// Derive the canonical spline-collection PDA from the market account.
+///
+/// The Phoenix HTTP metadata exposes a `spline_pubkey` field, but it can be
+/// stale or otherwise inconsistent with the on-chain PDA. The read/display
+/// path (`build_spline_config`) already prefers the derived address; signed
+/// transaction flows must do the same so account metas line up with what the
+/// program expects.
+fn derive_spline_collection(
+    symbol: &str,
+    market_pubkey: &str,
+    api_spline_pubkey: &str,
+) -> Result<solana_pubkey::Pubkey, solana_pubkey::ParsePubkeyError> {
+    let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey)?;
+    let (derived, _) = program_ids::get_spline_collection_address_default(&market_pk);
+    if let Ok(api_pk) = solana_pubkey::Pubkey::from_str(api_spline_pubkey) {
+        if api_pk != derived {
+            warn!(
+                api = %api_pk,
+                derived = %derived,
+                symbol = %symbol,
+                "spline pubkey mismatch; using derived address"
+            );
+        }
+    }
+    Ok(derived)
+}
 
 /// Public Solana mainnet-beta RPC. When the user opts in (config setting
 /// `fanout_public_rpc`, default on), every signed send is fanned out here in
@@ -90,7 +119,11 @@ impl TxContext {
         let market_addrs = MarketAddrs {
             perp_asset_map: solana_pubkey::Pubkey::from_str(&keys.perp_asset_map)?,
             orderbook: solana_pubkey::Pubkey::from_str(&market.market_pubkey)?,
-            spline_collection: solana_pubkey::Pubkey::from_str(&market.spline_pubkey)?,
+            spline_collection: derive_spline_collection(
+                &market.symbol,
+                &market.market_pubkey,
+                &market.spline_pubkey,
+            )?,
             global_trader_index: keys
                 .global_trader_index
                 .iter()
@@ -188,7 +221,12 @@ impl TxContext {
         Some(MarketAddrs {
             perp_asset_map: solana_pubkey::Pubkey::from_str(&keys.perp_asset_map).ok()?,
             orderbook: solana_pubkey::Pubkey::from_str(&market.market_pubkey).ok()?,
-            spline_collection: solana_pubkey::Pubkey::from_str(&market.spline_pubkey).ok()?,
+            spline_collection: derive_spline_collection(
+                &market.symbol,
+                &market.market_pubkey,
+                &market.spline_pubkey,
+            )
+            .ok()?,
             global_trader_index: keys
                 .global_trader_index
                 .iter()
@@ -202,5 +240,45 @@ impl TxContext {
                 .collect::<Result<Vec<_>, _>>()
                 .ok()?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn derive_spline_collection_overrides_stale_api_value() {
+        // A real Phoenix market pubkey shape; the actual value just needs to
+        // parse and produce a deterministic PDA via find_program_address.
+        let market_pubkey = "11111111111111111111111111111112";
+        let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey).unwrap();
+        let (canonical, _) = program_ids::get_spline_collection_address_default(&market_pk);
+
+        // Pretend the HTTP metadata reported a different (stale) pubkey.
+        let stale_api = solana_pubkey::Pubkey::new_unique().to_string();
+        assert_ne!(stale_api, canonical.to_string());
+
+        let resolved =
+            derive_spline_collection("TEST-PERP", market_pubkey, &stale_api).unwrap();
+        assert_eq!(
+            resolved, canonical,
+            "write path must use the derived spline PDA, not the API-reported pubkey"
+        );
+    }
+
+    #[test]
+    fn derive_spline_collection_returns_canonical_when_api_matches() {
+        let market_pubkey = "11111111111111111111111111111112";
+        let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey).unwrap();
+        let (canonical, _) = program_ids::get_spline_collection_address_default(&market_pk);
+
+        let resolved = derive_spline_collection(
+            "TEST-PERP",
+            market_pubkey,
+            &canonical.to_string(),
+        )
+        .unwrap();
+        assert_eq!(resolved, canonical);
     }
 }
