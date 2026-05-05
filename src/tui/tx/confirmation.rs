@@ -42,6 +42,18 @@ const SIGNATURE_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(5);
 /// (WSS path races this loop).
 const SIGNATURE_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(350);
 
+/// Cadence at which the same signed transaction is re-broadcast while we
+/// wait on confirmation. Solana validators dedupe by signature, so duplicate
+/// sends are cheap on-network; the cost is just one extra RPC call per tick.
+/// Reduces drop-related "lost" transactions when a primary RPC silently
+/// fails to forward to the leader.
+const REBROADCAST_INTERVAL: Duration = Duration::from_millis(300);
+
+/// Per-send timeout used inside the rebroadcast loop. Shorter than the
+/// initial-send timeout because we don't care about the result and don't want
+/// a stalled RPC to block the next tick.
+const REBROADCAST_SEND_TIMEOUT: Duration = Duration::from_secs(1);
+
 /// Compiles a versioned v0 transaction from `ixs` and signs it with `keypair`.
 /// Returns the signed transaction and its signature so callers can subscribe
 /// to confirmation *before* broadcasting.
@@ -140,8 +152,9 @@ pub(super) async fn send_and_confirm_on_stream(
         Ok(Ok(_)) => {}
     }
 
-    // --- confirm: race WSS stream vs HTTP polling ---------------------------
-    let result = tokio::time::timeout(CONFIRM_TIMEOUT, async {
+    // --- confirm: race WSS stream vs HTTP polling, while a sibling task
+    // re-broadcasts the same signed tx every REBROADCAST_INTERVAL. -----------
+    let confirm = tokio::time::timeout(CONFIRM_TIMEOUT, async {
         let wss = async {
             while let Some(resp) = stream.next().await {
                 match resp.value {
@@ -176,8 +189,46 @@ pub(super) async fn send_and_confirm_on_stream(
             r = wss => r,
             r = http_poll => r,
         }
-    })
-    .await;
+    });
+
+    // Rebroadcasts the *same* signed transaction (same signature, same
+    // blockhash) on the same cadence to both the primary and the secondary
+    // fan-out RPC. Validators dedupe by signature, so duplicates only cost
+    // RPC quota, not on-chain fees. The future never resolves on its own —
+    // it's dropped (and the loop torn down) when `confirm` completes via the
+    // `select!` below.
+    let rebroadcast = async {
+        let mut interval = tokio::time::interval(REBROADCAST_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        interval.tick().await; // initial tick fires immediately; skip
+        loop {
+            interval.tick().await;
+            let primary = tokio::time::timeout(
+                REBROADCAST_SEND_TIMEOUT,
+                ctx.rpc_client.send_transaction_with_config(tx, send_cfg()),
+            );
+            let secondary = async {
+                if let Some(secondary) = ctx.secondary_send_rpc.as_ref() {
+                    let _ = tokio::time::timeout(
+                        REBROADCAST_SEND_TIMEOUT,
+                        secondary.send_transaction_with_config(tx, send_cfg()),
+                    )
+                    .await;
+                }
+            };
+            let _ = tokio::join!(primary, secondary);
+        }
+        // Unreachable, but type-helps the `select!` below.
+        #[allow(unreachable_code)]
+        Result::<(), String>::Ok(())
+    };
+
+    let result = tokio::select! {
+        r = confirm => r,
+        // Will not fire under normal operation; only here so the rebroadcast
+        // loop is owned by this `select!` and dropped on confirm completion.
+        _ = rebroadcast => Ok(Err("rebroadcast loop ended unexpectedly".into())),
+    };
 
     match result {
         Ok(r) => r.map_err(ConfirmError::NotConfirmed),

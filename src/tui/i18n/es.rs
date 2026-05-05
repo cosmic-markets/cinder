@@ -103,6 +103,7 @@ pub static ES: Strings = Strings {
     cu_limit: "Límite CU / posición",
     cu_limit_note: "unidades de cómputo por posición",
     cu_default: "<por defecto>",
+    cu_auto: "auto",
     st_cu_price_set: "Precio CU establecido en",
     st_cu_limit_set: "Límite CU establecido en",
     st_cu_cleared: "Restablecido al valor por defecto",

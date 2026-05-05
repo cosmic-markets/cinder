@@ -4,6 +4,7 @@ use super::*;
 use crate::tui::config::{
     DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION, DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS,
 };
+use crate::tui::tx::current_auto_priority_fee;
 
 pub(in crate::tui::ui) fn render_config_modal(
     f: &mut Frame,
@@ -413,7 +414,11 @@ pub(in crate::tui::ui) fn render_config_modal(
         .constraints([Constraint::Length(LABEL_W), Constraint::Min(0)])
         .split(rows[6]);
 
-    let skip_preflight_cursor = if skip_preflight_selected { "▸ " } else { "  " };
+    let skip_preflight_cursor = if skip_preflight_selected {
+        "▸ "
+    } else {
+        "  "
+    };
     let skip_preflight_label_style = if skip_preflight_selected {
         Style::default()
             .fg(Color::Cyan)
@@ -462,6 +467,23 @@ pub(in crate::tui::ui) fn render_config_modal(
         skip_preflight_cols[1],
     );
 
+    // When no override is set, the resolved CU price is whatever the auto
+    // priority-fee task last produced (p75 of recent network fees). Surface
+    // that value inline as "<auto / N>" so the user can see what they're
+    // about to pay; fall back to "<default>  N" before the first sample
+    // arrives.
+    let cu_auto_label;
+    let (cu_default_value, cu_default_label) = match current_auto_priority_fee() {
+        Some(fee) => {
+            cu_auto_label = format!("<{} / {}>", cfg_s.cu_auto, fee);
+            (String::new(), cu_auto_label.as_str())
+        }
+        None => (
+            DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS.to_string(),
+            cfg_s.cu_default,
+        ),
+    };
+
     render_cu_field_row(
         f,
         rows[7],
@@ -475,8 +497,8 @@ pub(in crate::tui::ui) fn render_config_modal(
             .config
             .compute_unit_price_micro_lamports
             .map(|v| v.to_string()),
-        DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS.to_string(),
-        cfg_s.cu_default,
+        cu_default_value,
+        cu_default_label,
     );
 
     render_cu_field_row(
@@ -548,18 +570,25 @@ fn render_cu_field_row(
             ),
         ])
     } else {
-        Line::from(vec![
-            Span::styled(
-                default_label.to_string(),
+        // `default_display` is empty when the label already encodes the value
+        // (e.g. "<auto / 150>"); skip the separator span to avoid trailing
+        // whitespace before the note.
+        let mut spans = vec![Span::styled(
+            default_label.to_string(),
+            Style::default().fg(Color::DarkGray),
+        )];
+        if !default_display.is_empty() {
+            spans.push(Span::raw("  "));
+            spans.push(Span::styled(
+                default_display,
                 Style::default().fg(Color::DarkGray),
-            ),
-            Span::raw("  "),
-            Span::styled(default_display, Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("  ({})", note),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ])
+            ));
+        }
+        spans.push(Span::styled(
+            format!("  ({})", note),
+            Style::default().fg(Color::DarkGray),
+        ));
+        Line::from(spans)
     };
     f.render_widget(Paragraph::new(value_line), cols[1]);
 }

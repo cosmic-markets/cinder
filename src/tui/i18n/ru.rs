@@ -103,6 +103,7 @@ pub static RU: Strings = Strings {
     cu_limit: "Лимит CU / позиция",
     cu_limit_note: "единиц вычислений на позицию",
     cu_default: "<по умолчанию>",
+    cu_auto: "авто",
     st_cu_price_set: "Цена CU установлена:",
     st_cu_limit_set: "Лимит CU установлен:",
     st_cu_cleared: "Возврат к значению по умолчанию",

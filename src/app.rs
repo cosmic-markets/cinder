@@ -234,6 +234,10 @@ async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
 }
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // Kick off the auto priority-fee refresh task; runs in the background for
+    // the lifetime of the process and seeds the dynamic CU-price default.
+    crate::tui::spawn_auto_priority_fee_refresh();
+
     // Bring up the alt-screen terminal up-front so the splash can paint over
     // the otherwise blank startup window.
     let terminal = setup_terminal()?;

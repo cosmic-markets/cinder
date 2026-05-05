@@ -103,6 +103,7 @@ pub static CN: Strings = Strings {
     cu_limit: "CU 限额 / 仓位",
     cu_limit_note: "每个交易仓位的计算单元",
     cu_default: "<默认>",
+    cu_auto: "自动",
     st_cu_price_set: "计算单元价格已设置为",
     st_cu_limit_set: "计算单元限额已设置为",
     st_cu_cleared: "已恢复默认值",

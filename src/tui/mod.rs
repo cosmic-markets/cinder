@@ -28,3 +28,4 @@ pub use runtime::spawn_spline_poller;
 pub use splash::spawn as spawn_splash;
 pub use state::{MarketInfo, MarketListUpdate, MarketStatUpdate};
 pub use terminal::{cleanup_terminal, restore_terminal, setup_terminal, TuiTerminal};
+pub use tx::spawn_auto_priority_fee_refresh;

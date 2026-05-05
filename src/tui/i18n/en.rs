@@ -103,6 +103,7 @@ pub static EN: Strings = Strings {
     cu_limit: "CU limit / position",
     cu_limit_note: "compute units per trader position",
     cu_default: "<default>",
+    cu_auto: "auto",
     st_cu_price_set: "Compute unit price set to",
     st_cu_limit_set: "Compute unit limit set to",
     st_cu_cleared: "Reverted to default",
