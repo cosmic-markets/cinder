@@ -188,7 +188,10 @@ pub fn render_frame(
 
     if matches!(
         trading.input_mode,
-        InputMode::ViewingConfig | InputMode::EditingRpcUrl
+        InputMode::ViewingConfig
+            | InputMode::EditingRpcUrl
+            | InputMode::EditingComputeUnitPrice
+            | InputMode::EditingComputeUnitLimit
     ) {
         modals::render_config_modal(f, area, trading);
     }

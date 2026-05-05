@@ -45,6 +45,12 @@ pub(super) fn handle_key_press(
         InputMode::EditingWithdraw => input::handle_editing_withdraw(key.code, &mut state.trading),
         InputMode::ViewingConfig => input::handle_config_view_key(key.code, &mut state.trading),
         InputMode::EditingRpcUrl => input::handle_editing_rpc_url(key.code, &mut state.trading),
+        InputMode::EditingComputeUnitPrice => {
+            input::handle_editing_compute_unit_price(key.code, &mut state.trading)
+        }
+        InputMode::EditingComputeUnitLimit => {
+            input::handle_editing_compute_unit_limit(key.code, &mut state.trading)
+        }
         InputMode::EditingWalletPath => input::handle_editing_wallet_path(
             key.code,
             state,

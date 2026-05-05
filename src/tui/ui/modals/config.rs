@@ -1,6 +1,9 @@
 //! Configuration modal.
 
 use super::*;
+use crate::tui::config::{
+    DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION, DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS,
+};
 
 pub(in crate::tui::ui) fn render_config_modal(
     f: &mut Frame,
@@ -8,9 +11,9 @@ pub(in crate::tui::ui) fn render_config_modal(
     trading: &TradingState,
 ) {
     let cfg_s = strings();
-    const LABEL_W: u16 = 20;
-    let popup_w: u16 = 80.min(area.width.saturating_sub(4));
-    let popup_h: u16 = 9.min(area.height.saturating_sub(2));
+    const LABEL_W: u16 = 22;
+    let popup_w: u16 = 88.min(area.width.saturating_sub(4));
+    let popup_h: u16 = 11.min(area.height.saturating_sub(2));
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
     let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
     let popup_area = ratatui::layout::Rect::new(x, y, popup_w, popup_h);
@@ -24,8 +27,19 @@ pub(in crate::tui::ui) fn render_config_modal(
             .add_modifier(Modifier::BOLD),
     )]);
 
-    let footer = match trading.input_mode {
-        InputMode::EditingRpcUrl => Line::from(vec![
+    let editing_text = matches!(
+        trading.input_mode,
+        InputMode::EditingRpcUrl
+            | InputMode::EditingComputeUnitPrice
+            | InputMode::EditingComputeUnitLimit
+    );
+    let footer = if editing_text {
+        let action_label = if trading.input_mode == InputMode::EditingRpcUrl {
+            cfg_s.save_reconnect
+        } else {
+            cfg_s.set
+        };
+        Line::from(vec![
             Span::styled(
                 " Enter ",
                 Style::default()
@@ -33,7 +47,7 @@ pub(in crate::tui::ui) fn render_config_modal(
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("{}  ", cfg_s.save_reconnect),
+                format!("{}  ", action_label),
                 Style::default().fg(Color::DarkGray),
             ),
             Span::styled(
@@ -47,8 +61,9 @@ pub(in crate::tui::ui) fn render_config_modal(
                 Style::default().fg(Color::DarkGray),
             ),
         ])
-        .left_aligned(),
-        _ => Line::from(vec![
+        .left_aligned()
+    } else {
+        Line::from(vec![
             Span::styled(
                 " ↑↓ ",
                 Style::default()
@@ -90,7 +105,7 @@ pub(in crate::tui::ui) fn render_config_modal(
                 Style::default().fg(Color::DarkGray),
             ),
         ])
-        .left_aligned(),
+        .left_aligned()
     };
 
     let block = Block::default()
@@ -110,15 +125,24 @@ pub(in crate::tui::ui) fn render_config_modal(
             Constraint::Length(1), // language
             Constraint::Length(1), // clob orders
             Constraint::Length(1), // public RPC fan-out
+            Constraint::Length(1), // CU price
+            Constraint::Length(1), // CU limit
             Constraint::Min(0),
         ])
         .split(inner);
 
     let editing_rpc = trading.input_mode == InputMode::EditingRpcUrl;
-    let rpc_selected = trading.config_selected_field == 0 || editing_rpc;
-    let lang_selected = trading.config_selected_field == 1 && !editing_rpc;
-    let clob_selected = trading.config_selected_field == 2 && !editing_rpc;
-    let fanout_selected = trading.config_selected_field == 3 && !editing_rpc;
+    let editing_cu_price = trading.input_mode == InputMode::EditingComputeUnitPrice;
+    let editing_cu_limit = trading.input_mode == InputMode::EditingComputeUnitLimit;
+    let any_text_edit = editing_rpc || editing_cu_price || editing_cu_limit;
+    let rpc_selected = (trading.config_selected_field == 0 && !any_text_edit) || editing_rpc;
+    let lang_selected = trading.config_selected_field == 1 && !any_text_edit;
+    let clob_selected = trading.config_selected_field == 2 && !any_text_edit;
+    let fanout_selected = trading.config_selected_field == 3 && !any_text_edit;
+    let cu_price_selected =
+        (trading.config_selected_field == 4 && !any_text_edit) || editing_cu_price;
+    let cu_limit_selected =
+        (trading.config_selected_field == 5 && !any_text_edit) || editing_cu_limit;
 
     let rpc_cols = Layout::default()
         .direction(Direction::Horizontal)
@@ -325,4 +349,105 @@ pub(in crate::tui::ui) fn render_config_modal(
         ])),
         fanout_cols[1],
     );
+
+    render_cu_field_row(
+        f,
+        rows[5],
+        LABEL_W,
+        cfg_s.cu_price,
+        cfg_s.cu_price_note,
+        cu_price_selected,
+        editing_cu_price,
+        &trading.input_buffer,
+        trading
+            .config
+            .compute_unit_price_micro_lamports
+            .map(|v| v.to_string()),
+        DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS.to_string(),
+        cfg_s.cu_default,
+    );
+
+    render_cu_field_row(
+        f,
+        rows[6],
+        LABEL_W,
+        cfg_s.cu_limit,
+        cfg_s.cu_limit_note,
+        cu_limit_selected,
+        editing_cu_limit,
+        &trading.input_buffer,
+        trading
+            .config
+            .compute_unit_limit_per_position
+            .map(|v| v.to_string()),
+        DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION.to_string(),
+        cfg_s.cu_default,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_cu_field_row(
+    f: &mut Frame,
+    row: ratatui::layout::Rect,
+    label_w: u16,
+    label: &str,
+    note: &str,
+    selected: bool,
+    editing: bool,
+    buffer: &str,
+    override_value: Option<String>,
+    default_display: String,
+    default_label: &str,
+) {
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(label_w), Constraint::Min(0)])
+        .split(row);
+
+    let cursor = if selected { "▸ " } else { "  " };
+    let label_style = if selected {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(cursor, label_style),
+            Span::styled(label.to_string(), label_style),
+        ])),
+        cols[0],
+    );
+
+    let value_line = if editing {
+        Line::from(vec![Span::styled(
+            format!("{}_", buffer),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        )])
+    } else if let Some(v) = override_value {
+        Line::from(vec![
+            Span::styled(v, Style::default().fg(Color::White)),
+            Span::styled(
+                format!("  ({})", note),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(
+                default_label.to_string(),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::raw("  "),
+            Span::styled(default_display, Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("  ({})", note),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ])
+    };
+    f.render_widget(Paragraph::new(value_line), cols[1]);
 }

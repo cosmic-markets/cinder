@@ -7,20 +7,20 @@ use std::str::FromStr;
 use solana_instruction::Instruction;
 use solana_pubkey::Pubkey;
 
-/// Compute units allocated per position being closed/traded in a single tx.
-pub(super) const COMPUTE_UNITS_PER_POSITION: u32 = 200_000;
-/// Priority fee in microlamports per compute unit.
-const PRIORITY_FEE_MICRO_LAMPORTS: u64 = 111;
+use super::super::config::{
+    current_compute_unit_limit_per_position, current_compute_unit_price_micro_lamports,
+};
 
 /// Builds the two ComputeBudget instructions that must be appended to every
 /// Solana transaction:
-///   1. SetComputeUnitLimit  — 150 000  × `num_positions`
-///   2. SetComputeUnitPrice  — 111 microLamports per CU
+///   1. SetComputeUnitLimit  — `cu_per_position` × `num_positions`
+///   2. SetComputeUnitPrice  — microlamports per CU
 ///
-/// Uses the on-chain ComputeBudget program at
+/// Both values come from `current_user_config` (env / built-in default fall-
+/// back). Uses the on-chain ComputeBudget program at
 /// `ComputeBudget111111111111111111111111111111`.
 pub(super) fn build_compute_budget_ixs(num_positions: u32) -> Vec<Instruction> {
-    let limit = COMPUTE_UNITS_PER_POSITION.saturating_mul(num_positions);
+    let limit = current_compute_unit_limit_per_position().saturating_mul(num_positions);
     build_compute_budget_ixs_raw(limit)
 }
 
@@ -34,9 +34,10 @@ pub(super) fn build_compute_budget_ixs_raw(compute_unit_limit: u32) -> Vec<Instr
     limit_data.push(2u8);
     limit_data.extend_from_slice(&compute_unit_limit.to_le_bytes());
 
+    let cu_price = current_compute_unit_price_micro_lamports();
     let mut price_data = Vec::with_capacity(9);
     price_data.push(3u8);
-    price_data.extend_from_slice(&PRIORITY_FEE_MICRO_LAMPORTS.to_le_bytes());
+    price_data.extend_from_slice(&cu_price.to_le_bytes());
 
     vec![
         Instruction {
@@ -79,7 +80,7 @@ mod tests {
         assert_eq!(price_ix.data[0], 3);
         let price_val =
             u64::from_le_bytes(price_ix.data[1..9].try_into().expect("9-byte price ix"));
-        assert_eq!(price_val, PRIORITY_FEE_MICRO_LAMPORTS);
+        assert_eq!(price_val, current_compute_unit_price_micro_lamports());
     }
 
     #[test]
@@ -90,6 +91,6 @@ mod tests {
         let limit_ix = &ixs[0];
         let limit_val =
             u32::from_le_bytes(limit_ix.data[1..5].try_into().expect("5-byte limit ix"));
-        assert_eq!(limit_val, COMPUTE_UNITS_PER_POSITION * 2);
+        assert_eq!(limit_val, current_compute_unit_limit_per_position() * 2);
     }
 }

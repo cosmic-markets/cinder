@@ -26,6 +26,13 @@ pub enum InputMode {
     ViewingLedger,
     ViewingConfig,
     EditingRpcUrl,
+    /// Text editor for the `SetComputeUnitPrice` override (microlamports per
+    /// CU). Empty + Enter clears the override and falls back to env / default.
+    EditingComputeUnitPrice,
+    /// Text editor for the `SetComputeUnitLimit` per-position override
+    /// (compute units per trader position). Empty + Enter clears the override
+    /// and falls back to env / default.
+    EditingComputeUnitLimit,
     /// "Load Wallet" modal opened by [w] when no wallet is loaded. Edits a
     /// path string seeded from `default_wallet_path()`; Enter attempts the
     /// load and closes on success.

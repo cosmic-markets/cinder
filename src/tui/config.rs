@@ -58,6 +58,14 @@ impl Language {
     }
 }
 
+/// Built-in default for `SetComputeUnitPrice` (microlamports per CU). Used
+/// when neither the user config nor the env var overrides it.
+pub const DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS: u64 = 111;
+
+/// Built-in default for `SetComputeUnitLimit` per trader position touched by
+/// a tx. Used when neither the user config nor the env var overrides it.
+pub const DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION: u32 = 200_000;
+
 /// User-facing settings persisted to `~/.config/phoenix-cinder/config.json`.
 /// Empty `rpc_url` = not overridden; fall back to env/default.
 #[derive(Debug, Clone)]
@@ -74,6 +82,13 @@ pub struct UserConfig {
     /// authoritative for confirmation. Turn off if you want submissions to
     /// stay solely on your configured RPC.
     pub fanout_public_rpc: bool,
+    /// Override for `SetComputeUnitPrice` (microlamports per CU). `None` =
+    /// fall back to env / built-in default.
+    pub compute_unit_price_micro_lamports: Option<u64>,
+    /// Override for `SetComputeUnitLimit` per trader position touched by a tx
+    /// (the multiplier applied to position counts in CU-scaled flows). `None`
+    /// = fall back to env / built-in default.
+    pub compute_unit_limit_per_position: Option<u32>,
 }
 
 impl Default for UserConfig {
@@ -83,8 +98,43 @@ impl Default for UserConfig {
             language: Language::default(),
             show_clob: true,
             fanout_public_rpc: default_fanout_public_rpc_from_env(),
+            compute_unit_price_micro_lamports: None,
+            compute_unit_limit_per_position: None,
         }
     }
+}
+
+/// Reads `CINDER_COMPUTE_UNIT_PRICE` (microlamports per CU). Returns `None`
+/// when the env var is unset, empty, or fails to parse as `u64`.
+fn compute_unit_price_from_env() -> Option<u64> {
+    env::var("CINDER_COMPUTE_UNIT_PRICE")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+}
+
+/// Reads `CINDER_COMPUTE_UNIT_LIMIT` (CUs per position). Returns `None` when
+/// the env var is unset, empty, or fails to parse as `u32`.
+fn compute_unit_limit_from_env() -> Option<u32> {
+    env::var("CINDER_COMPUTE_UNIT_LIMIT")
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+}
+
+/// Resolved `SetComputeUnitPrice` value: user override → env → built-in default.
+pub fn current_compute_unit_price_micro_lamports() -> u64 {
+    current_user_config()
+        .compute_unit_price_micro_lamports
+        .or_else(compute_unit_price_from_env)
+        .unwrap_or(DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS)
+}
+
+/// Resolved `SetComputeUnitLimit` per-position multiplier: user override →
+/// env → built-in default.
+pub fn current_compute_unit_limit_per_position() -> u32 {
+    current_user_config()
+        .compute_unit_limit_per_position
+        .or_else(compute_unit_limit_from_env)
+        .unwrap_or(DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION)
 }
 
 /// Reads the env-var override for the public-RPC fan-out toggle.
@@ -257,6 +307,13 @@ fn load_user_config_from_disk() -> UserConfig {
             .get("fanout_public_rpc")
             .and_then(|x| x.as_bool())
             .unwrap_or_else(default_fanout_public_rpc_from_env),
+        compute_unit_price_micro_lamports: v
+            .get("compute_unit_price_micro_lamports")
+            .and_then(|x| x.as_u64()),
+        compute_unit_limit_per_position: v
+            .get("compute_unit_limit_per_position")
+            .and_then(|x| x.as_u64())
+            .and_then(|n| u32::try_from(n).ok()),
     }
 }
 
@@ -285,6 +342,8 @@ pub fn save_user_config(cfg: &UserConfig) -> std::io::Result<()> {
         "language": cfg.language.code(),
         "show_clob": cfg.show_clob,
         "fanout_public_rpc": cfg.fanout_public_rpc,
+        "compute_unit_price_micro_lamports": cfg.compute_unit_price_micro_lamports,
+        "compute_unit_limit_per_position": cfg.compute_unit_limit_per_position,
     });
     let content = serde_json::to_string_pretty(&value).map_err(std::io::Error::other)?;
     std::fs::write(user_config_path(), content)?;

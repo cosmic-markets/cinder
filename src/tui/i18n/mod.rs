@@ -117,6 +117,25 @@ pub struct Strings {
     pub fanout_public_rpc: &'static str,
     /// Helper text shown next to the toggle to disclose what the option does.
     pub fanout_public_rpc_note: &'static str,
+    /// Config-modal label — "Compute unit price" (microlamports per CU).
+    pub cu_price: &'static str,
+    /// Helper text next to the CU price field disclosing units.
+    pub cu_price_note: &'static str,
+    /// Config-modal label — "Compute unit limit" (CUs per position).
+    pub cu_limit: &'static str,
+    /// Helper text next to the CU limit field disclosing units.
+    pub cu_limit_note: &'static str,
+    /// Placeholder shown for CU price/limit fields when no override is set —
+    /// "<default>" / etc.
+    pub cu_default: &'static str,
+    /// Status-bar prefix when CU price is updated — append the value.
+    pub st_cu_price_set: &'static str,
+    /// Status-bar prefix when CU limit is updated — append the value.
+    pub st_cu_limit_set: &'static str,
+    /// Status-bar message when CU price/limit override is cleared.
+    pub st_cu_cleared: &'static str,
+    /// Status-bar message when CU input is invalid.
+    pub st_cu_invalid: &'static str,
     pub on: &'static str,
     pub off: &'static str,
     pub save_reconnect: &'static str,
