@@ -158,10 +158,16 @@ fn default_fanout_public_rpc_from_env() -> bool {
 fn wallet_path_candidates() -> Vec<String> {
     let home = env::var("USERPROFILE").unwrap_or_else(|_| env::var("HOME").unwrap_or_default());
     let env_path = env::var("PHX_WALLET_PATH").or_else(|_| env::var("KEYPAIR_PATH"));
+    let solana_default = std::path::PathBuf::from(home)
+        .join(".config")
+        .join("solana")
+        .join("id.json")
+        .to_string_lossy()
+        .into_owned();
     [
         Some("phoenix.json".to_string()),
         env_path.ok(),
-        Some(format!("{}/.config/solana/id.json", home)),
+        Some(solana_default),
     ]
     .into_iter()
     .flatten()

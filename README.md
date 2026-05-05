@@ -112,7 +112,7 @@ Trading perpetual futures is high-risk and can result in the rapid and total los
 ## Acknowledgments
 Thanks to the team at **Ellipsis Labs** for building [Phoenix](https://phoenix.trade). Cinder is an independent, open-source TUI client and is not affiliated with, sponsored by, or endorsed by Ellipsis Labs. "Phoenix" and any related names, logos, or marks are trademarks of their respective owners and are used here only to identify the protocol Cinder interoperates with.
 
-# Donations
+## Donations
 ❤️ SOL donations are greatly appreciated! Send to: `cosmic.sol`
 
 ## License
