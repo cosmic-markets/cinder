@@ -23,8 +23,6 @@ This file is the technical map. Use it before reading code so you know which cra
 | Persisted user config | `~/.config/phoenix-cinder/config.json` — `rpc_url`, `language` (`en`/`cn`), `show_clob` |
 | Config defaults RPC fallback | `https://api.mainnet-beta.solana.com` (with a warn log) |
 | Wallet path resolution | `phoenix.json` (cwd) → `PHX_WALLET_PATH` / `KEYPAIR_PATH` → `~/.config/solana/id.json` (first that exists) |
-| Pre-commit hooks | `lefthook.yml` runs `cargo fmt --all --check` and the strict clippy command |
-| Mise tasks | `mise run fmt | clippy | test | release-check` (release-check chains all three) |
 
 ---
 
@@ -36,8 +34,6 @@ This file is the technical map. Use it before reading code so you know which cra
 ├── Cargo.lock
 ├── Dockerfile                  # multi-stage musl build (statically linked)
 ├── docker-compose.yml          # service `cinder`
-├── lefthook.yml                # fmt + clippy pre-commit
-├── mise.toml                   # tool versions and aliased tasks
 ├── rustfmt.toml                # max_width=100, edition=2021, field-init/try shorthand
 ├── crates/
 │   └── phoenix-eternal-types/  # vendored zero-copy account / event types
@@ -172,7 +168,6 @@ cargo test -- --nocapture --test-threads=1                   # see println; seri
 cargo clippy --workspace --locked --all-targets -- -D warnings   # CI clippy gate
 cargo fmt --all --check                                      # CI fmt gate
 
-mise run release-check                                       # fmt + clippy + test
 docker compose build && docker compose run --rm cinder       # containerised
 ```
 
