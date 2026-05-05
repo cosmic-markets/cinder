@@ -11,7 +11,10 @@ use super::super::trading::TradingSide;
 use super::compute_budget::build_compute_budget_ixs;
 use super::confirmation::{compile_and_sign, subscribe_send_confirm, ConfirmError};
 use super::context::TxContext;
-use super::error::{format_not_confirmed_error, log_tx_error, parse_phoenix_tx_error};
+use super::error::{
+    format_not_confirmed_error, log_tx_error, not_confirmed_is_onchain_execution_failure,
+    parse_phoenix_tx_error,
+};
 use super::isolated_margin::estimate_collateral_transfer;
 
 /// Asynchronously constructs, signs, and dispatches a market order payload
@@ -151,15 +154,24 @@ pub fn submit_market_order(
                         &format!("isolated market order not confirmed — {}", order_summary),
                         &e,
                     );
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
-                        title: format!(
-                            "{} — {} ({})",
-                            s.tx_order_not_confirmed,
-                            order_summary,
-                            format_not_confirmed_error(&e)
-                        ),
-                        detail: sig_str,
-                    });
+                    let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
+                    let (title, detail) = if onchain_fail {
+                        (
+                            format!("{} — {}", s.tx_order_failed, order_summary),
+                            parse_phoenix_tx_error(&e),
+                        )
+                    } else {
+                        (
+                            format!(
+                                "{} — {} ({})",
+                                s.tx_order_not_confirmed,
+                                order_summary,
+                                format_not_confirmed_error(&e)
+                            ),
+                            sig_str.clone(),
+                        )
+                    };
+                    let _ = tx_status.send(TxStatusMsg::SetStatus { title, detail });
                 }
             }
             return;
@@ -260,15 +272,24 @@ pub fn submit_market_order(
                     &format!("market order not confirmed — {}", order_summary),
                     &e,
                 );
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
-                    title: format!(
-                        "{} — {} ({})",
-                        s.tx_order_not_confirmed,
-                        order_summary,
-                        format_not_confirmed_error(&e)
-                    ),
-                    detail: sig_str,
-                });
+                let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
+                let (title, detail) = if onchain_fail {
+                    (
+                        format!("{} — {}", s.tx_order_failed, order_summary),
+                        parse_phoenix_tx_error(&e),
+                    )
+                } else {
+                    (
+                        format!(
+                            "{} — {} ({})",
+                            s.tx_order_not_confirmed,
+                            order_summary,
+                            format_not_confirmed_error(&e)
+                        ),
+                        sig_str.clone(),
+                    )
+                };
+                let _ = tx_status.send(TxStatusMsg::SetStatus { title, detail });
             }
         }
     });

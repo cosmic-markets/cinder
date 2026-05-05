@@ -334,8 +334,10 @@ pub struct Strings {
     pub tx_order_confirmed: &'static str,
     /// "❌ Transaction rejected" — RPC rejection prefix
     pub tx_tx_rejected: &'static str,
-    /// "❌ Order not confirmed" — timeout/unconfirmed prefix
+    /// Timeout / disconnected — confirmation outcome unknown (`NotConfirmed`).
     pub tx_order_not_confirmed: &'static str,
+    /// Order broadcast succeeded but transaction executed with Err on-chain — title prefix.
+    pub tx_order_failed: &'static str,
     /// Phoenix program error 7002: user-facing explanation.
     pub tx_err_stop_opposite_direction: &'static str,
     /// Custom program error 0x1 / lamports — not enough SOL for fees.
@@ -360,6 +362,10 @@ pub struct Strings {
     pub tx_err_insufficient_funds: &'static str,
     /// BPF meter / simulation exceeded compute budget (RPC error substring).
     pub tx_err_insufficient_compute_units: &'static str,
+    /// Solana `ComputationalBudgetExceeded` / RPC wording (simulation, logs).
+    pub tx_err_computational_budget_exceeded: &'static str,
+    /// Solana runtime `ProgramFailedToComplete` — label plus compute-budget hint.
+    pub tx_err_program_failed_to_complete: &'static str,
     /// Prefix before raw RPC error when unmapped (`"Tx Failed: "`).
     pub tx_err_failed_prefix: &'static str,
     /// "deposit" — flow noun in "{amount} USDC deposit" fund scope
@@ -377,8 +383,10 @@ pub struct Strings {
     pub tx_withdrawal_confirmed: &'static str,
     /// "USDC confirmed!" — suffix after amount in transfer success
     pub tx_usdc_confirmed: &'static str,
-    /// "❌ Transfer not confirmed" — transfer timeout/unconfirmed prefix
+    /// Transfer timeout/outcome unknown (`NotConfirmed` without `transaction failed:`).
     pub tx_transfer_not_confirmed: &'static str,
+    /// USDC deposit/withdraw sent but landed with Err on-chain.
+    pub tx_transfer_failed: &'static str,
     /// "Building close-all for" — close-all progress prefix
     pub tx_building_close_all: &'static str,
     /// "not found, skipping" — market lookup failure suffix in close-all
@@ -399,8 +407,10 @@ pub struct Strings {
     pub tx_batch_confirmed_suf: &'static str,
     /// "rejected by the network" — batch rejected suffix
     pub tx_batch_rejected_suf: &'static str,
-    /// "not confirmed" — batch unconfirmed suffix
+    /// Truly pending / ambiguous batch confirmation suffix.
     pub tx_batch_not_confirmed_suf: &'static str,
+    /// Batch tx processed with Err (paired with ❌ `{Batch|Cancel batch} i/n`).
+    pub tx_batch_exec_failed_suf: &'static str,
     /// "✅ Close-all complete" — final close-all success
     pub tx_close_all_complete: &'static str,
     /// "Building cancel for" — cancel progress prefix

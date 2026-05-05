@@ -221,6 +221,7 @@ pub static ES: Strings = Strings {
     tx_order_confirmed: "✅ Orden confirmada:",
     tx_tx_rejected: "❌ Transacción rechazada",
     tx_order_not_confirmed: "Confirmación aún pendiente",
+    tx_order_failed: "❌ Orden fallida",
     tx_err_stop_opposite_direction: "La orden stop-loss debe ir en sentido contrario a la \
                                      posición del trader",
     tx_err_not_enough_sol: "SOL insuficiente",
@@ -237,6 +238,9 @@ pub static ES: Strings = Strings {
     tx_err_insufficient_balance: "Saldo insuficiente.",
     tx_err_insufficient_funds: "Fondos insuficientes.",
     tx_err_insufficient_compute_units: "Unidades de cómputo insuficientes.",
+    tx_err_computational_budget_exceeded: "Presupuesto computacional superado",
+    tx_err_program_failed_to_complete:
+        "ProgramFailedToComplete — revise el límite de compute units",
     tx_err_failed_prefix: "Tx fallida: ",
     tx_flow_deposit: "depósito",
     tx_flow_withdraw: "retiro",
@@ -246,6 +250,7 @@ pub static ES: Strings = Strings {
     tx_withdrawal_confirmed: "✅ Retiro de",
     tx_usdc_confirmed: "USDC confirmado!",
     tx_transfer_not_confirmed: "Confirmación de transferencia aún pendiente",
+    tx_transfer_failed: "❌ Transferencia fallida",
     tx_building_close_all: "Construyendo cierre total para",
     tx_not_found_skip: "no encontrado, omitiendo",
     tx_close_all_aborted: "Cierre total abortado: no se pudo construir ninguna instrucción válida",
@@ -257,6 +262,7 @@ pub static ES: Strings = Strings {
     tx_batch_confirmed_suf: "confirmado:",
     tx_batch_rejected_suf: "rechazado por la red",
     tx_batch_not_confirmed_suf: "confirmación aún pendiente",
+    tx_batch_exec_failed_suf: "falló on-chain",
     tx_close_all_complete: "✅ Cierre total completado",
     tx_building_cancel: "Construyendo cancelación para",
     tx_cancel_aborted: "Cancelación abortada: no se pudo construir ninguna instrucción válida",

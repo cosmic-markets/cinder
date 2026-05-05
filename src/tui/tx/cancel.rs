@@ -13,7 +13,10 @@ use super::super::state::TxStatusMsg;
 use super::compute_budget::build_compute_budget_ixs;
 use super::confirmation::{compile_and_sign, subscribe_send_confirm, ConfirmError};
 use super::context::TxContext;
-use super::error::{log_tx_error, parse_phoenix_tx_error};
+use super::error::{
+    format_not_confirmed_error, log_tx_error, not_confirmed_is_onchain_execution_failure,
+    parse_phoenix_tx_error,
+};
 
 /// One open order to cancel — the (`price_ticks`, `order_sequence_number`) pair
 /// is the on-chain `CancelId`, `symbol` selects which market's IX it lives in.
@@ -376,17 +379,33 @@ pub fn submit_cancel_orders(
                         ),
                         &e,
                     );
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
-                        title: format!(
-                            "{} {}/{} {} ({})",
-                            s.tx_cancel_batch,
-                            batch_idx + 1,
-                            num_batches,
-                            s.tx_batch_not_confirmed_suf,
-                            e
-                        ),
-                        detail: sig_str,
-                    });
+                    let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
+                    let mapped = format_not_confirmed_error(&e);
+                    let (title, detail) = if onchain_fail {
+                        (
+                            format!(
+                                "❌ {} {}/{} {}",
+                                s.tx_cancel_batch,
+                                batch_idx + 1,
+                                num_batches,
+                                s.tx_batch_exec_failed_suf
+                            ),
+                            parse_phoenix_tx_error(&e),
+                        )
+                    } else {
+                        (
+                            format!(
+                                "{} {}/{} {} ({})",
+                                s.tx_cancel_batch,
+                                batch_idx + 1,
+                                num_batches,
+                                s.tx_batch_not_confirmed_suf,
+                                mapped
+                            ),
+                            sig_str,
+                        )
+                    };
+                    let _ = tx_status.send(TxStatusMsg::SetStatus { title, detail });
                 }
             }
 

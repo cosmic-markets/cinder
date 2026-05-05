@@ -58,11 +58,26 @@ pub(super) fn log_tx_error(sig: Option<&str>, context: &str, error: &str) {
     }
 }
 
+/// True when the confirmation pipeline saw a definitive on-chain/program error
+/// (`transaction failed: ...`), as opposed to timeout or disconnect.
+///
+/// Matches `send_and_confirm_on_stream` (`confirmation.rs`) when the signature
+/// status returns `Processed`/`get_signature_status` with an Err payload.
+pub(super) fn not_confirmed_is_onchain_execution_failure(err: &str) -> bool {
+    err.to_lowercase().contains("transaction failed:")
+}
+
 /// User-facing text for `ConfirmError::NotConfirmed` in the status title (after
 /// the em dash).
 pub(super) fn format_not_confirmed_error(e: &str) -> String {
     let s = strings();
     let lower = e.to_lowercase();
+    if is_computational_budget_exceeded_error(&lower) {
+        return s.tx_err_computational_budget_exceeded.to_string();
+    }
+    if lower.contains(PROGRAM_FAILED_TO_COMPLETE) {
+        return s.tx_err_program_failed_to_complete.to_string();
+    }
     if is_compute_units_meter_error(e) {
         return s.tx_err_insufficient_compute_units.to_string();
     }
@@ -106,6 +121,21 @@ fn is_isolated_only_cross_margin_error(text: &str) -> bool {
             && lower.contains("reject"))
 }
 
+/// Substring in Solana RPC / simulator errors for `ComputationalBudgetExceeded`.
+const COMPUTATIONAL_BUDGET_EXCEEDED: &str = "computational budget exceeded";
+
+/// `InstructionError` / `Debug` token without spaces, e.g. `ComputationalBudgetExceeded`.
+const COMPUTATIONAL_BUDGET_EXCEEDED_VARIANT: &str = "computationalbudgetexceeded";
+
+#[inline]
+fn is_computational_budget_exceeded_error(lower: &str) -> bool {
+    lower.contains(COMPUTATIONAL_BUDGET_EXCEEDED)
+        || lower.contains(COMPUTATIONAL_BUDGET_EXCEEDED_VARIANT)
+}
+
+/// Substring matching `InstructionError`'s `ProgramFailedToComplete` in Debug formatting.
+const PROGRAM_FAILED_TO_COMPLETE: &str = "programfailedtocomplete";
+
 /// Substring in Solana RPC errors when a transaction exceeds its compute budget.
 const EXCEEDED_CUS_METER_AT_BPF: &str = "exceeded cus meter at bpf instruction";
 
@@ -116,6 +146,14 @@ fn is_compute_units_meter_error(text: &str) -> bool {
 
 fn parse_phoenix_tx_error_with_table(error: &str, s: &Strings) -> String {
     let lower = error.to_lowercase();
+
+    if is_computational_budget_exceeded_error(&lower) {
+        return s.tx_err_computational_budget_exceeded.to_string();
+    }
+
+    if lower.contains(PROGRAM_FAILED_TO_COMPLETE) {
+        return s.tx_err_program_failed_to_complete.to_string();
+    }
 
     if lower.contains(EXCEEDED_CUS_METER_AT_BPF) {
         return s.tx_err_insufficient_compute_units.to_string();
@@ -228,11 +266,66 @@ mod tests {
     }
 
     #[test]
-    fn parse_phoenix_tx_error_maps_compute_units_meter() {
-        let raw = r#"InstructionError(0, Custom(ProgramErrorWithOrigin { program_error: InstructionError(0, ComputationalBudgetExceeded), origin: Some("... exceeded CUs meter at BPF instruction ...") }))"#;
+    fn parse_phoenix_tx_error_maps_compute_units_meter_when_no_budget_variant() {
+        let raw = r#"Program log: ... exceeded CUs meter at BPF instruction ..."#;
         assert_eq!(
             parse_phoenix_tx_error_with_table(raw, &EN),
             EN.tx_err_insufficient_compute_units
         );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_computational_budget_variant_token() {
+        let raw = r#"Simulation failed: InstructionError(3, ComputationalBudgetExceeded)"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_computational_budget_exceeded
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_prefers_budget_variant_when_also_cu_meter_logged() {
+        let raw = r#"InstructionError(0, Custom(ProgramErrorWithOrigin { program_error: InstructionError(0, ComputationalBudgetExceeded), origin: Some("... exceeded CUs meter at BPF instruction ...") }))"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_computational_budget_exceeded
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_computational_budget_exceeded() {
+        let raw = r#"Simulation failed: Transaction simulation failed: Error processing Instruction 0: Computational budget exceeded"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_computational_budget_exceeded
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_prefers_computational_budget_when_both_substrings_present() {
+        let raw = "Computational budget exceeded … exceeded CUs meter at BPF instruction";
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_computational_budget_exceeded
+        );
+    }
+
+    #[test]
+    fn parse_phoenix_tx_error_maps_program_failed_to_complete() {
+        let raw = r#"transaction failed: Some(InstructionError(0, ProgramFailedToComplete))"#;
+        assert_eq!(
+            parse_phoenix_tx_error_with_table(raw, &EN),
+            EN.tx_err_program_failed_to_complete
+        );
+    }
+
+    #[test]
+    fn not_confirmed_onchain_detection() {
+        assert!(not_confirmed_is_onchain_execution_failure(
+            "transaction failed: Some(InstructionError(0, ProgramFailedToComplete))",
+        ));
+        assert!(!not_confirmed_is_onchain_execution_failure(
+            "confirmation timeout"
+        ));
     }
 }
