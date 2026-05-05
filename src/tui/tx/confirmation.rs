@@ -33,6 +33,10 @@ pub(super) const CONFIRM_TIMEOUT: Duration = Duration::from_secs(8);
 /// Bound signature WebSocket connection and subscription setup.
 const SIGNATURE_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Fallback interval between HTTP `get_signature_status` polls while confirming
+/// (WSS path races this loop).
+const SIGNATURE_HTTP_POLL_INTERVAL: Duration = Duration::from_millis(350);
+
 /// Compiles a versioned v0 transaction from `ixs` and signs it with `keypair`.
 /// Returns the signed transaction and its signature so callers can subscribe
 /// to confirmation *before* broadcasting.
@@ -89,7 +93,7 @@ pub(super) async fn get_or_connect_sig_pubsub(
 }
 
 /// Sends the pre-signed transaction and waits for `processed` confirmation,
-/// racing a WSS subscription stream against periodic HTTP polling every 1.5 s.
+/// racing a WSS subscription stream against HTTP `get_signature_status` polls.
 /// Whichever source responds first wins; the other is abandoned.
 pub(super) async fn send_and_confirm_on_stream(
     ctx: &TxContext,
@@ -149,7 +153,7 @@ pub(super) async fn send_and_confirm_on_stream(
         };
 
         let http_poll = async {
-            let mut interval = tokio::time::interval(Duration::from_millis(500));
+            let mut interval = tokio::time::interval(SIGNATURE_HTTP_POLL_INTERVAL);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             interval.tick().await; // skip the immediate first tick
             loop {
