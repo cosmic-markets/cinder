@@ -14,13 +14,18 @@ pub(in crate::tui::runtime) fn resolve_levels(
     let mut had_miss = false;
     let mut resolve_side = |raw: &[L2Level]| -> Vec<ClobLevel> {
         raw.iter()
-            .filter_map(|lvl| match cache.and_then(|c| c.resolve(lvl.trader_id)) {
-                Some(pk) => Some((lvl.price, lvl.qty, pubkey_trader_prefix(&pk))),
-                // Drop unresolved rows — they'll reappear on the next emit tick once
-                // the loader refreshes. Rendering a placeholder would flash noise.
+            .map(|lvl| match cache.and_then(|c| c.resolve(lvl.trader_id)) {
+                Some(pk) => (lvl.price, lvl.qty, pubkey_trader_prefix(&pk)),
+                // Render a placeholder instead of dropping unresolved rows. Dropping them
+                // creates invisible holes in the orderbook for valid liquidity.
                 None => {
                     had_miss = true;
-                    None
+                    let prefix = if lvl.trader_id == 0 {
+                        "----".to_string()
+                    } else {
+                        format!("{:04x}", lvl.trader_id)
+                    };
+                    (lvl.price, lvl.qty, prefix)
                 }
             })
             .collect()
@@ -37,9 +42,9 @@ pub(in crate::tui::runtime) fn resolve_levels(
 /// rewritten on nearly every slot of a busy market. `accountSubscribe` pushes
 /// the *full* account body on every notification and the server cadence is not
 /// bounded by client commitment level, so egress can hit tens of Mbps. Polling
-/// gives a hard ceiling: `account_size × 1/INTERVAL`. 500 ms is responsive
+/// gives a hard ceiling: `account_size × 1/INTERVAL`. 410 ms is responsive
 /// enough for a TUI book and keeps the worst-case bandwidth bounded.
-const L2_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const L2_POLL_INTERVAL: Duration = Duration::from_millis(410);
 
 /// Maintain an L2 book for the current market by polling the Phoenix market
 /// (orderbook) account over HTTP at a fixed cadence. Switches markets via the

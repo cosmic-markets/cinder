@@ -101,12 +101,13 @@ fn expand_region<F>(
     if region.start_offset >= region.end_offset {
         return;
     }
-    let unfilled_lots = region.total_size.saturating_sub(region.filled_size);
+    let visible_filled = region.filled_size.saturating_sub(region.hidden_filled_size);
+    let unfilled_lots = region.total_size.saturating_sub(visible_filled);
     if unfilled_lots == 0 || region.density == 0 {
         return;
     }
     let mut remaining = unfilled_lots;
-    for offset in (region.start_offset..region.end_offset).rev() {
+    for offset in region.start_offset..region.end_offset {
         if remaining == 0 {
             break;
         }
@@ -192,10 +193,15 @@ pub fn parse_spline_data(
         if b.1 < a.1 {
             break;
         }
-        if b.2 < a.2 {
-            bid_skip += 1;
+        let b_price = b.1;
+        let a_price = a.1;
+        let b_total: f64 = bid_rows[bid_skip..].iter().take_while(|r| r.1 == b_price).map(|r| r.2).sum();
+        let a_total: f64 = ask_rows[ask_skip..].iter().take_while(|r| r.1 == a_price).map(|r| r.2).sum();
+        
+        if b_total < a_total {
+            bid_skip += bid_rows[bid_skip..].iter().take_while(|r| r.1 == b_price).count();
         } else {
-            ask_skip += 1;
+            ask_skip += ask_rows[ask_skip..].iter().take_while(|r| r.1 == a_price).count();
         }
     }
     let bid_rows: Vec<SplineRow> = bid_rows.into_iter().skip(bid_skip).collect();
