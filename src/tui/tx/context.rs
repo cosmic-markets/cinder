@@ -259,8 +259,7 @@ mod tests {
         let stale_api = solana_pubkey::Pubkey::new_unique().to_string();
         assert_ne!(stale_api, canonical.to_string());
 
-        let resolved =
-            derive_spline_collection("TEST-PERP", market_pubkey, &stale_api).unwrap();
+        let resolved = derive_spline_collection("TEST-PERP", market_pubkey, &stale_api).unwrap();
         assert_eq!(
             resolved, canonical,
             "write path must use the derived spline PDA, not the API-reported pubkey"
@@ -273,12 +272,8 @@ mod tests {
         let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey).unwrap();
         let (canonical, _) = program_ids::get_spline_collection_address_default(&market_pk);
 
-        let resolved = derive_spline_collection(
-            "TEST-PERP",
-            market_pubkey,
-            &canonical.to_string(),
-        )
-        .unwrap();
+        let resolved =
+            derive_spline_collection("TEST-PERP", market_pubkey, &canonical.to_string()).unwrap();
         assert_eq!(resolved, canonical);
     }
 }
