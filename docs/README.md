@@ -15,6 +15,19 @@
 
 > 🔥 **No Phoenix invite yet?** Sign up through Cinder's referral and qualify for the current **Phoenix fee discount** (10% off fees) — see [Referral Funding](#referral-funding) below, or visit [cosmic.markets/phoenix/trade](https://cosmic.markets/phoenix/trade) to register with the `COSMIC` code.
 
+## Install
+
+The easiest way to run Cinder is from [crates.io](https://crates.io/crates/cosmic-cinder). The published crate is named **`cosmic-cinder`**; Cargo installs the **`cinder`** executable (same name as when you build from this repository).
+
+```bash
+cargo install cosmic-cinder
+cinder
+```
+
+Ensure `~/.cargo/bin` (or `$CARGO_HOME/bin` if you set `CARGO_HOME`) is on your `PATH` so the shell can find `cinder` after install.
+
+Configure [environment variables](#environment) (at minimum a good `RPC_URL` / `SOLANA_RPC_URL` is recommended) before launching, or rely on Cinder’s defaults as described below.
+
 ## Features
 
 - **Markets** — Loads Active / PostOnly markets from the Phoenix HTTP API; background refresh about every 60s.
@@ -75,7 +88,9 @@ When `PHX_WALLET_PATH` is unset, Cinder tries the following candidates in order 
 
 If you keep multiple wallets, be aware that a `phoenix.json` next to the binary takes priority over both env vars and the Solana CLI default. Delete or rename it to avoid signing with an unintended wallet.
 
-## Build and run
+## Build from source
+
+If you are developing Cinder or need an unreleased build, clone the repository and run from the workspace root:
 
 ```bash
 # Debug
@@ -86,7 +101,7 @@ cargo build --release
 RPC_URL=https://api.mainnet-beta.solana.com ./target/release/cinder
 ```
 
-Pre-compiled binaries for Windows and Linux are available in the Releases.
+For a published release without building locally, prefer **`cargo install cosmic-cinder`** ([Install](#install)) or pre-compiled binaries (Windows and Linux) from the repository Releases.
 
 ## Docker
 
