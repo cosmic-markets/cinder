@@ -6,6 +6,8 @@
 ![ratatui](https://img.shields.io/badge/ratatui-TUI-00ADD8?logo=terminal)
 ![Solana](https://img.shields.io/badge/Solana-RPC%20%2B%20WSS-9945FF?logo=solana)
 [![GitHub stars](https://img.shields.io/github/stars/cosmic-markets/cinder?style=flat&logo=github&label=stars)](https://github.com/cosmic-markets/cinder/stargazers)
+[![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.com/invite/XhQrN8FA2C)
+[![X](https://img.shields.io/badge/X-cosmic__markets-000000?style=flat&logo=x&logoColor=white)](https://x.com/cosmic_markets)
 
 <p align="center">
   <img
