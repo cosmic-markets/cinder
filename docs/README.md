@@ -11,7 +11,7 @@
 
 <p align="center">
   <img
-    src="../assets/demo.gif"
+    src="https://cosmic.markets/images/cinder_demo.gif"
     alt="Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet"
   />
 </p>
