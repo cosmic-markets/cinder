@@ -36,7 +36,7 @@ chrono                  = { version = "0.4.44", default-features = false, featur
 crossterm               = { version = "0.29.0", features = ["event-stream"] }
 dotenvy                 = "0.15.7"
 futures-util            = { version = "0.3.32", default-features = false, features = ["std"] }
-phoenix-eternal-types   = { version = "0.1.0", package = "cosmic-phoenix-eternal-types" }
+phoenix-eternal-types   = { version = "0.1.1", package = "cosmic-phoenix-eternal-types" }
 phoenix-rise            = "0.1.2"
 ratatui                 = { version = "0.30.0", default-features = false, features = ["crossterm"] }
 # Unify rustls features: tungstenite (via pubsub) uses rustls with no ring/aws-lc-rs; WSS needs a CryptoProvider.
