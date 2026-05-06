@@ -194,6 +194,15 @@ impl TuiState {
         apply_iceberg_markers(&mut bid_rows, &bid_iceberg_markers, price_decimals);
         apply_iceberg_markers(&mut ask_rows, &ask_iceberg_markers, price_decimals);
 
+        let (bid_skip, ask_skip) =
+            compute_merge_uncross_skip(&bid_rows, &ask_rows, price_decimals);
+        if bid_skip > 0 {
+            bid_rows.drain(0..bid_skip);
+        }
+        if ask_skip > 0 {
+            ask_rows.drain(0..ask_skip);
+        }
+
         let best_bid = bid_rows.first().map(|r| r.price);
         let best_ask = ask_rows.first().map(|r| r.price);
         let spread = match (best_bid, best_ask) {
@@ -419,6 +428,66 @@ fn group_by_price(
         });
     }
     rows
+}
+
+/// Resolve cross-source locks/crosses at the displayed touch.
+///
+/// `group_by_price` bucketed bid and ask quotes independently, so a CLOB
+/// resting bid at the same tick as a spline ask (or two different splines
+/// whose `mid_price`s coincide) survive into the merged book and render as
+/// bid==ask — visibly wrong, since two real resting orders at that touch
+/// would have executed against each other. Per-source trim
+/// ([`compute_cross_trim_skip`]) only sees one feed at a time and can't
+/// catch this; we run a second pass here against the union.
+///
+/// While the front rows are crossed or locked, peel from whichever side has
+/// less size at the touch (ties favour peeling the ask side, matching the
+/// per-source trim's `else` branch). One legitimate exception: a single
+/// Phoenix spline with `start_offset = 0` quotes both sides at its mid.
+/// That's a real 0-spread state from one quoter, the per-source trim
+/// preserves it to avoid flicker on a stable locked book, and we follow
+/// suit. Heuristic for "this is that case": both top rows have a single
+/// trader entry, both spline-sourced, same prefix.
+///
+/// Inputs must be pre-sorted: `bid_rows` descending by price, `ask_rows`
+/// ascending. Comparison goes through the same integer tick key as
+/// `group_by_price` so ULP-level FP drift between a spline's
+/// `mid - ticks_to_price(...)` and a CLOB's tick-aligned price doesn't hide
+/// a lock. Returns `(bid_skip, ask_skip)`.
+fn compute_merge_uncross_skip(
+    bid_rows: &[BookRow],
+    ask_rows: &[BookRow],
+    price_decimals: usize,
+) -> (usize, usize) {
+    let scale = 10_f64.powi(price_decimals as i32);
+    let key = |p: f64| (p * scale).round() as i64;
+    let mut bid_skip = 0usize;
+    let mut ask_skip = 0usize;
+    while let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) {
+        let bk = key(b.price);
+        let ak = key(a.price);
+        if bk < ak {
+            break;
+        }
+        if bk == ak && is_single_trader_spline_lock(b, a) {
+            break;
+        }
+        if b.size < a.size {
+            bid_skip += 1;
+        } else {
+            ask_skip += 1;
+        }
+    }
+    (bid_skip, ask_skip)
+}
+
+fn is_single_trader_spline_lock(b: &BookRow, a: &BookRow) -> bool {
+    if b.traders.len() != 1 || a.traders.len() != 1 {
+        return false;
+    }
+    let (b_trader, b_src) = &b.traders[0];
+    let (a_trader, a_src) = &a.traders[0];
+    matches!(b_src, RowSource::Spline) && matches!(a_src, RowSource::Spline) && b_trader == a_trader
 }
 
 /// Sets `has_hidden_fill` (and `iceberg_trader_prefix`) on each row whose
