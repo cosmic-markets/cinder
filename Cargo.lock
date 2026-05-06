@@ -1033,12 +1033,12 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "cosmic-cinder"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "arboard",
  "bs58",
  "chrono",
- "cosmic-phoenix-eternal-types",
+ "cosmic-phoenix-eternal-types 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossterm",
  "dotenvy",
  "futures-util",
@@ -1094,6 +1094,24 @@ dependencies = [
  "tracing-subscriber",
  "yellowstone-grpc-client",
  "yellowstone-grpc-proto",
+]
+
+[[package]]
+name = "cosmic-phoenix-eternal-types"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a598258ab17b78faf47ba35fc39e570fb3b72d1d5307ff302aa84d4add8138a3"
+dependencies = [
+ "anyhow",
+ "borsh 0.10.4",
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "sha2 0.10.9",
+ "solana-instruction",
+ "solana-pubkey",
+ "static_assertions",
+ "tracing",
 ]
 
 [[package]]
