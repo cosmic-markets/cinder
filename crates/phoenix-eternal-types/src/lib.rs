@@ -6,8 +6,8 @@
 //! # Example
 //!
 //! ```ignore
-//! use phoenix_eternal_types::program_ids;
-//! use phoenix_eternal_types::{GlobalConfiguration, discriminant};
+//! use cosmic_phoenix_eternal_types::program_ids;
+//! use cosmic_phoenix_eternal_types::{GlobalConfiguration, discriminant};
 //!
 //! // Derive the global configuration address
 //! let (global_config_key, _) = program_ids::get_global_config_address_default();

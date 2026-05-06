@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 use clap::{Parser, Subcommand};
-use phoenix_eternal_types::{
+use cosmic_phoenix_eternal_types::{
     discriminant::accounts as disc, events, program_ids, sokoban::Superblock,
     ActiveTraderBufferTree, DynamicTraderHeader, FIFORestingOrder, GlobalConfiguration,
     GlobalTraderIndexTree, MarketEvent, Orderbook, PerpAssetMapRef, SplineCollectionRef,
@@ -186,7 +186,7 @@ fn main() {
 
 fn init_tracing(command: &Commands) {
     let default_filter = match command {
-        Commands::VerifyEventDumps { .. } => "phoenix_eternal_types::events::parser=debug",
+        Commands::VerifyEventDumps { .. } => "cosmic_phoenix_eternal_types::events::parser=debug",
         _ => "info",
     };
 

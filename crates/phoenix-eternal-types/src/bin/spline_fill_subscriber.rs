@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
-use phoenix_eternal_types::events::{InnerInstructionContext, MarketEvent, MarketEventHeader};
-use phoenix_eternal_types::{program_ids, Side};
+use cosmic_phoenix_eternal_types::events::{InnerInstructionContext, MarketEvent, MarketEventHeader};
+use cosmic_phoenix_eternal_types::{program_ids, Side};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -475,7 +475,7 @@ async fn fetch_and_parse_tx(
     let parsed_ixs = flatten_inner_instructions(&inner_ixs, &account_keys)?;
 
     let market_events =
-        phoenix_eternal_types::events::parse_events_from_inner_instructions_with_context(
+        cosmic_phoenix_eternal_types::events::parse_events_from_inner_instructions_with_context(
             &program_id,
             &parsed_ixs,
         );
@@ -529,7 +529,7 @@ fn parse_yellowstone_tx(
     }
 
     let market_events =
-        phoenix_eternal_types::events::parse_events_from_inner_instructions_with_context(
+        cosmic_phoenix_eternal_types::events::parse_events_from_inner_instructions_with_context(
             &program_id,
             &parsed_ixs,
         );
