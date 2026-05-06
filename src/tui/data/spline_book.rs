@@ -395,6 +395,16 @@ where
     };
 
     for (order_id, order) in iter {
+        // Phoenix's sokoban tree retains an `OrderbookRestingOrder` slot until
+        // an explicit `evict`/`reduce` instruction sweeps it, so a fully-filled
+        // maker order can linger with `num_base_lots_remaining == 0` for tens
+        // of slots. Surfacing those as L2 rows produces a 0-size phantom level
+        // that beats every legitimate row in the merge-layer
+        // `b.size < a.size` peel comparison, sticking at the touch and
+        // displaying as a stale bid/ask exactly one tick from the real one.
+        if order.num_base_lots_remaining == 0 {
+            continue;
+        }
         let ticks = order_id.price_in_ticks;
         let trader_id = order.trader_position_id.trader_id.unwrap_or(0);
         let qty = base_lots_to_units(order.num_base_lots_remaining, bld);
@@ -487,7 +497,79 @@ pub fn parse_l2_book_from_market_account(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use phoenix_rise::types::accounts::TraderPositionId;
     use solana_pubkey::Pubkey as PhoenixPubkey;
+
+    fn resting(trader_id: u32, lots: u64) -> OrderbookRestingOrder {
+        OrderbookRestingOrder {
+            trader_position_id: TraderPositionId {
+                trader_id: Some(trader_id),
+                asset_id: 0,
+            },
+            initial_trade_size: lots,
+            num_base_lots_remaining: lots,
+            order_flags: 0,
+            optional_conditional_order_index: None,
+            expiration_offset: None,
+            initial_slot: 0,
+            prev_node: None,
+            next_node: None,
+            last_valid_slot: None,
+            reduce_only: false,
+            is_stop_loss: false,
+            is_stop_loss_direction: false,
+            is_conditional_order: false,
+        }
+    }
+
+    fn fifo(price_in_ticks: u64, order_sequence_number: u64) -> FifoOrderId {
+        FifoOrderId {
+            price_in_ticks,
+            order_sequence_number,
+        }
+    }
+
+    #[test]
+    fn aggregate_side_drops_zero_remaining_orders() {
+        // Phoenix retains an `OrderbookRestingOrder` slot until an explicit
+        // `evict`/`reduce` sweeps it, so a fully-filled order can linger
+        // with `num_base_lots_remaining == 0`. Such an entry must not
+        // surface as a 0-size L2 level — it would beat every real row in
+        // the merge-layer `b.size < a.size` peel and stick at the touch as
+        // a phantom one tick away from the actual best bid/ask.
+        // bid side, descending order (best first). Phantom at tick 8736
+        // sits ABOVE a real $87.35 (tick 8735) bid: classic "bid showing
+        // one tick high" symptom.
+        let id_phantom = fifo(8736, 1);
+        let order_phantom = resting(1, 0);
+        let id_real = fifo(8735, 2);
+        let order_real = resting(2, 100);
+        let entries = [(&id_phantom, &order_phantom), (&id_real, &order_real)];
+        // tick_size=1, bld=-2 → ticks_to_price(8735, 1, -2)
+        //   = 8735 * 1 * 10^-2 / 10^6 ... not the right shape; use
+        // bld=0 with tick_size such that 8735 ticks → $87.35. Easiest:
+        // tick_size = 10_000 (since QUOTE_LOT_DECIMALS = 6 and bld = 0
+        // gives price = ticks * tick_size / 1e6).
+        let bids = aggregate_side(entries.into_iter(), 10_000, 0, 8);
+        assert_eq!(bids.len(), 1, "phantom 0-lot row must not surface");
+        assert!((bids[0].price - 87.35).abs() < 1e-9);
+        assert!((bids[0].qty - 100.0).abs() < 1e-9);
+        assert_eq!(bids[0].trader_id, 2);
+    }
+
+    #[test]
+    fn aggregate_side_keeps_real_orders_at_phantom_tick() {
+        // Same tick has both a real order and a zero-remaining slot. The
+        // level should still be emitted, with only the real qty.
+        let id_phantom = fifo(8735, 1);
+        let order_phantom = resting(1, 0);
+        let id_real = fifo(8735, 2);
+        let order_real = resting(1, 50);
+        let entries = [(&id_phantom, &order_phantom), (&id_real, &order_real)];
+        let levels = aggregate_side(entries.into_iter(), 10_000, 0, 8);
+        assert_eq!(levels.len(), 1);
+        assert!((levels[0].qty - 50.0).abs() < 1e-9);
+    }
 
     /// Build a row with `region_depth = size`, i.e. modeling a single-tick
     /// region whose only row carries the entire region's remaining depth.

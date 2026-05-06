@@ -224,6 +224,91 @@ fn rebuild_merged_book_paints_iceberg_marker_on_outer_adjacent_row() {
 }
 
 #[test]
+fn rebuild_merged_book_uncrosses_spline_vs_clob_lock_at_touch() {
+    // Spline ask sits at $80 and a CLOB bid (different participant) rests at
+    // $80 too. That's a heterogeneous-source lock — would have executed if
+    // both were real resting orders. Per-source trim only sees one feed at
+    // a time, so the merge layer must peel one side.
+    let mut s = empty_state();
+    s.last_parsed = Some(ParsedSplineData {
+        bid_rows: vec![spline_row(0xA1, 79.0, 79.0, 1.0)],
+        ask_rows: vec![spline_row(0xA2, 80.0, 80.0, 1.0)],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![],
+        best_bid: Some(79.0),
+        best_ask: Some(80.0),
+        best_bid_size: Some(1.0),
+        best_ask_size: Some(1.0),
+    });
+    s.clob_bids = vec![(80.0, 5.0, "ZZZZ".to_string())];
+    s.clob_asks = vec![(81.0, 4.0, "YYYY".to_string())];
+    s.rebuild_merged_book("BTC", true, None, 2);
+    let bb = s.merged_book.best_bid.unwrap();
+    let ba = s.merged_book.best_ask.unwrap();
+    assert!(
+        bb < ba,
+        "expected uncrossed touch, got bid={bb} ask={ba}"
+    );
+    // Smaller side at the touch (spline ask, size 1) is peeled, leaving the
+    // larger CLOB bid at $80 visible and the spline's next ask above it.
+    assert_eq!(bb, 80.0);
+    assert_eq!(ba, 81.0);
+}
+
+#[test]
+fn rebuild_merged_book_preserves_single_spline_lock_at_mid() {
+    // One Phoenix spline (trader A1) quotes both sides at $80 — the
+    // start_offset=0 case. That's a legitimate 0-spread quote from one
+    // participant; the per-source trim preserves it to avoid the
+    // tied-size flicker documented in compute_cross_trim_skip, and the
+    // merge layer must follow suit when it's the only thing at the touch.
+    let mut s = empty_state();
+    s.last_parsed = Some(ParsedSplineData {
+        bid_rows: vec![spline_row(0xA1, 80.0, 80.0, 1.0)],
+        ask_rows: vec![spline_row(0xA1, 80.0, 80.0, 1.0)],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![],
+        best_bid: Some(80.0),
+        best_ask: Some(80.0),
+        best_bid_size: Some(1.0),
+        best_ask_size: Some(1.0),
+    });
+    s.rebuild_merged_book("BTC", false, None, 2);
+    assert_eq!(s.merged_book.best_bid, Some(80.0));
+    assert_eq!(s.merged_book.best_ask, Some(80.0));
+    assert_eq!(s.merged_book.spread, Some(0.0));
+}
+
+#[test]
+fn rebuild_merged_book_uncrosses_strictly_crossed_cross_source() {
+    // Strictly crossed across sources: spline bid at $81 vs CLOB ask at
+    // $80. Walk outward until uncrossed.
+    let mut s = empty_state();
+    s.last_parsed = Some(ParsedSplineData {
+        bid_rows: vec![
+            spline_row(0xA1, 81.0, 81.0, 1.0),
+            spline_row(0xA2, 79.0, 79.0, 3.0),
+        ],
+        ask_rows: vec![],
+        bid_iceberg_markers: vec![],
+        ask_iceberg_markers: vec![],
+        best_bid: Some(81.0),
+        best_ask: None,
+        best_bid_size: Some(1.0),
+        best_ask_size: None,
+    });
+    s.clob_asks = vec![(80.0, 4.0, "ZZZZ".to_string())];
+    s.rebuild_merged_book("BTC", true, None, 2);
+    let bb = s.merged_book.best_bid.unwrap();
+    let ba = s.merged_book.best_ask.unwrap();
+    assert!(bb < ba, "expected uncrossed, got bid={bb} ask={ba}");
+    // Spline bid at $81 (size 1) is the smaller side and gets peeled,
+    // leaving the spline's $79 bid as the new touch.
+    assert_eq!(bb, 79.0);
+    assert_eq!(ba, 80.0);
+}
+
+#[test]
 fn begin_market_switch_sets_pending_and_clears_book() {
     let mut s = empty_state();
     s.clob_bids = vec![(1.0, 1.0, "T".to_string())];
