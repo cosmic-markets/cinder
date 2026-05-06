@@ -5,6 +5,7 @@
 ![Rust](https://img.shields.io/badge/rust-2021-orange?logo=rust&logoColor=white)
 ![ratatui](https://img.shields.io/badge/ratatui-TUI-00ADD8?logo=terminal)
 ![Solana](https://img.shields.io/badge/Solana-RPC%20%2B%20WSS-9945FF?logo=solana)
+[![GitHub stars](https://img.shields.io/github/stars/cosmic-markets/cinder?style=flat&logo=github&label=stars)](https://github.com/cosmic-markets/cinder/stargazers)
 
 <p align="center">
   <img
@@ -14,6 +15,15 @@
 </p>
 
 > 🔥 **No Phoenix invite yet?** Sign up through Cinder's referral and qualify for the current **Phoenix fee discount** (10% off fees) — see [Referral Funding](#referral-funding) below, or visit [cosmic.markets/phoenix/trade](https://cosmic.markets/phoenix/trade) to register with the `COSMIC` code.
+
+## Features
+
+- **Markets** — Active and PostOnly Phoenix markets from the HTTP API, auto-refreshed in the background about once a minute.
+- **Spline depth** — Subscribes to each market’s on-chain spline account via Solana WebSocket (`accountSubscribe`) and draws ladder-style liquidity from live updates.
+- **CLOB depth (optional)** — Merges in FIFO L2 levels from the market orderbook account for a fuller book; enable it in user config.
+- **Top positions** — Periodically reads the protocol-wide Active Trader Buffer; open the leaderboard-style modal with **`T`**.
+- **Trading and wallet** — Market, limit, and stop-style flows with confirmation dialogs; with a keypair loaded, deposit and withdraw from the TUI.
+- **Languages** — Built-in UI copy for English, Chinese, Spanish, and Russian.
 
 ## Install
 
@@ -25,19 +35,6 @@ cinder
 ```
 
 Ensure `~/.cargo/bin` (or `$CARGO_HOME/bin` if you set `CARGO_HOME`) is on your `PATH` so the shell can find `cinder` after install.
-
-Configure [environment variables](#environment) (at minimum a good `RPC_URL` / `SOLANA_RPC_URL` is recommended) before launching, or rely on Cinder’s defaults as described below.
-
-## Features
-
-- **Markets** — Loads Active / PostOnly markets from the Phoenix HTTP API; background refresh about every 60s.
-- **Spline Liquidity** — `accountSubscribe` to the market’s on-chain spline account for ladder-style liquidity.
-- **CLOB Liquidity** — Optional merge of FIFO L2 levels from the market orderbook account (toggle in user config).
-- **Top positions** — Periodic scan of the protocol-wide Active Trader Buffer for a leaderboard-style modal (`T`).
-- **Trading** — Market / limit / stop-style flows with confirmation modals; deposits and withdrawals when a wallet is loaded.
-- **i18n** — UI strings in English, Chinese, Spanish, and Russian.
-
-Quit with **`q`** (confirm) or **Ctrl+C**.
 
 ## Architecture
 
