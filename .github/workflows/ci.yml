@@ -37,7 +37,7 @@ jobs:
       - name: Vendored crate all-features test
         run: cargo test --locked --manifest-path crates/phoenix-eternal-types/Cargo.toml --all-features
       - name: Package metadata smoke
-        run: cargo package -p phoenix-eternal-types --locked --no-verify
+        run: cargo package -p cosmic-phoenix-eternal-types --locked --no-verify
       - name: Release build
         run: cargo build --workspace --release --locked
       - name: Docker build
