@@ -1,9 +1,9 @@
 [package]
 authors      = ["Cosmic Markets"]
-categories   = ["command-line-utilities", "finance", "cryptography::cryptocurrencies"]
+categories   = ["command-line-utilities", "finance", "cryptography::cryptocurrencies", "solana"]
 description  = "Rust terminal UI for Phoenix perpetuals on Solana"
 edition      = "2021"
-homepage     = "https://cosmic.markets/phoenix/trade"
+homepage     = "https://cinder.trading"
 keywords     = ["solana", "phoenix", "trading", "tui", "perpetuals"]
 license      = "MIT"
 name         = "cosmic-cinder"
@@ -11,7 +11,7 @@ publish      = true
 readme       = "docs/README.md"
 repository   = "https://github.com/cosmic-markets/cinder"
 rust-version = "1.94"
-version      = "0.1.13"
+version      = "0.1.14"
 
 # Keep the on-disk crate ident (`cinder::run`) and CLI binary name decoupled from the
 # crates.io package name so existing imports and the published `cinder` command stay stable.
