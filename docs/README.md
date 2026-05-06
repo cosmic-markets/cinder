@@ -1,6 +1,6 @@
 # Cinder
 
-**Cinder** is a Rust terminal UI for [Phoenix](https://phoenix.trade) perpetuals on Solana: live charts, a merged on-chain **spline** + optional **CLOB** order book, market and wallet flows, and signed transactions from the shell.
+**Cinder** is a Rust-based trading terminal for [Phoenix](https://phoenix.trade) perpetuals on Solana: live charts, a merged on-chain **spline** + optional **CLOB** order book, market and wallet flows, trading, and signed transactions from the shell.
 
 ![Rust](https://img.shields.io/badge/rust-2021-orange?logo=rust&logoColor=white)
 ![ratatui](https://img.shields.io/badge/ratatui-TUI-00ADD8?logo=terminal)
@@ -18,7 +18,7 @@
 
 > 🔥 **No Phoenix invite yet?** Sign up through Cinder's referral and qualify for the current **Phoenix fee discount** (10% off fees) — see [Referral Funding](#referral-funding) below, or visit [cosmic.markets/phoenix/trade](https://cosmic.markets/phoenix/trade) to register with the `COSMIC` code.
 
-## Features
+## ✨ Features
 
 - **Markets** — Active and PostOnly Phoenix markets from the HTTP API, auto-refreshed in the background about once a minute.
 - **Spline depth** — Subscribes to each market’s on-chain spline account via Solana WebSocket (`accountSubscribe`) and draws ladder-style liquidity from live updates.
@@ -27,9 +27,11 @@
 - **Trading and wallet** — Market, limit, and stop-style flows with confirmation dialogs; with a keypair loaded, deposit and withdraw from the TUI.
 - **Languages** — Built-in UI copy for English, Chinese, Spanish, and Russian.
 
-## Install
+## 📦 Install
 
-The easiest way to run Cinder is from [crates.io](https://crates.io/crates/cosmic-cinder). The published crate is named **`cosmic-cinder`**; Cargo installs the **`cinder`** executable (same name as when you build from this repository).
+The easiest way to run Cinder is from [crates.io](https://crates.io/crates/cosmic-cinder). The published crate is named **`cosmic-cinder`**; Cargo installs the **`cinder`** executable (same name as when you build from this repository). If you prefer not to use Cargo, download pre-built Windows and Linux binaries from [GitHub Releases](https://github.com/cosmic-markets/cinder/releases).
+
+To use Cargo, you need the Rust toolchain: install it with **[rustup](https://rustup.rs/)** (official installer; includes `cargo` and `rustc` for Windows, macOS, and Linux). Then run:
 
 ```bash
 cargo install cosmic-cinder
@@ -129,7 +131,7 @@ Trading perpetual futures is high-risk and can result in the rapid and total los
 Thanks to the team at **Ellipsis Labs** for building [Phoenix](https://phoenix.trade). Cinder is an independent, open-source TUI client and is not affiliated with, sponsored by, or endorsed by Ellipsis Labs. "Phoenix" and any related names, logos, or marks are trademarks of their respective owners and are used here only to identify the protocol Cinder interoperates with.
 
 ## Donations
-❤️ SOL donations are greatly appreciated! Send to: `cosmic.sol`
+❤️ SOL donations: `cosmic.sol`
 
 ## License
 MIT
