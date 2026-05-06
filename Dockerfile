@@ -4,27 +4,18 @@ FROM rust:1.94-bookworm AS builder
 WORKDIR /app
 
 # 1) Pre-compile dependencies against a dummy crate so a code-only change
-#    reuses the ~200-crate `target/` cache layer instead of rebuilding from
-#    scratch (`cargo fetch` alone caches downloads but not compilation).
+#    reuses the `target/` cache layer instead of rebuilding from scratch
+#    (`cargo fetch` alone caches downloads but not compilation).
 COPY Cargo.toml Cargo.lock ./
-COPY crates/phoenix-eternal-types/Cargo.toml crates/phoenix-eternal-types/Cargo.toml
-RUN mkdir -p src crates/phoenix-eternal-types/src \
- && echo 'fn main() {}' > src/main.rs \
- && : > src/lib.rs \
- && : > crates/phoenix-eternal-types/src/lib.rs \
- && cargo build --release --locked \
- && rm -rf src crates/phoenix-eternal-types/src \
-            target/release/deps/cinder-* \
-            target/release/deps/libcinder-* \
-            target/release/deps/phoenix_eternal_types-* \
-            target/release/deps/libphoenix_eternal_types-* \
-            target/release/cinder \
-            target/release/.fingerprint/cinder-* \
-            target/release/.fingerprint/phoenix-eternal-types-*
+RUN mkdir -p src \
+    && echo 'fn main() {}' > src/main.rs \
+    && : > src/lib.rs \
+    && cargo build --release --locked \
+    && rm -rf src target/release/deps/cinder-* target/release/deps/libcinder-* target/release/cinder target/release/.fingerprint/cinder-*
 
-# 2) Compile the actual workspace crates against the cached dependency graph.
+# 2) Compile the real crate against the cached dependency graph (includes
+#    `cosmic-phoenix-eternal-types` from crates.io).
 COPY src/ src/
-COPY crates/phoenix-eternal-types/ crates/phoenix-eternal-types/
 RUN cargo build --release --locked --offline
 
 # ---------------------------------------------------------------------------
