@@ -23,10 +23,6 @@ path = "src/lib.rs"
 name = "cinder"
 path = "src/main.rs"
 
-[workspace]
-members  = [".", "crates/phoenix-eternal-types"]
-resolver = "2"
-
 [dependencies]
 # Phoenix and all Solana client I/O (`solana-rpc-client`, `solana-pubsub-client`) use the Agave 2.3.x wire stack so
 # HTTP RPC and WebSocket subscriptions resolve to one `solana-rpc-client-types` / `solana-commitment-config` graph.
