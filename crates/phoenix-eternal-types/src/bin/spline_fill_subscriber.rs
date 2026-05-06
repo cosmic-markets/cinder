@@ -1,7 +1,9 @@
 use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
-use cosmic_phoenix_eternal_types::events::{InnerInstructionContext, MarketEvent, MarketEventHeader};
+use cosmic_phoenix_eternal_types::events::{
+    InnerInstructionContext, MarketEvent, MarketEventHeader,
+};
 use cosmic_phoenix_eternal_types::{program_ids, Side};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_pubkey::Pubkey;
