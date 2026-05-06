@@ -245,10 +245,7 @@ fn rebuild_merged_book_uncrosses_spline_vs_clob_lock_at_touch() {
     s.rebuild_merged_book("BTC", true, None, 2);
     let bb = s.merged_book.best_bid.unwrap();
     let ba = s.merged_book.best_ask.unwrap();
-    assert!(
-        bb < ba,
-        "expected uncrossed touch, got bid={bb} ask={ba}"
-    );
+    assert!(bb < ba, "expected uncrossed touch, got bid={bb} ask={ba}");
     // Smaller side at the touch (spline ask, size 1) is peeled, leaving the
     // larger CLOB bid at $80 visible and the spline's next ask above it.
     assert_eq!(bb, 80.0);

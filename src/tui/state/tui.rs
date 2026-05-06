@@ -194,8 +194,7 @@ impl TuiState {
         apply_iceberg_markers(&mut bid_rows, &bid_iceberg_markers, price_decimals);
         apply_iceberg_markers(&mut ask_rows, &ask_iceberg_markers, price_decimals);
 
-        let (bid_skip, ask_skip) =
-            compute_merge_uncross_skip(&bid_rows, &ask_rows, price_decimals);
+        let (bid_skip, ask_skip) = compute_merge_uncross_skip(&bid_rows, &ask_rows, price_decimals);
         if bid_skip > 0 {
             bid_rows.drain(0..bid_skip);
         }
