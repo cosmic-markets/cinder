@@ -35,6 +35,7 @@ pub fn submit_close_all_positions(
     keypair: Arc<Keypair>,
     ctx: Arc<TxContext>,
     entries: Vec<ClosePositionEntry>,
+    positions_requested: usize,
     active_symbol: String,
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
@@ -46,6 +47,8 @@ pub fn submit_close_all_positions(
         if total == 0 {
             return;
         }
+        let mut built_symbols: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let _ = tx_status.send(TxStatusMsg::SetStatus {
             title: format!("{} {} {}…", s.tx_building_close_all, total, s.st_position_s),
             detail: String::new(),
@@ -112,6 +115,7 @@ pub fn submit_close_all_positions(
                 "{} {} {}",
                 s.tx_close_label, entry.display_size, entry.symbol
             );
+            built_symbols.insert(entry.symbol.clone());
             for ix in mapped {
                 all_ixs.push((ix, label.clone(), entry.symbol.clone(), entry.close_side));
             }
@@ -282,11 +286,17 @@ pub fn submit_close_all_positions(
             }
         }
 
+        let closed = built_symbols.len();
+        let title = if closed < positions_requested {
+            format!(
+                "{} ({}/{} {})",
+                s.tx_close_all_complete, closed, positions_requested, s.st_position_s
+            )
+        } else {
+            format!("{} ({} {})", s.tx_close_all_complete, closed, s.st_position_s)
+        };
         let _ = tx_status.send(TxStatusMsg::SetStatus {
-            title: format!(
-                "{} ({} {})",
-                s.tx_close_all_complete, total, s.st_position_s
-            ),
+            title,
             detail: last_sig,
         });
     });

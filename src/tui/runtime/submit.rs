@@ -13,14 +13,19 @@ use super::super::tx::{
 };
 use super::input::num_base_lots_for_close;
 
-/// Map a synthetic stop-trigger row's side back to its `execution_direction`.
-/// Placement uses Long→GreaterThan / Short→LessThan (see
-/// `submit_stop_market_order`); cancellation must match.
+/// Map position side to on-chain stop trigger direction (long SL → LessThan).
 fn stop_direction_for(side: TradingSide) -> phoenix_rise::Direction {
     match side {
         TradingSide::Long => phoenix_rise::Direction::LessThan,
         TradingSide::Short => phoenix_rise::Direction::GreaterThan,
     }
+}
+
+fn stop_cancel_direction(
+    side: TradingSide,
+    conditional_trigger_direction: Option<phoenix_rise::Direction>,
+) -> Option<phoenix_rise::Direction> {
+    conditional_trigger_direction.or_else(|| Some(stop_direction_for(side)))
 }
 
 fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
@@ -100,6 +105,7 @@ pub(super) fn execute_confirmed_action(
                 num_base_lots,
                 display_size: *size,
             }],
+            1,
             cfg.symbol.clone(),
             tx_status.clone(),
         );
@@ -112,35 +118,61 @@ pub(super) fn execute_confirmed_action(
             state.trading.set_status_title(strings().st_no_positions);
             return;
         }
-        let count = positions.len();
-        state.trading.set_status_title(format!(
-            "{} {} {}\u{2026}",
-            strings().st_closing,
-            count,
-            strings().st_position_s
-        ));
-        let entries: Vec<ClosePositionEntry> = positions
-            .iter()
-            .filter_map(|pos| {
-                let market_cfg = configs.get(&pos.symbol)?;
-                let num_base_lots =
-                    num_base_lots_for_close(market_cfg, pos.size, pos.position_size_raw).ok()?;
-                Some(ClosePositionEntry {
-                    symbol: pos.symbol.clone(),
-                    subaccount_index: pos.subaccount_index,
-                    close_side: pos.side.toggle(),
-                    num_base_lots,
-                    display_size: pos.size,
-                })
-            })
-            .collect();
+        let s = strings();
+        let mut entries: Vec<ClosePositionEntry> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        for pos in &positions {
+            let Some(market_cfg) = configs.get(&pos.symbol) else {
+                skipped.push(format!("{}: {}", pos.symbol, s.st_no_market_cfg));
+                continue;
+            };
+            let num_base_lots = match num_base_lots_for_close(
+                market_cfg,
+                pos.size,
+                pos.position_size_raw,
+            ) {
+                Ok(n) => n,
+                Err(e) => {
+                    skipped.push(format!("{}: {}", pos.symbol, e));
+                    continue;
+                }
+            };
+            entries.push(ClosePositionEntry {
+                symbol: pos.symbol.clone(),
+                subaccount_index: pos.subaccount_index,
+                close_side: pos.side.toggle(),
+                num_base_lots,
+                display_size: pos.size,
+            });
+        }
         if entries.is_empty() {
-            state
-                .trading
-                .set_status_title(strings().st_no_positions_matched);
+            state.trading.set_status_title(strings().st_no_positions_matched);
             return;
         }
-        submit_close_all_positions(kp, ctx, entries, cfg.symbol.clone(), tx_status.clone());
+        if !skipped.is_empty() {
+            state.trading.set_status_title(format!(
+                "{} {}/{} (skipped: {})",
+                s.st_closing,
+                entries.len(),
+                positions.len(),
+                skipped.join(", ")
+            ));
+        } else {
+            state.trading.set_status_title(format!(
+                "{} {} {}\u{2026}",
+                s.st_closing,
+                entries.len(),
+                s.st_position_s
+            ));
+        }
+        submit_close_all_positions(
+            kp,
+            ctx,
+            entries,
+            positions.len(),
+            cfg.symbol.clone(),
+            tx_status.clone(),
+        );
         return;
     }
 
@@ -178,7 +210,7 @@ pub(super) fn execute_confirmed_action(
                 order_sequence_number: *order_sequence_number,
                 is_stop_loss: *is_stop_loss,
                 stop_direction: if *is_stop_loss {
-                    Some(stop_direction_for(*side))
+                    stop_cancel_direction(*side, *conditional_trigger_direction)
                 } else {
                     None
                 },
@@ -213,7 +245,7 @@ pub(super) fn execute_confirmed_action(
                 order_sequence_number: o.order_sequence_number,
                 is_stop_loss: o.is_stop_loss,
                 stop_direction: if o.is_stop_loss {
-                    Some(stop_direction_for(o.side))
+                    stop_cancel_direction(o.side, o.conditional_trigger_direction)
                 } else {
                     None
                 },
@@ -482,5 +514,27 @@ pub(super) fn cancel_message(
             )
         }
         PendingAction::CancelAllOrders => s.st_cancelled_cancel_all.to_string(),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use phoenix_rise::Direction;
+    use crate::tui::trading::TradingSide;
+
+    #[test]
+    fn stop_cancel_direction_prefers_stored_trigger() {
+        assert_eq!(
+            stop_cancel_direction(TradingSide::Short, Some(Direction::LessThan)),
+            Some(Direction::LessThan)
+        );
+    }
+
+    #[test]
+    fn stop_direction_for_long_position_side() {
+        assert_eq!(stop_direction_for(TradingSide::Long), Direction::LessThan);
+        assert_eq!(stop_direction_for(TradingSide::Short), Direction::GreaterThan);
     }
 }
