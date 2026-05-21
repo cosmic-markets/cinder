@@ -19,6 +19,15 @@ fn trigger_side_to_trading_side(side: StopLossTradeSide) -> TradingSide {
     }
 }
 
+fn legacy_stop_trigger_direction(side: phoenix_rise::types::Side) -> Direction {
+    // WS trigger.side is execution side when the stop fires (Bid closes short, Ask closes long).
+    // cancel_stop_loss is keyed by trigger direction (LessThan for long SL, GreaterThan for short).
+    match side {
+        phoenix_rise::types::Side::Bid => Direction::GreaterThan,
+        phoenix_rise::types::Side::Ask => Direction::LessThan,
+    }
+}
+
 fn trigger_direction_to_phoenix(direction: StopLossDirection) -> Direction {
     match direction {
         StopLossDirection::GreaterThan => Direction::GreaterThan,
@@ -204,7 +213,7 @@ fn build_order_rows(
             reduce_only: true,
             is_stop_loss: true,
             conditional_order_index: None,
-            conditional_trigger_direction: None,
+            conditional_trigger_direction: Some(legacy_stop_trigger_direction(sl.trigger.side)),
         });
     }
 

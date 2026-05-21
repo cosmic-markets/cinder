@@ -177,7 +177,6 @@ pub(in crate::tui::runtime) fn handle_normal_key(
                     ));
                     return KeyAction::Redraw;
                 }
-                // Drop any non-positive/non-finite price by falling back to Market.
                 let kind = match state.trading.order_kind {
                     OrderKind::Limit { price } if price.is_finite() && price > 0.0 => {
                         OrderKind::Limit { price }
@@ -185,7 +184,13 @@ pub(in crate::tui::runtime) fn handle_normal_key(
                     OrderKind::StopMarket { trigger } if trigger.is_finite() && trigger > 0.0 => {
                         OrderKind::StopMarket { trigger }
                     }
-                    _ => OrderKind::Market,
+                    OrderKind::Market => OrderKind::Market,
+                    OrderKind::Limit { .. } | OrderKind::StopMarket { .. } => {
+                        state
+                            .trading
+                            .set_status_title(strings().st_invalid_price);
+                        return KeyAction::Redraw;
+                    }
                 };
                 state.trading.input_mode =
                     InputMode::Confirming(PendingAction::PlaceOrder { side, size, kind });
