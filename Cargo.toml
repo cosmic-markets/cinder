@@ -1,6 +1,6 @@
 [package]
 authors      = ["Cosmic Markets"]
-categories   = ["command-line-utilities", "finance", "cryptography::cryptocurrencies", "solana"]
+categories   = ["command-line-utilities", "finance", "cryptography::cryptocurrencies"]
 description  = "Rust terminal UI for Phoenix perpetuals on Solana"
 edition      = "2021"
 homepage     = "https://cinder.trading"
