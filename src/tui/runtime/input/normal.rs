@@ -186,9 +186,7 @@ pub(in crate::tui::runtime) fn handle_normal_key(
                     }
                     OrderKind::Market => OrderKind::Market,
                     OrderKind::Limit { .. } | OrderKind::StopMarket { .. } => {
-                        state
-                            .trading
-                            .set_status_title(strings().st_invalid_price);
+                        state.trading.set_status_title(strings().st_invalid_price);
                         return KeyAction::Redraw;
                     }
                 };

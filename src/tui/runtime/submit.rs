@@ -126,17 +126,14 @@ pub(super) fn execute_confirmed_action(
                 skipped.push(format!("{}: {}", pos.symbol, s.st_no_market_cfg));
                 continue;
             };
-            let num_base_lots = match num_base_lots_for_close(
-                market_cfg,
-                pos.size,
-                pos.position_size_raw,
-            ) {
-                Ok(n) => n,
-                Err(e) => {
-                    skipped.push(format!("{}: {}", pos.symbol, e));
-                    continue;
-                }
-            };
+            let num_base_lots =
+                match num_base_lots_for_close(market_cfg, pos.size, pos.position_size_raw) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        skipped.push(format!("{}: {}", pos.symbol, e));
+                        continue;
+                    }
+                };
             entries.push(ClosePositionEntry {
                 symbol: pos.symbol.clone(),
                 subaccount_index: pos.subaccount_index,
@@ -146,7 +143,9 @@ pub(super) fn execute_confirmed_action(
             });
         }
         if entries.is_empty() {
-            state.trading.set_status_title(strings().st_no_positions_matched);
+            state
+                .trading
+                .set_status_title(strings().st_no_positions_matched);
             return;
         }
         if !skipped.is_empty() {
@@ -517,12 +516,11 @@ pub(super) fn cancel_message(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use phoenix_rise::Direction;
     use crate::tui::trading::TradingSide;
+    use phoenix_rise::Direction;
 
     #[test]
     fn stop_cancel_direction_prefers_stored_trigger() {
@@ -535,6 +533,9 @@ mod tests {
     #[test]
     fn stop_direction_for_long_position_side() {
         assert_eq!(stop_direction_for(TradingSide::Long), Direction::LessThan);
-        assert_eq!(stop_direction_for(TradingSide::Short), Direction::GreaterThan);
+        assert_eq!(
+            stop_direction_for(TradingSide::Short),
+            Direction::GreaterThan
+        );
     }
 }

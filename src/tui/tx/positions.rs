@@ -47,8 +47,7 @@ pub fn submit_close_all_positions(
         if total == 0 {
             return;
         }
-        let mut built_symbols: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut built_symbols: std::collections::HashSet<String> = std::collections::HashSet::new();
         let _ = tx_status.send(TxStatusMsg::SetStatus {
             title: format!("{} {} {}…", s.tx_building_close_all, total, s.st_position_s),
             detail: String::new(),
@@ -293,7 +292,10 @@ pub fn submit_close_all_positions(
                 s.tx_close_all_complete, closed, positions_requested, s.st_position_s
             )
         } else {
-            format!("{} ({} {})", s.tx_close_all_complete, closed, s.st_position_s)
+            format!(
+                "{} ({} {})",
+                s.tx_close_all_complete, closed, s.st_position_s
+            )
         };
         let _ = tx_status.send(TxStatusMsg::SetStatus {
             title,
