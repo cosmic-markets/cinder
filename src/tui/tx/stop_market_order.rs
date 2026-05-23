@@ -21,6 +21,7 @@ use super::error::{
     format_not_confirmed_error, log_tx_error, not_confirmed_is_onchain_execution_failure,
     parse_phoenix_tx_error,
 };
+use super::flight::wrap_order_ixs;
 
 /// Asynchronously constructs, signs, and dispatches a stop-market order onto
 /// the network.
@@ -121,6 +122,17 @@ pub fn submit_stop_market_order(
             }
         };
         ixs.append(&mut bracket_ixs);
+
+        let ixs = match wrap_order_ixs(ixs, ctx.authority_v2) {
+            Ok(ixs) => ixs,
+            Err(e) => {
+                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
+                    detail: e,
+                });
+                return;
+            }
+        };
 
         let mut cu_mul = 1u32;
         if prepended_conditional_create {

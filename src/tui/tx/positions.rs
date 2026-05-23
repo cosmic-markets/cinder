@@ -17,6 +17,7 @@ use super::error::{
     format_not_confirmed_error, log_tx_error, not_confirmed_is_onchain_execution_failure,
     parse_phoenix_tx_error,
 };
+use super::flight::wrap_order_ixs;
 
 /// Describes a single position to close, carrying everything needed to build
 /// its reduce-only market order instruction.
@@ -109,7 +110,16 @@ pub fn submit_close_all_positions(
                     continue;
                 }
             };
-            let mapped = phoenix_ixs;
+            let mapped = match wrap_order_ixs(phoenix_ixs, ctx.authority_v2) {
+                Ok(ixs) => ixs,
+                Err(e) => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("Flight wrap error (close {}): {}", entry.symbol, e),
+                        detail: String::new(),
+                    });
+                    continue;
+                }
+            };
             let label = format!(
                 "{} {} {}",
                 s.tx_close_label, entry.display_size, entry.symbol

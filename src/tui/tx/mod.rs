@@ -12,6 +12,7 @@ pub mod stop_market_order;
 
 mod compute_budget;
 mod error;
+mod flight;
 mod isolated_margin;
 
 pub use cancel::{submit_cancel_orders, CancelOrderEntry};

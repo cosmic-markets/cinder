@@ -15,6 +15,7 @@ use super::error::{
     format_not_confirmed_error, log_tx_error, not_confirmed_is_onchain_execution_failure,
     parse_phoenix_tx_error,
 };
+use super::flight::wrap_order_ixs;
 use super::isolated_margin::estimate_collateral_transfer;
 
 /// Asynchronously constructs, signs, and dispatches a limit order payload
@@ -87,6 +88,16 @@ pub fn submit_limit_order(
                     let _ = tx_status.send(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                         detail,
+                    });
+                    return;
+                }
+            };
+            ixs = match wrap_order_ixs(ixs, ctx.authority_v2) {
+                Ok(ixs) => ixs,
+                Err(e) => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
+                        detail: e,
                     });
                     return;
                 }
@@ -215,6 +226,17 @@ pub fn submit_limit_order(
                 let _ = tx_status.send(TxStatusMsg::SetStatus {
                     title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                     detail: format!("{}", e),
+                });
+                return;
+            }
+        };
+
+        let ixs = match wrap_order_ixs(ixs, ctx.authority_v2) {
+            Ok(ixs) => ixs,
+            Err(e) => {
+                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
+                    detail: e,
                 });
                 return;
             }
