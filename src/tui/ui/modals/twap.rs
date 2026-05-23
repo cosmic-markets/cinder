@@ -23,9 +23,9 @@ pub(in crate::tui::ui) fn render_twap_modal(
     let s = strings();
     let draft = &trading.twap_draft;
     let has_error = draft.error.is_some();
-    // Header block (intro + summary) + spacer + 6 form rows, plus an
+    // Header block (intro + summary) + spacer + 7 form rows, plus an
     // optional 2-row error tail. +2 for the top/bottom border.
-    let desired_h: u16 = if has_error { 13 } else { 11 };
+    let desired_h: u16 = if has_error { 14 } else { 12 };
     let popup_h: u16 = desired_h.min(area.height.saturating_sub(2));
     let popup_w: u16 = 72.min(area.width.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
@@ -128,6 +128,7 @@ pub(in crate::tui::ui) fn render_twap_modal(
         Constraint::Length(1), // total time header
         Constraint::Length(1), // hours
         Constraint::Length(1), // minutes
+        Constraint::Length(1), // seconds
     ];
     if has_error {
         constraints.push(Constraint::Length(1)); // spacer before error
@@ -236,6 +237,17 @@ pub(in crate::tui::ui) fn render_twap_modal(
         ),
         draft.selected_field == 4,
     );
+    render_form_row(
+        f,
+        rows[9],
+        s.twap_field_secs,
+        editable_value_span(
+            &draft.duration_sec_buffer,
+            draft.selected_field == 5,
+            s.twap_unit_sec,
+        ),
+        draft.selected_field == 5,
+    );
 
     if has_error {
         let err = draft.error.as_deref().unwrap_or("");
@@ -247,7 +259,7 @@ pub(in crate::tui::ui) fn render_twap_modal(
                 ),
                 Span::styled(err.to_string(), Style::default().fg(Color::LightRed)),
             ])),
-            rows[10],
+            rows[11],
         );
     }
 }
@@ -303,11 +315,11 @@ fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
     let size: Option<f64> = draft.size_buffer.parse::<f64>().ok().filter(|v| *v > 0.0);
     let hours: u32 = draft.duration_hour_buffer.parse::<u32>().unwrap_or(0);
     let mins: u32 = draft.duration_min_buffer.parse::<u32>().unwrap_or(0);
-    let total_minutes = hours * 60 + mins;
-    if let (Some(size), true) = (size, total_minutes >= 1) {
-        let slice_count = total_minutes;
+    let secs: u32 = draft.duration_sec_buffer.parse::<u32>().unwrap_or(0);
+    let total_seconds: u32 = hours * 3600 + mins * 60 + secs;
+    if let (Some(size), true) = (size, total_seconds >= 1) {
+        let (slice_count, interval_sec) = derive_schedule(hours, mins, secs);
         let slice_size = size / slice_count as f64;
-        let interval_sec = (total_minutes as f64 * 60.0) / slice_count as f64;
         format!(
             "{} {} {} {} ({:.4} {}/{}, {:.0}{} {})",
             s.twap_summary_prefix,
@@ -326,6 +338,20 @@ fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
     }
 }
 
+/// Cadence rule (must stay in lockstep with the validation in
+/// `runtime::input::twap`): if a seconds component is supplied (or the
+/// total is sub-minute), fire one slice per second; otherwise fall back
+/// to the conventional one-slice-per-minute cadence.
+fn derive_schedule(hours: u32, mins: u32, secs: u32) -> (u32, u32) {
+    let total_seconds = hours * 3600 + mins * 60 + secs;
+    let total_minutes = hours * 60 + mins;
+    if secs > 0 || total_minutes == 0 {
+        (total_seconds, 1)
+    } else {
+        (total_minutes, 60)
+    }
+}
+
 /// "Bots" modal (toggled with [b]).
 pub(in crate::tui::ui) fn render_bots_modal(
     f: &mut Frame,
@@ -334,7 +360,9 @@ pub(in crate::tui::ui) fn render_bots_modal(
     active_symbol: &str,
 ) {
     let row_count = view.bots.len().max(1) as u16;
-    let max_width: u16 = 110;
+    // Sized to the sum of the fixed column widths below + spacing + borders.
+    // Wider than this just leaves dead space after the State column.
+    let max_width: u16 = 79;
     let popup_w = max_width.min(area.width.saturating_sub(4));
     let popup_h = (row_count + 6).min(area.height.saturating_sub(2));
 
@@ -497,11 +525,11 @@ pub(in crate::tui::ui) fn render_bots_modal(
         Constraint::Length(13),
         Constraint::Length(6),
         Constraint::Length(6),
-        Constraint::Length(12),
+        Constraint::Length(8),
         Constraint::Length(9),
         Constraint::Length(10),
         Constraint::Length(10),
-        Constraint::Min(0),
+        Constraint::Length(8),
     ];
     let table = Table::new(table_rows, widths)
         .header(header)
