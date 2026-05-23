@@ -28,6 +28,7 @@ pub(super) fn render_actions(
                 OrderKind::Market => tp_s.mkt,
                 OrderKind::Limit { .. } => tp_s.lmt,
                 OrderKind::StopMarket { .. } => tp_s.stp,
+                OrderKind::Twap => tp_s.twap,
             };
             let msg = format!(" {} {} {} {}? ", tp_s.confirm, side_lbl, size, kind_lbl);
             let bg = side.color();
@@ -167,10 +168,13 @@ pub(super) fn render_actions(
             f.render_widget(Paragraph::new(line), rows[2]);
         }
         _ => {
+            let is_twap = matches!(trading.order_kind, OrderKind::Twap);
             let verb = if is_limit {
                 tp_s.limit_order
             } else if is_stop {
                 tp_s.stop_order
+            } else if is_twap {
+                tp_s.twap_order
             } else {
                 tp_s.market_order
             };

@@ -58,33 +58,31 @@ pub(super) fn render_status_tray(
     ])
     .left_aligned();
 
-    // Hotkey row labels — full forms by default, with compact fallbacks for
-    // narrow terminals (e.g. 80x24) where the full row would overflow and
-    // truncate. Chinese labels are mostly already short; only the four-glyph
-    // "top positions" needs squeezing. Russian uses short Cyrillic abbrevs.
-    let full_labels: [&str; 6] = [
-        s.orders,
-        s.positions,
-        s.top_positions_title,
-        s.liquidations_title,
-        s.markets,
-        s.quit,
-    ];
-    let short_labels: [&str; 6] = match super::super::config::current_user_config().language {
+    // Compact hotkey row labels. Always-short form per the project style —
+    // the previous full/short fallback was dropped because the full row
+    // overflowed at common widths and the short row reads cleanly enough.
+    let labels: [&str; 7] = match super::super::config::current_user_config().language {
         super::super::config::Language::Chinese => [
             s.orders,
             s.positions,
             "顶级",
-            s.liquidations_title,
+            "强平",
+            s.bots_title,
             s.markets,
             s.quit,
         ],
-        super::super::config::Language::English => ["ord", "pos", "top", "liq", "mkt", "quit"],
-        super::super::config::Language::Russian => ["орд", "поз", "топ", "лик", "рын", "вых"],
-        super::super::config::Language::Spanish => ["ord", "pos", "top", "liq", "mer", "sal"],
+        super::super::config::Language::English => {
+            ["orders", "pos", "top", "liqs", "bots", "mkts", "quit"]
+        }
+        super::super::config::Language::Russian => {
+            ["орд", "поз", "топ", "лик", "боты", "рын", "вых"]
+        }
+        super::super::config::Language::Spanish => {
+            ["ord", "pos", "top", "liqs", "bots", "mer", "sal"]
+        }
     };
 
-    let build_quit_hint = |labels: &[&str; 6]| -> Line<'static> {
+    let quit_hint = {
         let key_style = Style::default()
             .fg(Color::Cyan)
             .add_modifier(Modifier::BOLD);
@@ -98,21 +96,14 @@ pub(super) fn render_status_tray(
             Span::styled(format!(" {} ", labels[2]), label_style),
             Span::styled("[F]", key_style),
             Span::styled(format!(" {} ", labels[3]), label_style),
-            Span::styled("[m]", key_style),
+            Span::styled("[b]", key_style),
             Span::styled(format!(" {} ", labels[4]), label_style),
-            Span::styled("[q]", key_style),
+            Span::styled("[m]", key_style),
             Span::styled(format!(" {} ", labels[5]), label_style),
+            Span::styled("[q]", key_style),
+            Span::styled(format!(" {} ", labels[6]), label_style),
         ])
         .right_aligned()
-    };
-
-    let full_hint = build_quit_hint(&full_labels);
-    // Reserve room for the two border columns plus the bottom-left RPC label.
-    let reserved = (rpc_bottom_left.width() as u16).saturating_add(2);
-    let quit_hint = if (full_hint.width() as u16).saturating_add(reserved) > area.width {
-        build_quit_hint(&short_labels)
-    } else {
-        full_hint
     };
 
     let block = Block::default()

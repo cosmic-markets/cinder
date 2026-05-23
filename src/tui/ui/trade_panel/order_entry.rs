@@ -103,25 +103,48 @@ pub(super) fn render_order_entry(
             f.render_widget(Paragraph::new(line), rows[1]);
         }
         _ => {
-            let qty_line = Line::from(vec![
-                Span::styled(format!(" {}:", tp_s.size), trade_field_label_style),
-                Span::styled(" ", Style::default()),
-                Span::styled(
-                    format!("{}", trading.order_size()),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::UNDERLINED),
-                ),
-                Span::styled(format!(" {} ", symbol), Style::default().fg(Color::White)),
-                Span::styled(
-                    "[s]",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]);
+            // TWAP doesn't have a single size — its total size, duration, and
+            // slice cadence are all collected in the modal. Show "TWAP"
+            // underlined in the size slot as a visual hint that the normal
+            // size entry doesn't apply.
+            let qty_line = if matches!(trading.order_kind, OrderKind::Twap) {
+                Line::from(vec![
+                    Span::styled(format!(" {}:", tp_s.size), trade_field_label_style),
+                    Span::styled(" ", Style::default()),
+                    Span::styled(
+                        tp_s.twap,
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::UNDERLINED),
+                    ),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::styled(format!(" {}:", tp_s.size), trade_field_label_style),
+                    Span::styled(" ", Style::default()),
+                    Span::styled(
+                        format!("{}", trading.order_size()),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::UNDERLINED),
+                    ),
+                    Span::styled(format!(" {} ", symbol), Style::default().fg(Color::White)),
+                    Span::styled(
+                        "[s]",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])
+            };
             f.render_widget(Paragraph::new(qty_line), row1_cols[0]);
 
+            // TWAP has no single price; the left column already shows
+            // "TWAP" as the type indicator, so leave the price column blank
+            // rather than printing a misleading "Px: TWAP".
+            if matches!(trading.order_kind, OrderKind::Twap) {
+                return;
+            }
             let mut price_spans = vec![Span::styled(
                 format!("{}:", tp_s.px),
                 trade_field_label_style,
@@ -157,6 +180,8 @@ pub(super) fn render_order_entry(
                             .add_modifier(Modifier::BOLD),
                     ));
                 }
+                // Twap is short-circuited above; this match never sees it.
+                OrderKind::Twap => unreachable!(),
                 _ => {
                     price_spans.push(Span::styled(" ", Style::default().fg(Color::White)));
                     price_spans.push(Span::styled(

@@ -511,6 +511,108 @@ pub struct Strings {
     /// Disclosure note rendered at the bottom: attribution is permanent on
     /// Phoenix's side and cannot be changed later.
     pub referral_choice_sticky_note: &'static str,
+
+    // ── TWAP modal & bots modal ─────────────────────────────────────────────
+    /// 3-letter abbreviation for TWAP shown in the order-entry kind cycle.
+    pub twap: &'static str,
+    /// Bottom-bar / order-entry label — "TWAP (modal)" hint when the active
+    /// kind is TWAP, prompting the user to press Enter to open the modal.
+    pub twap_order: &'static str,
+    /// Modal title — "New TWAP".
+    pub twap_modal_title: &'static str,
+    /// One-line intro under the title.
+    pub twap_modal_intro: &'static str,
+    /// Form field label — "Market".
+    pub twap_field_market: &'static str,
+    /// Form field label — "Side".
+    pub twap_field_side: &'static str,
+    /// Form field label — "Size".
+    pub twap_field_size: &'static str,
+    /// Form field label — "Total Time".
+    pub twap_field_total_time: &'static str,
+    /// Form field label — hours row.
+    pub twap_field_hours: &'static str,
+    /// Form field label — minutes row.
+    pub twap_field_mins: &'static str,
+    /// Unit suffix — "hr".
+    pub twap_unit_hr: &'static str,
+    /// Unit suffix — "min".
+    pub twap_unit_min: &'static str,
+    /// Unit suffix — "sec".
+    pub twap_unit_sec: &'static str,
+    /// Unit suffix — "slices".
+    pub twap_unit_slices: &'static str,
+    /// Footer hint paired with ↑↓ — "field".
+    pub twap_nav_field: &'static str,
+    /// Footer hint paired with Tab — "toggle side".
+    pub twap_toggle_side: &'static str,
+    /// Footer hint paired with ←→ — "cycle market".
+    pub twap_cycle_market: &'static str,
+    /// Footer hint paired with Enter — "start".
+    pub twap_start: &'static str,
+    /// Summary line prefix — e.g. "Will split into".
+    pub twap_summary_prefix: &'static str,
+    /// Summary line connector — "slices of".
+    pub twap_summary_slices_of: &'static str,
+    /// Summary line suffix after slice size — "per slice".
+    pub twap_summary_per_slice_suf: &'static str,
+    /// Summary line suffix after interval value — "between slices".
+    pub twap_summary_interval_suf: &'static str,
+    /// Summary placeholder when the form isn't yet fully populated.
+    pub twap_summary_placeholder: &'static str,
+    /// Validation error — total size must be a positive number.
+    pub twap_err_size: &'static str,
+    /// Validation error — duration must be a positive number of minutes.
+    pub twap_err_duration: &'static str,
+    /// Validation error — total time below the minimum (1 slice / minute).
+    pub twap_err_too_short: &'static str,
+    /// Validation error — slice count cannot exceed total size in base units.
+    pub twap_err_size_too_small: &'static str,
+    /// Validation error — must have a wallet loaded to start a TWAP.
+    pub twap_err_no_wallet: &'static str,
+    /// Status line emitted when a TWAP bot is queued.
+    pub twap_started: &'static str,
+    /// Status line emitted when a TWAP slice is dispatched ("slice N/M sent").
+    pub twap_slice_sent: &'static str,
+    /// Status line — "slice"
+    pub twap_slice_word: &'static str,
+    /// Bots modal title.
+    pub bots_title: &'static str,
+    /// Bots modal empty placeholder.
+    pub bots_empty: &'static str,
+    /// Bots modal column header — "Kind".
+    pub bots_kind: &'static str,
+    /// Bots modal column header — "Progress".
+    pub bots_progress: &'static str,
+    /// Bots modal column header — "Interval".
+    pub bots_interval: &'static str,
+    /// Bots modal column header — "Next" (countdown to the next slice).
+    pub bots_next: &'static str,
+    /// Bots modal column header — "State".
+    pub bots_state: &'static str,
+    /// Footer hint — pause/resume.
+    pub bots_pause_resume: &'static str,
+    /// Footer hint — stop.
+    pub bots_stop: &'static str,
+    /// Footer hint — restart.
+    pub bots_restart: &'static str,
+    /// Footer hint — remove from list.
+    pub bots_remove: &'static str,
+    /// Status pill labels.
+    pub bots_status_running: &'static str,
+    pub bots_status_paused: &'static str,
+    pub bots_status_stopped: &'static str,
+    pub bots_status_completed: &'static str,
+    /// Status line — paused.
+    pub bots_paused_status: &'static str,
+    /// Status line — resumed.
+    pub bots_resumed_status: &'static str,
+    /// Status line — stopped.
+    pub bots_stopped_status: &'static str,
+    /// Status line — restarted.
+    pub bots_restarted_status: &'static str,
+    /// Status line — removed.
+    pub bots_removed_status: &'static str,
 }
 
 mod en;

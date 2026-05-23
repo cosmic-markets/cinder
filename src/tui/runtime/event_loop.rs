@@ -29,7 +29,7 @@ use super::super::terminal::TuiTerminal;
 use super::super::ui;
 use super::{
     connection, keyboard::handle_key_press, new_channels, redraw::redraw_tui_force, tasks,
-    update_handlers, KeyAction, FEED_REDRAW_MIN_INTERVAL,
+    twap_scheduler, update_handlers, KeyAction, FEED_REDRAW_MIN_INTERVAL,
 };
 
 pub async fn spawn_spline_poller(
@@ -101,6 +101,11 @@ pub async fn spawn_spline_poller(
         balance_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut top_positions_interval = tokio::time::interval(Duration::from_secs(5));
         top_positions_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // TWAP scheduler tick. 1s resolution is plenty — minimum sensible
+        // slice interval is on the order of seconds, and the scheduler skips
+        // bots whose `slice_due` predicate isn't satisfied yet.
+        let mut twap_interval = tokio::time::interval(Duration::from_secs(1));
+        twap_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut top_positions_handle: Option<tokio::task::JoinHandle<()>> = None;
         let clock_start =
             tokio::time::Instant::now() + connection::duration_until_next_utc_second();
@@ -282,6 +287,18 @@ pub async fn spawn_spline_poller(
                                         channels.balance_tx.clone(),
                                     ));
                                 }
+                            }
+                        }
+
+                        _ = twap_interval.tick() => {
+                            let fired = twap_scheduler::tick_twap_scheduler(
+                                &mut state,
+                                &configs,
+                                &channels.tx_status,
+                            );
+                            if fired {
+                                redraw_tui_force(&mut terminal, &state, &cfg, &rpc_host);
+                                last_feed_paint = Instant::now();
                             }
                         }
 

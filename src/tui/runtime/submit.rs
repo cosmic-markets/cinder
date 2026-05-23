@@ -348,6 +348,10 @@ pub(super) fn execute_confirmed_action(
                         tx_status.clone(),
                     );
                 }
+                // TWAP orders are routed through the TWAP modal, not the
+                // confirm prompt. We never construct a `PlaceOrder` with
+                // `OrderKind::Twap`.
+                OrderKind::Twap => {}
             }
         }
         PendingAction::ClosePosition => {
@@ -451,6 +455,16 @@ pub(super) fn cancel_message(
             OrderKind::Market => format!(
                 "{} {} {} {}",
                 s.st_cancelled,
+                side_lbl(side),
+                size,
+                cfg.symbol
+            ),
+            // Unreachable in practice — TWAP doesn't route through
+            // PendingAction::PlaceOrder. The arm exists so the match is total.
+            OrderKind::Twap => format!(
+                "{} {} {} {} {}",
+                s.st_cancelled,
+                s.twap,
                 side_lbl(side),
                 size,
                 cfg.symbol

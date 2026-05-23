@@ -62,8 +62,11 @@ pub(in crate::tui::runtime) fn handle_normal_key(
             KeyAction::Redraw
         }
         KeyCode::Char('t') => {
-            // Cycle Market → Limit → StopMarket → Market. On transitions into
-            // a price-bearing kind, seed the price from the current mark.
+            // Cycle Market → Limit → StopMarket → Twap → Market. On
+            // transitions into a price-bearing kind, seed the price from the
+            // current mark. Twap collects its own inputs in a modal opened
+            // when the user presses [Enter] — nothing for the order entry
+            // row to seed.
             let mark = state
                 .market_stats
                 .as_ref()
@@ -102,6 +105,10 @@ pub(in crate::tui::runtime) fn handle_normal_key(
                     }
                 }
                 OrderKind::StopMarket { .. } => {
+                    state.trading.order_kind = OrderKind::Twap;
+                    state.trading.set_status_title(s.twap_order);
+                }
+                OrderKind::Twap => {
                     state.trading.order_kind = OrderKind::Market;
                     state.trading.set_status_title(s.st_market_mode);
                 }
@@ -166,6 +173,14 @@ pub(in crate::tui::runtime) fn handle_normal_key(
             KeyAction::Redraw
         }
         KeyCode::Enter => {
+            // TWAP collects its inputs via a modal rather than the order
+            // entry row — short-circuit out of the confirm-prompt flow and
+            // open the editor instead.
+            if matches!(state.trading.order_kind, OrderKind::Twap) {
+                state.trading.reset_twap_draft(cfg.symbol.clone());
+                state.trading.input_mode = InputMode::EditingTwap;
+                return KeyAction::Redraw;
+            }
             if state.trading.wallet_loaded {
                 let side = state.trading.side;
                 let size = state.trading.order_size();
@@ -189,6 +204,8 @@ pub(in crate::tui::runtime) fn handle_normal_key(
                         state.trading.set_status_title(strings().st_invalid_price);
                         return KeyAction::Redraw;
                     }
+                    // Already short-circuited above.
+                    OrderKind::Twap => unreachable!("TWAP routes through the modal"),
                 };
                 state.trading.input_mode =
                     InputMode::Confirming(PendingAction::PlaceOrder { side, size, kind });
@@ -216,6 +233,7 @@ pub(in crate::tui::runtime) fn handle_normal_key(
                             s.st_confirm, side_lbl, size, cfg.symbol, s.st_yn
                         ));
                     }
+                    OrderKind::Twap => unreachable!("TWAP routes through the modal"),
                 }
             } else {
                 state
@@ -291,6 +309,13 @@ pub(in crate::tui::runtime) fn handle_normal_key(
         KeyCode::Char('F') => {
             state.liquidation_feed_view.selected_index = 0;
             state.trading.input_mode = InputMode::ViewingLiquidations;
+            KeyAction::Redraw
+        }
+        // [b] opens the bots modal — lists running TWAP bots with
+        // pause/unpause/stop/restart/remove hotkeys.
+        KeyCode::Char('b') => {
+            state.twaps_view.clamp_index();
+            state.trading.input_mode = InputMode::ViewingBots;
             KeyAction::Redraw
         }
         _ => KeyAction::Nothing,

@@ -71,6 +71,78 @@ pub struct TradingState {
     pub ledger: VecDeque<LedgerEntry>,
     /// Selected row in the ledger modal.
     pub ledger_selected: usize,
+    /// In-progress draft for the "New TWAP" modal. Reset to defaults each
+    /// time the modal opens via [`reset_twap_draft`](Self::reset_twap_draft).
+    pub twap_draft: TwapDraft,
+}
+
+/// Editable form state backing the "New TWAP" modal. Field layout mirrors
+/// the Binance TWAP modal: market, side, total size, and total time
+/// (hours + minutes). Side is selectable from any field via [Tab]. Slice
+/// cadence is fixed at one market slice per minute
+/// (`slice_count = total_minutes`).
+#[derive(Debug, Clone)]
+pub struct TwapDraft {
+    /// Cursor row: 0 = market, 1 = side, 2 = total size, 3 = total time
+    /// hours, 4 = total time minutes.
+    pub selected_field: usize,
+    /// Symbol of the market the TWAP will run against. Seeded from the
+    /// active market when the modal opens; cycled with ←/→ when the market
+    /// field is focused.
+    pub market: String,
+    pub side: super::super::trading::TradingSide,
+    pub size_buffer: String,
+    pub duration_hour_buffer: String,
+    pub duration_min_buffer: String,
+    /// Set when the user presses [Enter] but a field fails validation —
+    /// rendered below the form until the next keystroke.
+    pub error: Option<String>,
+}
+
+impl TwapDraft {
+    /// Index of the Total Size row in the form. Cursor starts here on open
+    /// — Market and Side both default to sensible values, so the user almost
+    /// always wants to type a size first.
+    pub const DEFAULT_FIELD: usize = 2;
+    pub const FIELD_COUNT: usize = 5;
+
+    pub fn new(market: String, side: super::super::trading::TradingSide) -> Self {
+        Self {
+            selected_field: Self::DEFAULT_FIELD,
+            market,
+            side,
+            size_buffer: String::new(),
+            duration_hour_buffer: String::new(),
+            duration_min_buffer: String::new(),
+            error: None,
+        }
+    }
+
+    pub fn move_field_up(&mut self) {
+        if self.selected_field > 0 {
+            self.selected_field -= 1;
+        }
+    }
+
+    pub fn move_field_down(&mut self) {
+        if self.selected_field + 1 < Self::FIELD_COUNT {
+            self.selected_field += 1;
+        }
+    }
+
+    /// Step to the previous or next market in `markets` (wrapping). No-op if
+    /// the current market isn't in the list (shouldn't happen — the draft is
+    /// always seeded from the active market) or the list is empty.
+    pub fn cycle_market(&mut self, markets: &[String], step: i32) {
+        if markets.is_empty() {
+            return;
+        }
+        let idx = markets.iter().position(|s| *s == self.market).unwrap_or(0);
+        let len = markets.len() as i32;
+        let new_idx = ((idx as i32 + step).rem_euclid(len)) as usize;
+        self.market = markets[new_idx].clone();
+        self.error = None;
+    }
 }
 
 impl TradingState {
@@ -110,7 +182,15 @@ impl TradingState {
             referral_choice_shown: false,
             ledger: VecDeque::with_capacity(LEDGER_CAPACITY),
             ledger_selected: 0,
+            twap_draft: TwapDraft::new(String::new(), TradingSide::Long),
         }
+    }
+
+    /// Reset the TWAP draft form to default values, seeding the market and
+    /// side from the active context. Called when the "New TWAP" modal opens
+    /// so each entry starts from a known-good baseline.
+    pub fn reset_twap_draft(&mut self, market: String) {
+        self.twap_draft = TwapDraft::new(market, self.side);
     }
 
     /// Record a user action in the ledger. If the same txid already appears as
@@ -220,6 +300,46 @@ mod tests {
         assert_eq!(s.ledger.len(), 2);
         assert_eq!(s.ledger.front().unwrap().txid, "sig2");
         assert_eq!(s.ledger.back().unwrap().txid, "sig1");
+    }
+
+    #[test]
+    fn twap_draft_field_nav_clamps_at_bounds() {
+        let mut d = TwapDraft::new("SOL".into(), TradingSide::Long);
+        assert_eq!(d.selected_field, TwapDraft::DEFAULT_FIELD);
+        for _ in 0..10 {
+            d.move_field_up();
+        }
+        assert_eq!(d.selected_field, 0);
+        for _ in 0..10 {
+            d.move_field_down();
+        }
+        assert_eq!(d.selected_field, TwapDraft::FIELD_COUNT - 1);
+    }
+
+    #[test]
+    fn reset_twap_draft_seeds_market_and_side() {
+        let mut s = TradingState::new();
+        s.side = TradingSide::Short;
+        s.twap_draft.size_buffer = "leftover".to_string();
+        s.reset_twap_draft("BTC".to_string());
+        assert_eq!(s.twap_draft.market, "BTC");
+        assert_eq!(s.twap_draft.side, TradingSide::Short);
+        assert!(s.twap_draft.size_buffer.is_empty());
+        assert_eq!(s.twap_draft.selected_field, TwapDraft::DEFAULT_FIELD);
+    }
+
+    #[test]
+    fn cycle_market_wraps_at_ends() {
+        let mut d = TwapDraft::new("SOL".into(), TradingSide::Long);
+        let markets = vec!["SOL".to_string(), "BTC".to_string(), "ETH".to_string()];
+        d.cycle_market(&markets, 1);
+        assert_eq!(d.market, "BTC");
+        d.cycle_market(&markets, 1);
+        assert_eq!(d.market, "ETH");
+        d.cycle_market(&markets, 1);
+        assert_eq!(d.market, "SOL");
+        d.cycle_market(&markets, -1);
+        assert_eq!(d.market, "ETH");
     }
 
     #[test]
