@@ -64,7 +64,7 @@ pub const DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS: u64 = 111;
 
 /// Built-in default for `SetComputeUnitLimit` per trader position touched by
 /// a tx. Used when neither the user config nor the env var overrides it.
-pub const DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION: u32 = 200_000;
+pub const DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION: u32 = 275_000;
 
 /// User-facing settings persisted to `~/.config/phoenix-cinder/config.json`.
 /// Empty `rpc_url` = not overridden; fall back to env/default.
