@@ -37,6 +37,7 @@ pub fn submit_market_order(
 ) {
     tokio::spawn(async move {
         use phoenix_rise::ix::{create_place_market_order_ix, MarketOrderParams, OrderFlags, Side};
+        use phoenix_rise::PhoenixTxBuilder;
 
         let s = strings();
         let side_lbl = match side {
@@ -81,19 +82,22 @@ pub fn submit_market_order(
                         return;
                     }
                 };
-            let (mut ixs, _) = match ctx
-                .http_client
-                .build_isolated_market_order_tx_enhanced(
-                    &ctx.authority_v2,
-                    &symbol,
-                    phx_side,
-                    num_base_lots,
-                    Some(collateral),
-                    false,
-                    None,
-                )
-                .await
-            {
+            // Build locally via `PhoenixTxBuilder` so we don't round-trip
+            // through the Phoenix HTTP API just to estimate a liquidation
+            // price we discard anyway. The API path failed with "No mid price
+            // available (insufficient liquidity)" when the server-side mid
+            // couldn't be computed; the on-chain builder needs none of that.
+            let trader_snapshot = ctx.snapshot_trader();
+            let builder = PhoenixTxBuilder::new(&ctx.metadata);
+            let mut ixs = match builder.build_isolated_market_order(
+                &trader_snapshot,
+                &symbol,
+                phx_side,
+                num_base_lots,
+                Some(collateral),
+                false,
+                None,
+            ) {
                 Ok(ixs) => ixs,
                 Err(e) => {
                     let detail = parse_phoenix_tx_error(&format!("{}", e));

@@ -4,10 +4,11 @@
 
 use std::collections::VecDeque;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
+use phoenix_rise::{Trader, TraderKey};
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
@@ -73,6 +74,11 @@ pub struct TxContext {
     /// Confirmation still listens exclusively on `rpc_client`. `None` when the
     /// primary already targets the public mainnet-beta endpoint.
     pub secondary_send_rpc: Option<Arc<solana_rpc_client::nonblocking::rpc_client::RpcClient>>,
+    /// Phoenix HTTP SDK client. Kept on the context as a connection-pool
+    /// holder even though signed-order construction now builds instructions
+    /// locally via `PhoenixTxBuilder`; future flows (e.g. metadata refresh,
+    /// account-info helpers) reuse this handle instead of opening a second.
+    #[allow(dead_code)]
     pub http_client: Arc<phoenix_rise::PhoenixHttpClient>,
     pub metadata: phoenix_rise::PhoenixMetadata,
     pub authority_v2: solana_pubkey::Pubkey,
@@ -84,6 +90,12 @@ pub struct TxContext {
     /// Shared WSS client for signature confirmations — all orders multiplex
     /// through a single WebSocket instead of opening one per transaction.
     pub(super) sig_pubsub: tokio::sync::Mutex<Option<Arc<PubsubClient>>>,
+    /// Live mirror of the wallet's `Trader` state — written by the trader-state
+    /// WS subscription, read by isolated-margin order builders so they can
+    /// construct subaccount-aware instructions locally without round-tripping
+    /// through the Phoenix HTTP API. Starts empty and is hydrated by the WS
+    /// task on the first `TraderUpdate`.
+    pub shared_trader: Arc<RwLock<Trader>>,
 }
 
 impl TxContext {
@@ -94,6 +106,7 @@ impl TxContext {
         keypair: &Keypair,
         symbol: &str,
         http: Arc<phoenix_rise::PhoenixHttpClient>,
+        shared_trader: Arc<RwLock<Trader>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
@@ -150,7 +163,25 @@ impl TxContext {
             blockhash_pool: tokio::sync::Mutex::new(VecDeque::with_capacity(30)),
             ws_url: ws_url_from_env(),
             sig_pubsub: tokio::sync::Mutex::new(None),
+            shared_trader,
         })
+    }
+
+    /// Snapshot the shared `Trader` state under a short read lock. The clone
+    /// keeps the lock window minimal so the WS task can keep applying updates
+    /// while order construction runs.
+    pub fn snapshot_trader(&self) -> Trader {
+        match self.shared_trader.read() {
+            Ok(guard) => guard.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
+
+    /// Construct an empty `Trader` keyed to the supplied authority. Used as the
+    /// initial value for the shared trader before the WS subscription delivers
+    /// its first snapshot.
+    pub fn empty_trader(authority: solana_pubkey::Pubkey) -> Trader {
+        Trader::new(TraderKey::new(authority))
     }
 
     /// Pushes the latest blockhash from the network into the rotating memory

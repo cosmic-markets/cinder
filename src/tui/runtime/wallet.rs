@@ -1,7 +1,8 @@
 //! Wallet connect / disconnect helpers.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 
 use phoenix_rise::PhoenixHttpClient;
 use solana_keypair::Keypair;
@@ -9,6 +10,7 @@ use solana_keypair::Keypair;
 use super::super::config::SplineConfig;
 use super::super::i18n::strings;
 use super::super::state::TuiState;
+use super::super::tx::TxContext;
 use super::tasks::{
     spawn_initial_connect_flow, spawn_trader_orders_ws, spawn_tx_context_task, spawn_wallet_wss,
 };
@@ -48,10 +50,23 @@ pub(super) fn connect_wallet_with_keypair(
     state.trading.referral_choice_shown = false;
     state.trading.set_status_title(strings().st_loading_ctx);
 
+    // Shared `Trader` mirror used by both the trader-state WS task (writer) and
+    // the isolated-margin tx builders (readers). Seeded empty here so the
+    // `TxContext` future can move it into place even if it resolves before the
+    // first WS update. Stored on `TradingState` so RPC swaps and market
+    // switches can rebuild a `TxContext` against the same live trader.
+    let authority = match solana_pubkey::Pubkey::from_str(&kp_arc.pubkey().to_string()) {
+        Ok(pk) => pk,
+        Err(_) => solana_pubkey::Pubkey::default(),
+    };
+    let shared_trader = Arc::new(RwLock::new(TxContext::empty_trader(authority)));
+    state.trading.shared_trader = Some(Arc::clone(&shared_trader));
+
     let tx_ctx = spawn_tx_context_task(
         Arc::clone(&kp_arc),
         cfg.symbol.clone(),
         Arc::clone(&http),
+        Arc::clone(&shared_trader),
         channels.tx_ctx_tx.clone(),
         channels.tx_status.clone(),
     );
@@ -86,6 +101,7 @@ pub(super) fn connect_wallet_with_keypair(
         Arc::clone(&kp_arc),
         channels.orders_tx.clone(),
         conditional_asset_symbols,
+        Arc::clone(&shared_trader),
     );
 
     WalletHandles {
@@ -125,6 +141,7 @@ pub(super) fn disconnect_wallet(
     state.trading.wallet_label.clear();
     state.trading.keypair = None;
     state.trading.tx_context = None;
+    state.trading.shared_trader = None;
     state.trading.referral_choice_shown = false;
     state.trading.position = None;
     state.trading.usdc_balance = None;

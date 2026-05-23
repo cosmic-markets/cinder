@@ -1,6 +1,7 @@
 //! Runtime connection, market-switch, and shutdown helpers.
 
 use std::io::Stdout;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -144,10 +145,27 @@ pub(super) fn handle_full_rpc_reconnect(
             channels.wallet_usdc_tx.clone(),
             channels.wallet_sol_tx.clone(),
         ));
+        // Reuse the existing shared `Trader` so the rebuilt `TxContext` sees
+        // the live state populated by the still-running trader-orders WS
+        // task. Fall back to a fresh empty trader if (somehow) the wallet
+        // load path didn't initialize one.
+        let shared_trader = state
+            .trading
+            .shared_trader
+            .clone()
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(std::sync::RwLock::new(
+                    crate::tui::tx::TxContext::empty_trader(
+                        solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
+                            .unwrap_or_default(),
+                    ),
+                ))
+            });
         let new_tx_ctx = tasks::spawn_tx_context_task(
             kp,
             cfg.symbol.clone(),
             Arc::clone(balance_http),
+            shared_trader,
             channels.tx_ctx_tx.clone(),
             channels.tx_status.clone(),
         );
@@ -190,10 +208,23 @@ pub(super) fn handle_pending_market_switch(
 
         if let Some(kp) = &state.trading.keypair {
             state.trading.tx_context = None;
+            let shared_trader = state
+                .trading
+                .shared_trader
+                .clone()
+                .unwrap_or_else(|| {
+                    std::sync::Arc::new(std::sync::RwLock::new(
+                        crate::tui::tx::TxContext::empty_trader(
+                            solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
+                                .unwrap_or_default(),
+                        ),
+                    ))
+                });
             let new_tx_ctx = tasks::spawn_tx_context_task(
                 Arc::clone(kp),
                 cfg.symbol.clone(),
                 Arc::clone(balance_http),
+                shared_trader,
                 channels.tx_ctx_tx.clone(),
                 channels.tx_status.clone(),
             );

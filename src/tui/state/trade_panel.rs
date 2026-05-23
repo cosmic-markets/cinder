@@ -1,8 +1,9 @@
 //! TradingState: in-flight order inputs, wallet connection, and status display.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
+use phoenix_rise::Trader;
 use solana_keypair::Keypair;
 
 use super::super::config::{current_user_config, UserConfig};
@@ -30,6 +31,12 @@ pub struct TradingState {
     pub status_detail: String,
     pub keypair: Option<Arc<Keypair>>,
     pub tx_context: Option<Arc<TxContext>>,
+    /// Shared mirror of the wallet's on-chain `Trader` state. Owned by
+    /// `TradingState` so connection-change paths (RPC swap, market switch)
+    /// can rebuild a fresh `TxContext` against the same live trader without
+    /// re-subscribing the WS stream from scratch. Set on wallet connect,
+    /// cleared on disconnect.
+    pub shared_trader: Option<Arc<RwLock<Trader>>>,
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub deposit_buffer: String,
@@ -162,6 +169,7 @@ impl TradingState {
             status_detail: String::new(),
             keypair: None,
             tx_context: None,
+            shared_trader: None,
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
             deposit_buffer: String::new(),

@@ -36,6 +36,7 @@ pub fn submit_limit_order(
     tokio::spawn(async move {
         use phoenix_rise::ix::{create_place_limit_order_ix, LimitOrderParams, OrderFlags, Side};
         use phoenix_rise::math::WrapperNum;
+        use phoenix_rise::PhoenixTxBuilder;
 
         let s = strings();
         let side_lbl = match side {
@@ -69,19 +70,21 @@ pub fn submit_limit_order(
                         return;
                     }
                 };
-            let (mut ixs, _) = match ctx
-                .http_client
-                .build_isolated_limit_order_tx_enhanced(
-                    &ctx.authority_v2,
-                    &symbol,
-                    phx_side,
-                    limit_price_usd,
-                    num_base_lots,
-                    Some(collateral),
-                    false,
-                )
-                .await
-            {
+            // Same rationale as the isolated market path: build locally via
+            // `PhoenixTxBuilder` to avoid the API endpoint's mid-price
+            // dependency. The on-chain limit-order builder needs only trader
+            // state + market metadata, both of which we already mirror.
+            let trader_snapshot = ctx.snapshot_trader();
+            let builder = PhoenixTxBuilder::new(&ctx.metadata);
+            let mut ixs = match builder.build_isolated_limit_order(
+                &trader_snapshot,
+                &symbol,
+                phx_side,
+                limit_price_usd,
+                num_base_lots,
+                Some(collateral),
+                false,
+            ) {
                 Ok(ixs) => ixs,
                 Err(e) => {
                     let detail = parse_phoenix_tx_error(&format!("{}", e));

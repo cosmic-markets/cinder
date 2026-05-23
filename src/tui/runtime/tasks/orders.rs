@@ -244,6 +244,7 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
     kp: Arc<Keypair>,
     orders_tx: UnboundedSender<Vec<OrderInfo>>,
     conditional_asset_symbols: HashMap<u32, String>,
+    shared_trader: Arc<std::sync::RwLock<Trader>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
@@ -282,6 +283,12 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
                 CommitmentConfig::processed(),
             );
             let mut trader = Trader::new(key);
+            // Seed the shared trader to the freshly-keyed instance so any read
+            // before the first WS update still gets a coherent view (matching
+            // authority, empty subaccounts).
+            if let Ok(mut guard) = shared_trader.write() {
+                *guard = trader.clone();
+            }
             // Stop-loss triggers live on `TraderStatePositionRow`, not in
             // `subaccount.orders`, so the SDK's `Trader::all_orders()` never
             // surfaces them. Track them ourselves from the raw ws payload so
@@ -312,6 +319,14 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
                             break;
                         };
                         trader.apply_update(&msg);
+                        // Mirror the freshly-applied state for any tx-side
+                        // reader (isolated-margin order builders snapshot the
+                        // trader under a read lock to build instructions
+                        // locally — no HTTP round-trip needed for collateral
+                        // routing or subaccount registration).
+                        if let Ok(mut guard) = shared_trader.write() {
+                            *guard = trader.clone();
+                        }
 
                         match &msg.content {
                             TraderStatePayload::Snapshot(s) => {
