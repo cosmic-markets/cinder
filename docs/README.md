@@ -1,11 +1,8 @@
 # Cinder
 
-**Cinder** is a Rust-based trading terminal for [Phoenix](https://phoenix.trade) perpetuals on Solana: live charts, a merged on-chain **spline** + optional **CLOB** order book, market and wallet flows, trading, and signed transactions from the shell.
+**Cinder** is a Rust-based trading terminal for [Phoenix](https://phoenix.trade/?code=COSMIC) perpetuals on Solana: live charts, a merged on-chain **spline** + optional **CLOB** order book, market and wallet flows, trading, and signed transactions from the shell.
 
 ![Rust](https://img.shields.io/badge/rust-2021-orange?logo=rust&logoColor=white)
-![ratatui](https://img.shields.io/badge/ratatui-TUI-00ADD8?logo=terminal)
-![Solana](https://img.shields.io/badge/Solana-RPC%20%2B%20WSS-9945FF?logo=solana)
-[![GitHub stars](https://img.shields.io/github/stars/cosmic-markets/cinder?style=flat&logo=github&label=stars)](https://github.com/cosmic-markets/cinder/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.com/invite/XhQrN8FA2C)
 [![X](https://img.shields.io/badge/X-cosmic__markets-000000?style=flat&logo=x&logoColor=white)](https://x.com/cosmic_markets)
 
@@ -119,16 +116,11 @@ docker compose run --rm \
   cinder
 ```
 
-## Referral Funding
-Cinder is partially funded through Phoenix's referral program. The first time a wallet with no Phoenix account connects, Cinder shows a choice modal where you can pick the `COSMIC` referral (10% off fees), enter a custom code from someone else, or continue without one. Cinder earns a share of trading fees from wallets that register with `COSMIC`, and it's a great way to support the project.
-
-Phoenix referral attribution is permanent: once a wallet is activated with a referral code, the attribution cannot be changed later.
-
 ## Risk Disclaimer
 Trading perpetual futures is high-risk and can result in the rapid and total loss of your funds. Cinder is provided **as-is** under the MIT license with no warranties; the authors are not liable for any losses, missed fills, RPC outages, on-chain errors, or other issues arising from use of this software. You are solely responsible for your trades, your keys, and your compliance with the laws of your jurisdiction. Nothing in this project is financial advice.
 
 ## Acknowledgments
-Thanks to the team at **Ellipsis Labs** for building [Phoenix](https://phoenix.trade). Cinder is an independent, open-source TUI client and is not affiliated with, sponsored by, or endorsed by Ellipsis Labs. "Phoenix" and any related names, logos, or marks are trademarks of their respective owners and are used here only to identify the protocol Cinder interoperates with.
+Thanks to the team at **Ellipsis Labs** for building [Phoenix](https://phoenix.trade/?code=COSMIC). Cinder is an independent, open-source TUI client and is not affiliated with, sponsored by, or endorsed by Ellipsis Labs. "Phoenix" and any related names, logos, or marks are trademarks of their respective owners and are used here only to identify the protocol Cinder interoperates with.
 
 ## Donations
 ❤️ SOL donations: `cosmic.sol`
