@@ -294,6 +294,7 @@ pub async fn spawn_spline_poller(
                             let fired = twap_scheduler::tick_twap_scheduler(
                                 &mut state,
                                 &configs,
+                                &cfg,
                                 &channels.tx_status,
                             );
                             if fired {
@@ -501,6 +502,7 @@ pub async fn spawn_spline_poller(
                     &gti_refresh,
                     &mut wallet_wss_handle,
                     &mut blockhash_refresh_handle,
+                    &mut trader_orders_handle,
                     &mut tx_ctx_task,
                     &mut liquidation_task,
                     &mut state,

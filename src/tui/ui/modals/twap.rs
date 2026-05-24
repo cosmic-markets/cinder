@@ -253,6 +253,41 @@ pub(in crate::tui::ui) fn render_twap_modal(
             rows[10],
         );
     }
+
+    // Render the Y/N confirmation overlay on top of the form. We don't
+    // bother layouting a new section — the modal area is small and the
+    // existing layout has padding; a Clear over a single line at the
+    // bottom of the inner area keeps the form visible behind it.
+    if draft.pending_confirm {
+        let confirm_h: u16 = 3;
+        let inner_w = inner.width;
+        let confirm_w = inner_w;
+        let confirm_y = inner.y + inner.height.saturating_sub(confirm_h);
+        let confirm_area = ratatui::layout::Rect::new(inner.x, confirm_y, confirm_w, confirm_h);
+        f.render_widget(ratatui::widgets::Clear, confirm_area);
+        let confirm_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+        let confirm_inner = confirm_block.inner(confirm_area);
+        f.render_widget(confirm_block, confirm_area);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    " ⚠ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    s.twap_confirm_start.to_string(),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])),
+            confirm_inner,
+        );
+    }
 }
 
 fn editable_value_span<'a>(buffer: &'a str, is_selected: bool, unit: &'a str) -> Span<'a> {
@@ -306,8 +341,15 @@ fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
     let size: Option<f64> = draft.size_buffer.parse::<f64>().ok().filter(|v| *v > 0.0);
     let hours: u32 = draft.duration_hour_buffer.parse::<u32>().unwrap_or(0);
     let mins: u32 = draft.duration_min_buffer.parse::<u32>().unwrap_or(0);
-    let total_minutes: u32 = hours * 60 + mins;
-    if let (Some(size), true) = (size, total_minutes >= 1) {
+    // Use checked arithmetic — unchecked `hours * 60 + mins` panics in
+    // debug builds on large input (e.g. user typing 99999999 in Hours).
+    // On overflow, fall through to the placeholder; the validator will
+    // reject the input on submit with a proper error message.
+    let total_minutes: Option<u32> = hours.checked_mul(60).and_then(|h| h.checked_add(mins));
+    if let (Some(size), Some(total_minutes)) = (size, total_minutes) {
+        if total_minutes < 1 {
+            return s.twap_summary_placeholder.to_string();
+        }
         let slice_count = total_minutes;
         let slice_size = size / slice_count as f64;
         format!(
@@ -510,6 +552,44 @@ pub(in crate::tui::ui) fn render_bots_modal(
         .header(header)
         .column_spacing(1);
     f.render_widget(table, inner);
+
+    // Y/N confirmation overlay for [s]/[r]/[x]. Drawn on top of the table
+    // so the user can still see which bot they're acting on.
+    if let Some(pending) = view.pending_confirm {
+        use super::super::super::state::TwapBotConfirm;
+        let prompt = match pending {
+            TwapBotConfirm::Stop(_) => s.twap_confirm_stop,
+            TwapBotConfirm::Restart(_) => s.twap_confirm_restart,
+            TwapBotConfirm::Remove(_) => s.twap_confirm_remove,
+        };
+        let confirm_h: u16 = 3;
+        let confirm_w = inner.width;
+        let confirm_y = inner.y + inner.height.saturating_sub(confirm_h);
+        let confirm_area = ratatui::layout::Rect::new(inner.x, confirm_y, confirm_w, confirm_h);
+        f.render_widget(ratatui::widgets::Clear, confirm_area);
+        let confirm_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+        let confirm_inner = confirm_block.inner(confirm_area);
+        f.render_widget(confirm_block, confirm_area);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    " ⚠ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    prompt.to_string(),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])),
+            confirm_inner,
+        );
+    }
 }
 
 fn bot_row<'a>(b: &'a TwapBot, active_symbol: &str, is_selected: bool, now: Instant) -> Row<'a> {

@@ -74,7 +74,20 @@ pub fn submit_limit_order(
             // `PhoenixTxBuilder` to avoid the API endpoint's mid-price
             // dependency. The on-chain limit-order builder needs only trader
             // state + market metadata, both of which we already mirror.
-            let trader_snapshot = ctx.snapshot_trader();
+            //
+            // Refuse to build if the trader-state WS hasn't hydrated yet —
+            // an empty Trader makes the builder spin up a fresh isolated
+            // subaccount on top of any existing one.
+            let trader_snapshot = match ctx.snapshot_trader() {
+                Some(t) => t,
+                None => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_failed_build_params, order_summary),
+                        detail: s.twap_waiting_trader_sync.to_string(),
+                    });
+                    return;
+                }
+            };
             let builder = PhoenixTxBuilder::new(&ctx.metadata);
             let mut ixs = match builder.build_isolated_limit_order(
                 &trader_snapshot,
@@ -173,6 +186,19 @@ pub fn submit_limit_order(
                     let _ = tx_status.send(TxStatusMsg::SetStatus { title, detail });
                 }
             }
+            return;
+        }
+
+        // Non-isolated limit orders pin `ctx.market_addrs.*` to the active
+        // symbol, so the caller must not pass a different `symbol` here.
+        if symbol != ctx.active_symbol {
+            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                title: format!("{} — {}", s.tx_failed_build_params, order_summary),
+                detail: format!(
+                    "{} ({} != active {})",
+                    s.twap_waiting_active_market, symbol, ctx.active_symbol
+                ),
+            });
             return;
         }
 

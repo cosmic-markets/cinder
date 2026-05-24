@@ -16,7 +16,7 @@ mod flight;
 mod isolated_margin;
 
 pub use cancel::{submit_cancel_orders, CancelOrderEntry};
-pub use context::TxContext;
+pub use context::{TraderMirror, TxContext};
 pub use funds::submit_funds_transfer;
 pub use limit_order::submit_limit_order;
 pub use market_order::submit_market_order;

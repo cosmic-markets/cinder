@@ -6,7 +6,7 @@ pub(in crate::tui::runtime) fn spawn_tx_context_task(
     kp: Arc<Keypair>,
     symbol: String,
     http: Arc<PhoenixHttpClient>,
-    shared_trader: Arc<std::sync::RwLock<Trader>>,
+    shared_trader: Arc<std::sync::RwLock<crate::tui::tx::TraderMirror>>,
     ctx_chan: UnboundedSender<TxCtxMsg>,
     status_chan: UnboundedSender<TxStatusMsg>,
 ) -> tokio::task::JoinHandle<()> {

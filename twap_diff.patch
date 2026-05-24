@@ -1,0 +1,2931 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index bc6995d..36d69a2 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -484,7 +484,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+ 
+ [[package]]
+ name = "cosmic-cinder"
+-version = "0.1.15"
++version = "0.1.16"
+ dependencies = [
+  "arboard",
+  "bs58",
+diff --git a/Cargo.toml b/Cargo.toml
+index 1aaa55e..4e1fb93 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -11,10 +11,8 @@ publish      = true
+ readme       = "docs/README.md"
+ repository   = "https://github.com/cosmic-markets/cinder"
+ rust-version = "1.94"
+-version      = "0.1.15"
++version      = "0.1.16"
+ 
+-# Keep the on-disk crate ident (`cinder::run`) and CLI binary name decoupled from the
+-# crates.io package name so existing imports and the published `cinder` command stay stable.
+ [lib]
+ name = "cinder"
+ path = "src/lib.rs"
+@@ -24,8 +22,6 @@ name = "cinder"
+ path = "src/main.rs"
+ 
+ [dependencies]
+-# Phoenix and all Solana client I/O (`solana-rpc-client`, `solana-pubsub-client`) use the Agave 2.3.x wire stack so
+-# HTTP RPC and WebSocket subscriptions resolve to one `solana-rpc-client-types` / `solana-commitment-config` graph.
+ arboard                 = { version = "3.6.1", default-features = false }
+ bs58                    = "0.5.1"
+ chrono                  = { version = "0.4.44", default-features = false, features = ["std", "clock"] }
+@@ -35,7 +31,6 @@ futures-util            = { version = "0.3.32", default-features = false, featur
+ phoenix-eternal-types   = { version = "0.1.1", package = "cosmic-phoenix-eternal-types" }
+ phoenix-rise            = "0.1.3"
+ ratatui                 = { version = "0.30.0", default-features = false, features = ["crossterm"] }
+-# Unify rustls features: tungstenite (via pubsub) uses rustls with no ring/aws-lc-rs; WSS needs a CryptoProvider.
+ rustls                  = { version = "0.23.40", default-features = false, features = ["ring", "std", "tls12"] }
+ serde_json              = "1.0.149"
+ solana-account-decoder-client-types = "=2.3.13"
+diff --git a/src/tui/i18n/en.rs b/src/tui/i18n/en.rs
+index c50a386..3b5adcd 100644
+--- a/src/tui/i18n/en.rs
++++ b/src/tui/i18n/en.rs
+@@ -304,4 +304,57 @@ pub static EN: Strings = Strings {
+     referral_choice_action: "choose",
+     referral_choice_sticky_note:
+         "Attribution is permanent on Phoenix's side and cannot be changed later.",
++
++    twap: "TWAP",
++    twap_order: "configure TWAP",
++    twap_modal_title: "new TWAP",
++    twap_modal_intro: "Each slice fires a market order. Cadence: 1 slice per minute.",
++    twap_field_market: "Market",
++    twap_field_side: "Side",
++    twap_field_size: "Total Size",
++    twap_field_total_time: "Total Time",
++    twap_field_hours: "Hours",
++    twap_field_mins: "Minutes",
++    twap_unit_hr: "hr",
++    twap_unit_min: "min",
++    twap_unit_slices: "slices",
++    twap_nav_field: "field",
++    twap_toggle_side: "toggle side",
++    twap_cycle_market: "cycle market",
++    twap_start: "start",
++    twap_summary_prefix: "Will fire",
++    twap_summary_slices_of: "market slices, total size",
++    twap_summary_per_slice_suf: "/slice",
++    twap_summary_interval_suf: "apart",
++    twap_summary_placeholder: "—",
++    twap_err_size: "Size must be a positive number",
++    twap_err_duration: "Total Time must be a positive duration",
++    twap_err_too_short: "Total Time must be at least 1 minute",
++    twap_err_size_too_small:
++        "Each slice rounds to zero base lots \u{2014} shorten Total Time or increase size",
++    twap_err_no_wallet: "Wallet not loaded \u{2014} press [w] to connect before starting a TWAP",
++    twap_started: "🐦‍🔥 TWAP started",
++    twap_slice_sent: "TWAP slice sent",
++    twap_slice_word: "slice",
++
++    bots_title: "bots",
++    bots_empty: "No bots running \u{2014} press [t] to TWAP and [Enter] to configure one",
++    bots_kind: "Kind",
++    bots_progress: "Progress",
++    bots_interval: "Interval",
++    bots_next: "Next",
++    bots_state: "State",
++    bots_pause_resume: "pause/resume",
++    bots_stop: "stop",
++    bots_restart: "restart",
++    bots_remove: "remove",
++    bots_status_running: "RUNNING",
++    bots_status_paused: "PAUSED",
++    bots_status_stopped: "STOPPED",
++    bots_status_completed: "DONE",
++    bots_paused_status: "TWAP paused",
++    bots_resumed_status: "TWAP resumed",
++    bots_stopped_status: "TWAP stopped",
++    bots_restarted_status: "TWAP restarted",
++    bots_removed_status: "TWAP removed",
+ };
+diff --git a/src/tui/i18n/es.rs b/src/tui/i18n/es.rs
+index df7d936..e2c64e1 100644
+--- a/src/tui/i18n/es.rs
++++ b/src/tui/i18n/es.rs
+@@ -307,4 +307,58 @@ pub static ES: Strings = Strings {
+     referral_choice_action: "elegir",
+     referral_choice_sticky_note:
+         "La atribución es permanente en Phoenix y no puede cambiarse después.",
++
++    twap: "TWAP",
++    twap_order: "configurar TWAP",
++    twap_modal_title: "nuevo TWAP",
++    twap_modal_intro: "Cada porción es una orden a mercado. Cadencia: 1 porción por minuto.",
++    twap_field_market: "Mercado",
++    twap_field_side: "Lado",
++    twap_field_size: "Tamaño total",
++    twap_field_total_time: "Tiempo total",
++    twap_field_hours: "Horas",
++    twap_field_mins: "Minutos",
++    twap_unit_hr: "h",
++    twap_unit_min: "min",
++    twap_unit_slices: "porciones",
++    twap_nav_field: "campo",
++    twap_toggle_side: "cambiar lado",
++    twap_cycle_market: "cambiar mercado",
++    twap_start: "iniciar",
++    twap_summary_prefix: "Se ejecutarán",
++    twap_summary_slices_of: "porciones a mercado, tamaño total",
++    twap_summary_per_slice_suf: "/porción",
++    twap_summary_interval_suf: "entre porciones",
++    twap_summary_placeholder: "—",
++    twap_err_size: "El tamaño debe ser un número positivo",
++    twap_err_duration: "El tiempo total debe ser una duración positiva",
++    twap_err_too_short: "El tiempo total debe ser al menos 1 minuto",
++    twap_err_size_too_small:
++        "Cada porción se redondea a cero \u{2014} acorta el tiempo o aumenta tamaño",
++    twap_err_no_wallet:
++        "Wallet no cargada \u{2014} presiona [w] para conectar antes de iniciar un TWAP",
++    twap_started: "🐦‍🔥 TWAP iniciado",
++    twap_slice_sent: "Porción TWAP enviada",
++    twap_slice_word: "porción",
++
++    bots_title: "bots",
++    bots_empty: "Sin bots en ejecución \u{2014} presiona [t] hasta TWAP y luego [Enter]",
++    bots_kind: "Tipo",
++    bots_progress: "Progreso",
++    bots_interval: "Intervalo",
++    bots_next: "Próx.",
++    bots_state: "Estado",
++    bots_pause_resume: "pausar/reanudar",
++    bots_stop: "detener",
++    bots_restart: "reiniciar",
++    bots_remove: "eliminar",
++    bots_status_running: "EJECUTANDO",
++    bots_status_paused: "EN PAUSA",
++    bots_status_stopped: "DETENIDO",
++    bots_status_completed: "LISTO",
++    bots_paused_status: "TWAP pausado",
++    bots_resumed_status: "TWAP reanudado",
++    bots_stopped_status: "TWAP detenido",
++    bots_restarted_status: "TWAP reiniciado",
++    bots_removed_status: "TWAP eliminado",
+ };
+diff --git a/src/tui/i18n/mod.rs b/src/tui/i18n/mod.rs
+index 86a31af..f41c8cd 100644
+--- a/src/tui/i18n/mod.rs
++++ b/src/tui/i18n/mod.rs
+@@ -511,6 +511,106 @@ pub struct Strings {
+     /// Disclosure note rendered at the bottom: attribution is permanent on
+     /// Phoenix's side and cannot be changed later.
+     pub referral_choice_sticky_note: &'static str,
++
++    // ── TWAP modal & bots modal ─────────────────────────────────────────────
++    /// 3-letter abbreviation for TWAP shown in the order-entry kind cycle.
++    pub twap: &'static str,
++    /// Bottom-bar / order-entry label — "TWAP (modal)" hint when the active
++    /// kind is TWAP, prompting the user to press Enter to open the modal.
++    pub twap_order: &'static str,
++    /// Modal title — "New TWAP".
++    pub twap_modal_title: &'static str,
++    /// One-line intro under the title.
++    pub twap_modal_intro: &'static str,
++    /// Form field label — "Market".
++    pub twap_field_market: &'static str,
++    /// Form field label — "Side".
++    pub twap_field_side: &'static str,
++    /// Form field label — "Size".
++    pub twap_field_size: &'static str,
++    /// Form field label — "Total Time".
++    pub twap_field_total_time: &'static str,
++    /// Form field label — hours row.
++    pub twap_field_hours: &'static str,
++    /// Form field label — minutes row.
++    pub twap_field_mins: &'static str,
++    /// Unit suffix — "hr".
++    pub twap_unit_hr: &'static str,
++    /// Unit suffix — "min".
++    pub twap_unit_min: &'static str,
++    /// Unit suffix — "slices".
++    pub twap_unit_slices: &'static str,
++    /// Footer hint paired with ↑↓ — "field".
++    pub twap_nav_field: &'static str,
++    /// Footer hint paired with Tab — "toggle side".
++    pub twap_toggle_side: &'static str,
++    /// Footer hint paired with ←→ — "cycle market".
++    pub twap_cycle_market: &'static str,
++    /// Footer hint paired with Enter — "start".
++    pub twap_start: &'static str,
++    /// Summary line prefix — e.g. "Will split into".
++    pub twap_summary_prefix: &'static str,
++    /// Summary line connector — "slices of".
++    pub twap_summary_slices_of: &'static str,
++    /// Summary line suffix after slice size — "per slice".
++    pub twap_summary_per_slice_suf: &'static str,
++    /// Summary line suffix after interval value — "between slices".
++    pub twap_summary_interval_suf: &'static str,
++    /// Summary placeholder when the form isn't yet fully populated.
++    pub twap_summary_placeholder: &'static str,
++    /// Validation error — total size must be a positive number.
++    pub twap_err_size: &'static str,
++    /// Validation error — duration must be a positive number of minutes.
++    pub twap_err_duration: &'static str,
++    /// Validation error — total time below the minimum (1 slice / minute).
++    pub twap_err_too_short: &'static str,
++    /// Validation error — slice count cannot exceed total size in base units.
++    pub twap_err_size_too_small: &'static str,
++    /// Validation error — must have a wallet loaded to start a TWAP.
++    pub twap_err_no_wallet: &'static str,
++    /// Status line emitted when a TWAP bot is queued.
++    pub twap_started: &'static str,
++    /// Status line emitted when a TWAP slice is dispatched ("slice N/M sent").
++    pub twap_slice_sent: &'static str,
++    /// Status line — "slice"
++    pub twap_slice_word: &'static str,
++    /// Bots modal title.
++    pub bots_title: &'static str,
++    /// Bots modal empty placeholder.
++    pub bots_empty: &'static str,
++    /// Bots modal column header — "Kind".
++    pub bots_kind: &'static str,
++    /// Bots modal column header — "Progress".
++    pub bots_progress: &'static str,
++    /// Bots modal column header — "Interval".
++    pub bots_interval: &'static str,
++    /// Bots modal column header — "Next" (countdown to the next slice).
++    pub bots_next: &'static str,
++    /// Bots modal column header — "State".
++    pub bots_state: &'static str,
++    /// Footer hint — pause/resume.
++    pub bots_pause_resume: &'static str,
++    /// Footer hint — stop.
++    pub bots_stop: &'static str,
++    /// Footer hint — restart.
++    pub bots_restart: &'static str,
++    /// Footer hint — remove from list.
++    pub bots_remove: &'static str,
++    /// Status pill labels.
++    pub bots_status_running: &'static str,
++    pub bots_status_paused: &'static str,
++    pub bots_status_stopped: &'static str,
++    pub bots_status_completed: &'static str,
++    /// Status line — paused.
++    pub bots_paused_status: &'static str,
++    /// Status line — resumed.
++    pub bots_resumed_status: &'static str,
++    /// Status line — stopped.
++    pub bots_stopped_status: &'static str,
++    /// Status line — restarted.
++    pub bots_restarted_status: &'static str,
++    /// Status line — removed.
++    pub bots_removed_status: &'static str,
+ }
+ 
+ mod en;
+diff --git a/src/tui/i18n/ru.rs b/src/tui/i18n/ru.rs
+index 1e1e7bc..6c84a5b 100644
+--- a/src/tui/i18n/ru.rs
++++ b/src/tui/i18n/ru.rs
+@@ -303,4 +303,58 @@ pub static RU: Strings = Strings {
+     referral_choice_action: "подтвердить",
+     referral_choice_sticky_note:
+         "Привязка реферала на стороне Phoenix постоянна и не может быть изменена позже.",
++
++    twap: "TWAP",
++    twap_order: "настроить TWAP",
++    twap_modal_title: "новый TWAP",
++    twap_modal_intro: "Каждый срез — рыночный ордер. Частота: 1 срез в минуту.",
++    twap_field_market: "Рынок",
++    twap_field_side: "Сторона",
++    twap_field_size: "Общий объём",
++    twap_field_total_time: "Общее время",
++    twap_field_hours: "Часы",
++    twap_field_mins: "Минуты",
++    twap_unit_hr: "ч",
++    twap_unit_min: "мин",
++    twap_unit_slices: "срезов",
++    twap_nav_field: "поле",
++    twap_toggle_side: "сменить сторону",
++    twap_cycle_market: "сменить рынок",
++    twap_start: "запуск",
++    twap_summary_prefix: "Будет отправлено",
++    twap_summary_slices_of: "рыночных срезов, общий объём",
++    twap_summary_per_slice_suf: "/срез",
++    twap_summary_interval_suf: "между срезами",
++    twap_summary_placeholder: "—",
++    twap_err_size: "Объём должен быть положительным числом",
++    twap_err_duration: "Общее время должно быть положительным",
++    twap_err_too_short: "Общее время должно быть не менее 1 минуты",
++    twap_err_size_too_small:
++        "Каждый срез округляется до нуля \u{2014} уменьшите время или увеличьте объём",
++    twap_err_no_wallet:
++        "Кошелёк не загружен \u{2014} нажмите [w] для подключения перед запуском TWAP",
++    twap_started: "🐦‍🔥 TWAP запущен",
++    twap_slice_sent: "Срез TWAP отправлен",
++    twap_slice_word: "срез",
++
++    bots_title: "боты",
++    bots_empty: "Нет запущенных ботов \u{2014} нажмите [t] до TWAP и затем [Enter]",
++    bots_kind: "Тип",
++    bots_progress: "Прогресс",
++    bots_interval: "Интервал",
++    bots_next: "След.",
++    bots_state: "Статус",
++    bots_pause_resume: "пауза/продолжить",
++    bots_stop: "стоп",
++    bots_restart: "перезапуск",
++    bots_remove: "удалить",
++    bots_status_running: "РАБОТАЕТ",
++    bots_status_paused: "ПАУЗА",
++    bots_status_stopped: "ОСТАНОВЛЕН",
++    bots_status_completed: "ГОТОВО",
++    bots_paused_status: "TWAP на паузе",
++    bots_resumed_status: "TWAP возобновлён",
++    bots_stopped_status: "TWAP остановлен",
++    bots_restarted_status: "TWAP перезапущен",
++    bots_removed_status: "TWAP удалён",
+ };
+diff --git a/src/tui/i18n/zh.rs b/src/tui/i18n/zh.rs
+index 0c62bb4..2343ad3 100644
+--- a/src/tui/i18n/zh.rs
++++ b/src/tui/i18n/zh.rs
+@@ -297,4 +297,56 @@ pub static CN: Strings = Strings {
+     referral_choice_nav: "选择",
+     referral_choice_action: "确认",
+     referral_choice_sticky_note: "Phoenix 的归属一经激活即为永久，之后无法更改。",
++
++    twap: "TWAP",
++    twap_order: "配置 TWAP",
++    twap_modal_title: "新建 TWAP",
++    twap_modal_intro: "每片为市价单。节奏：每分钟 1 片。",
++    twap_field_market: "市场",
++    twap_field_side: "方向",
++    twap_field_size: "总量",
++    twap_field_total_time: "总时长",
++    twap_field_hours: "小时",
++    twap_field_mins: "分钟",
++    twap_unit_hr: "时",
++    twap_unit_min: "分钟",
++    twap_unit_slices: "片",
++    twap_nav_field: "选择字段",
++    twap_toggle_side: "切换方向",
++    twap_cycle_market: "切换市场",
++    twap_start: "开始",
++    twap_summary_prefix: "将触发",
++    twap_summary_slices_of: "次市价分片，总量",
++    twap_summary_per_slice_suf: "/片",
++    twap_summary_interval_suf: "间隔",
++    twap_summary_placeholder: "—",
++    twap_err_size: "数量必须为正数",
++    twap_err_duration: "总时长必须为正",
++    twap_err_too_short: "总时长至少为 1 分钟",
++    twap_err_size_too_small: "单片向下取整为零基础手数 \u{2014} 请缩短总时长或增加总量",
++    twap_err_no_wallet: "钱包未加载 \u{2014} 启动 TWAP 前请按 [w] 连接钱包",
++    twap_started: "🐦‍🔥 TWAP 已启动",
++    twap_slice_sent: "TWAP 分片已发送",
++    twap_slice_word: "分片",
++
++    bots_title: "机器人",
++    bots_empty: "没有运行中的机器人 \u{2014} 按 [t] 切到 TWAP，再按 [Enter] 配置",
++    bots_kind: "类型",
++    bots_progress: "进度",
++    bots_interval: "间隔",
++    bots_next: "下一片",
++    bots_state: "状态",
++    bots_pause_resume: "暂停/继续",
++    bots_stop: "停止",
++    bots_restart: "重启",
++    bots_remove: "移除",
++    bots_status_running: "运行中",
++    bots_status_paused: "已暂停",
++    bots_status_stopped: "已停止",
++    bots_status_completed: "已完成",
++    bots_paused_status: "TWAP 已暂停",
++    bots_resumed_status: "TWAP 已继续",
++    bots_stopped_status: "TWAP 已停止",
++    bots_restarted_status: "TWAP 已重启",
++    bots_removed_status: "TWAP 已移除",
+ };
+diff --git a/src/tui/runtime/connection.rs b/src/tui/runtime/connection.rs
+index 2110ba7..57acce0 100644
+--- a/src/tui/runtime/connection.rs
++++ b/src/tui/runtime/connection.rs
+@@ -1,6 +1,7 @@
+ //! Runtime connection, market-switch, and shutdown helpers.
+ 
+ use std::io::Stdout;
++use std::str::FromStr;
+ use std::sync::Arc;
+ use std::time::{Duration, Instant};
+ 
+@@ -144,10 +145,22 @@ pub(super) fn handle_full_rpc_reconnect(
+             channels.wallet_usdc_tx.clone(),
+             channels.wallet_sol_tx.clone(),
+         ));
++        // Reuse the existing shared `Trader` so the rebuilt `TxContext` sees
++        // the live state populated by the still-running trader-orders WS
++        // task. Fall back to a fresh empty trader if (somehow) the wallet
++        // load path didn't initialize one.
++        let shared_trader = state.trading.shared_trader.clone().unwrap_or_else(|| {
++            std::sync::Arc::new(std::sync::RwLock::new(
++                crate::tui::tx::TxContext::empty_trader(
++                    solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()).unwrap_or_default(),
++                ),
++            ))
++        });
+         let new_tx_ctx = tasks::spawn_tx_context_task(
+             kp,
+             cfg.symbol.clone(),
+             Arc::clone(balance_http),
++            shared_trader,
+             channels.tx_ctx_tx.clone(),
+             channels.tx_status.clone(),
+         );
+@@ -190,10 +203,19 @@ pub(super) fn handle_pending_market_switch(
+ 
+         if let Some(kp) = &state.trading.keypair {
+             state.trading.tx_context = None;
++            let shared_trader = state.trading.shared_trader.clone().unwrap_or_else(|| {
++                std::sync::Arc::new(std::sync::RwLock::new(
++                    crate::tui::tx::TxContext::empty_trader(
++                        solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
++                            .unwrap_or_default(),
++                    ),
++                ))
++            });
+             let new_tx_ctx = tasks::spawn_tx_context_task(
+                 Arc::clone(kp),
+                 cfg.symbol.clone(),
+                 Arc::clone(balance_http),
++                shared_trader,
+                 channels.tx_ctx_tx.clone(),
+                 channels.tx_status.clone(),
+             );
+diff --git a/src/tui/runtime/event_loop.rs b/src/tui/runtime/event_loop.rs
+index f5052ec..abf5406 100644
+--- a/src/tui/runtime/event_loop.rs
++++ b/src/tui/runtime/event_loop.rs
+@@ -29,7 +29,7 @@ use super::super::terminal::TuiTerminal;
+ use super::super::ui;
+ use super::{
+     connection, keyboard::handle_key_press, new_channels, redraw::redraw_tui_force, tasks,
+-    update_handlers, KeyAction, FEED_REDRAW_MIN_INTERVAL,
++    twap_scheduler, update_handlers, KeyAction, FEED_REDRAW_MIN_INTERVAL,
+ };
+ 
+ pub async fn spawn_spline_poller(
+@@ -101,6 +101,11 @@ pub async fn spawn_spline_poller(
+         balance_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+         let mut top_positions_interval = tokio::time::interval(Duration::from_secs(5));
+         top_positions_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
++        // TWAP scheduler tick. 1s resolution is plenty — minimum sensible
++        // slice interval is on the order of seconds, and the scheduler skips
++        // bots whose `slice_due` predicate isn't satisfied yet.
++        let mut twap_interval = tokio::time::interval(Duration::from_secs(1));
++        twap_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+         let mut top_positions_handle: Option<tokio::task::JoinHandle<()>> = None;
+         let clock_start =
+             tokio::time::Instant::now() + connection::duration_until_next_utc_second();
+@@ -285,6 +290,18 @@ pub async fn spawn_spline_poller(
+                             }
+                         }
+ 
++                        _ = twap_interval.tick() => {
++                            let fired = twap_scheduler::tick_twap_scheduler(
++                                &mut state,
++                                &configs,
++                                &channels.tx_status,
++                            );
++                            if fired {
++                                redraw_tui_force(&mut terminal, &state, &cfg, &rpc_host);
++                                last_feed_paint = Instant::now();
++                            }
++                        }
++
+                         _ = top_positions_interval.tick() => {
+                             let in_flight = top_positions_handle
+                                 .as_ref()
+diff --git a/src/tui/runtime/input/mod.rs b/src/tui/runtime/input/mod.rs
+index 22dc64e..fb3fa87 100644
+--- a/src/tui/runtime/input/mod.rs
++++ b/src/tui/runtime/input/mod.rs
+@@ -27,6 +27,7 @@ mod market;
+ mod normal;
+ mod referral;
+ mod settings;
++mod twap;
+ mod views;
+ 
+ pub(in crate::tui::runtime) use amounts::*;
+@@ -36,4 +37,5 @@ pub(in crate::tui::runtime) use market::*;
+ pub(in crate::tui::runtime) use normal::*;
+ pub(in crate::tui::runtime) use referral::*;
+ pub(in crate::tui::runtime) use settings::*;
++pub(in crate::tui::runtime) use twap::*;
+ pub(in crate::tui::runtime) use views::*;
+diff --git a/src/tui/runtime/input/normal.rs b/src/tui/runtime/input/normal.rs
+index 4ecd33a..af6cbfb 100644
+--- a/src/tui/runtime/input/normal.rs
++++ b/src/tui/runtime/input/normal.rs
+@@ -62,8 +62,11 @@ pub(in crate::tui::runtime) fn handle_normal_key(
+             KeyAction::Redraw
+         }
+         KeyCode::Char('t') => {
+-            // Cycle Market → Limit → StopMarket → Market. On transitions into
+-            // a price-bearing kind, seed the price from the current mark.
++            // Cycle Market → Limit → StopMarket → Twap → Market. On
++            // transitions into a price-bearing kind, seed the price from the
++            // current mark. Twap collects its own inputs in a modal opened
++            // when the user presses [Enter] — nothing for the order entry
++            // row to seed.
+             let mark = state
+                 .market_stats
+                 .as_ref()
+@@ -102,6 +105,10 @@ pub(in crate::tui::runtime) fn handle_normal_key(
+                     }
+                 }
+                 OrderKind::StopMarket { .. } => {
++                    state.trading.order_kind = OrderKind::Twap;
++                    state.trading.set_status_title(s.twap_order);
++                }
++                OrderKind::Twap => {
+                     state.trading.order_kind = OrderKind::Market;
+                     state.trading.set_status_title(s.st_market_mode);
+                 }
+@@ -166,6 +173,14 @@ pub(in crate::tui::runtime) fn handle_normal_key(
+             KeyAction::Redraw
+         }
+         KeyCode::Enter => {
++            // TWAP collects its inputs via a modal rather than the order
++            // entry row — short-circuit out of the confirm-prompt flow and
++            // open the editor instead.
++            if matches!(state.trading.order_kind, OrderKind::Twap) {
++                state.trading.reset_twap_draft(cfg.symbol.clone());
++                state.trading.input_mode = InputMode::EditingTwap;
++                return KeyAction::Redraw;
++            }
+             if state.trading.wallet_loaded {
+                 let side = state.trading.side;
+                 let size = state.trading.order_size();
+@@ -189,6 +204,8 @@ pub(in crate::tui::runtime) fn handle_normal_key(
+                         state.trading.set_status_title(strings().st_invalid_price);
+                         return KeyAction::Redraw;
+                     }
++                    // Already short-circuited above.
++                    OrderKind::Twap => unreachable!("TWAP routes through the modal"),
+                 };
+                 state.trading.input_mode =
+                     InputMode::Confirming(PendingAction::PlaceOrder { side, size, kind });
+@@ -216,6 +233,7 @@ pub(in crate::tui::runtime) fn handle_normal_key(
+                             s.st_confirm, side_lbl, size, cfg.symbol, s.st_yn
+                         ));
+                     }
++                    OrderKind::Twap => unreachable!("TWAP routes through the modal"),
+                 }
+             } else {
+                 state
+@@ -293,6 +311,13 @@ pub(in crate::tui::runtime) fn handle_normal_key(
+             state.trading.input_mode = InputMode::ViewingLiquidations;
+             KeyAction::Redraw
+         }
++        // [b] opens the bots modal — lists running TWAP bots with
++        // pause/unpause/stop/restart/remove hotkeys.
++        KeyCode::Char('b') => {
++            state.twaps_view.clamp_index();
++            state.trading.input_mode = InputMode::ViewingBots;
++            KeyAction::Redraw
++        }
+         _ => KeyAction::Nothing,
+     }
+ }
+diff --git a/src/tui/runtime/input/twap.rs b/src/tui/runtime/input/twap.rs
+new file mode 100644
+index 0000000..d75ed63
+--- /dev/null
++++ b/src/tui/runtime/input/twap.rs
+@@ -0,0 +1,313 @@
++//! Input handlers for the "New TWAP" modal (`EditingTwap`) and the bots
++//! modal (`ViewingBots`).
++
++use crossterm::event::KeyCode;
++
++use super::super::super::config::SplineConfig;
++use super::super::super::i18n::strings;
++use super::super::super::math::{ui_size_to_num_base_lots, MAX_UI_ORDER_SIZE_UNITS};
++use super::super::super::state::{TuiState, TwapBot, TwapDraft};
++use super::super::super::trading::{InputMode, OrderKind, TradingSide};
++use super::super::KeyAction;
++
++/// Editor for the TWAP form. Field layout: 0 = market, 1 = side,
++/// 2 = total size, 3 = total time hours, 4 = total time minutes.
++/// ↑↓ moves between fields, Tab toggles side, ←→ cycles the market when
++/// row 0 is focused, digits/`.` edit numeric fields, Enter advances the
++/// cursor through the form (validates & spawns on the final row), Esc
++/// discards.
++pub(in crate::tui::runtime) fn handle_editing_twap_key(
++    code: KeyCode,
++    state: &mut TuiState,
++    configs: &std::collections::HashMap<String, SplineConfig>,
++) -> KeyAction {
++    match code {
++        KeyCode::Esc => {
++            state.trading.input_mode = InputMode::Normal;
++            // Keep TWAP as the active order_kind so the user can press [Enter]
++            // again to reopen the modal — they came here intentionally and
++            // didn't switch kind.
++            KeyAction::Redraw
++        }
++        KeyCode::Up => {
++            state.trading.twap_draft.move_field_up();
++            state.trading.twap_draft.error = None;
++            KeyAction::Redraw
++        }
++        KeyCode::Down => {
++            state.trading.twap_draft.move_field_down();
++            state.trading.twap_draft.error = None;
++            KeyAction::Redraw
++        }
++        KeyCode::Tab => {
++            // Tab from anywhere on the form toggles the side — saves the user
++            // from having to navigate to the side row each time.
++            state.trading.twap_draft.side = state.trading.twap_draft.side.toggle();
++            state.trading.twap_draft.error = None;
++            KeyAction::Redraw
++        }
++        KeyCode::Left if state.trading.twap_draft.selected_field == 0 => {
++            let symbols: Vec<String> = state
++                .market_selector
++                .markets
++                .iter()
++                .map(|m| m.symbol.clone())
++                .collect();
++            state.trading.twap_draft.cycle_market(&symbols, -1);
++            KeyAction::Redraw
++        }
++        KeyCode::Right if state.trading.twap_draft.selected_field == 0 => {
++            let symbols: Vec<String> = state
++                .market_selector
++                .markets
++                .iter()
++                .map(|m| m.symbol.clone())
++                .collect();
++            state.trading.twap_draft.cycle_market(&symbols, 1);
++            KeyAction::Redraw
++        }
++        KeyCode::Enter => {
++            // Enter advances through the form like Tab on a web form: on
++            // any non-final row it moves the cursor down. On the last row
++            // (minutes) it validates and spawns the bot.
++            if state.trading.twap_draft.selected_field + 1 < TwapDraft::FIELD_COUNT {
++                state.trading.twap_draft.move_field_down();
++                state.trading.twap_draft.error = None;
++                return KeyAction::Redraw;
++            }
++            if !state.trading.wallet_loaded {
++                state.trading.twap_draft.error = Some(strings().twap_err_no_wallet.to_string());
++                return KeyAction::Redraw;
++            }
++            match build_bot_from_draft(state, configs) {
++                Ok(bot) => {
++                    let total = bot.total_size;
++                    let slices = bot.slice_count;
++                    let symbol = bot.symbol.clone();
++                    let side = bot.side;
++                    state.twaps_view.push(bot);
++                    state.trading.input_mode = InputMode::Normal;
++                    // Drop back to Market mode so a follow-up Enter doesn't
++                    // immediately reopen the TWAP modal — most users will
++                    // want to do something else next.
++                    state.trading.order_kind = OrderKind::Market;
++                    let s = strings();
++                    let side_lbl = match side {
++                        TradingSide::Long => s.long_label,
++                        TradingSide::Short => s.short_label,
++                    };
++                    state.trading.set_status_title(format!(
++                        "{}: {} {} {} \u{2014} {} {}",
++                        s.twap_started, side_lbl, total, symbol, slices, s.twap_unit_slices
++                    ));
++                    KeyAction::Redraw
++                }
++                Err(msg) => {
++                    state.trading.twap_draft.error = Some(msg);
++                    KeyAction::Redraw
++                }
++            }
++        }
++        KeyCode::Backspace => {
++            if let Some(buf) = field_buffer_mut(state) {
++                buf.pop();
++            }
++            state.trading.twap_draft.error = None;
++            KeyAction::Redraw
++        }
++        KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
++            // Hours / minutes are integer-only; reject `.` on those rows.
++            // Size accepts decimals.
++            let allow = match state.trading.twap_draft.selected_field {
++                3 | 4 => c != '.',
++                _ => true,
++            };
++            if allow {
++                if let Some(buf) = field_buffer_mut(state) {
++                    buf.push(c);
++                    state.trading.twap_draft.error = None;
++                }
++            }
++            KeyAction::Redraw
++        }
++        _ => KeyAction::Nothing,
++    }
++}
++
++fn field_buffer_mut(state: &mut TuiState) -> Option<&mut String> {
++    let d = &mut state.trading.twap_draft;
++    match d.selected_field {
++        2 => Some(&mut d.size_buffer),
++        3 => Some(&mut d.duration_hour_buffer),
++        4 => Some(&mut d.duration_min_buffer),
++        // Row 0 (market) and row 1 (side) have no text buffer — they're
++        // toggled via ←→ and Tab respectively.
++        _ => None,
++    }
++}
++
++/// Validate the TWAP draft and assemble a `TwapBot`. Returns a localized
++/// error message string on failure. Slice cadence is fixed at one market
++/// slice per minute (`slice_count = total_minutes`), matching Binance.
++fn build_bot_from_draft(
++    state: &TuiState,
++    configs: &std::collections::HashMap<String, SplineConfig>,
++) -> Result<TwapBot, String> {
++    let s = strings();
++    let draft = &state.trading.twap_draft;
++
++    let market_cfg = configs
++        .get(&draft.market)
++        .ok_or_else(|| format!("{} {}", s.st_market_switch_failed, draft.market))?;
++
++    let size: f64 = draft
++        .size_buffer
++        .parse::<f64>()
++        .ok()
++        .filter(|v| v.is_finite() && *v > 0.0 && *v <= MAX_UI_ORDER_SIZE_UNITS)
++        .ok_or_else(|| s.twap_err_size.to_string())?;
++
++    let hours: u32 = if draft.duration_hour_buffer.is_empty() {
++        0
++    } else {
++        draft
++            .duration_hour_buffer
++            .parse::<u32>()
++            .map_err(|_| s.twap_err_duration.to_string())?
++    };
++    let mins: u32 = if draft.duration_min_buffer.is_empty() {
++        0
++    } else {
++        draft
++            .duration_min_buffer
++            .parse::<u32>()
++            .map_err(|_| s.twap_err_duration.to_string())?
++    };
++    if hours == 0 && mins == 0 {
++        return Err(s.twap_err_duration.to_string());
++    }
++    let total_minutes: u32 = hours
++        .checked_mul(60)
++        .and_then(|h| h.checked_add(mins))
++        .ok_or_else(|| s.twap_err_duration.to_string())?;
++    if total_minutes < 1 {
++        return Err(s.twap_err_too_short.to_string());
++    }
++    let total_seconds: u64 = (total_minutes as u64) * 60;
++
++    // Cadence: 1 slice / minute.
++    let slice_count: u32 = total_minutes;
++    let slice_size = size / slice_count as f64;
++    // Reject slice sizes that would round to zero base lots on this market —
++    // the on-chain order would immediately fail. Surface the friendlier
++    // "shorten Total Time or increase size" message instead.
++    if ui_size_to_num_base_lots(slice_size, market_cfg.base_lot_decimals)
++        .map(|n| n == 0)
++        .unwrap_or(true)
++    {
++        return Err(s.twap_err_size_too_small.to_string());
++    }
++
++    Ok(TwapBot::new(
++        market_cfg.symbol.clone(),
++        draft.side,
++        size,
++        slice_count,
++        total_seconds.max(1),
++    ))
++}
++
++/// Bots modal — pause/resume, stop, restart, remove, scroll, switch market.
++pub(in crate::tui::runtime) fn handle_bots_view_key(
++    code: KeyCode,
++    state: &mut TuiState,
++    cfg: &SplineConfig,
++    pending_market_switch: &mut Option<String>,
++) -> KeyAction {
++    match code {
++        KeyCode::Up => {
++            state.twaps_view.move_up();
++            KeyAction::Redraw
++        }
++        KeyCode::Down => {
++            state.twaps_view.move_down();
++            KeyAction::Redraw
++        }
++        KeyCode::Enter => {
++            // Same pattern as the positions/liquidations modals: jump the
++            // active market to the bot's market, then close the modal so
++            // the user lands on the chart that the bot is trading.
++            let target = state
++                .twaps_view
++                .bots
++                .get(state.twaps_view.selected_index)
++                .map(|b| b.symbol.clone());
++            if let Some(sym) = target {
++                if sym != cfg.symbol {
++                    state.trading.input_mode = InputMode::Normal;
++                    state.trading.set_status_title(format!(
++                        "{} {}\u{2026}",
++                        strings().st_switching_to,
++                        sym
++                    ));
++                    *pending_market_switch = Some(sym);
++                    return KeyAction::BreakInner;
++                }
++            }
++            state.trading.input_mode = InputMode::Normal;
++            KeyAction::Redraw
++        }
++        KeyCode::Char('p') => {
++            let msg = state.twaps_view.selected_mut().map(|bot| {
++                use super::super::super::state::TwapStatus;
++                let s = strings();
++                match bot.status {
++                    TwapStatus::Running => {
++                        bot.pause();
++                        s.bots_paused_status
++                    }
++                    TwapStatus::Paused => {
++                        bot.resume();
++                        s.bots_resumed_status
++                    }
++                    _ => "",
++                }
++            });
++            if let Some(line) = msg.filter(|m| !m.is_empty()) {
++                state.trading.set_status_title(line);
++            }
++            KeyAction::Redraw
++        }
++        KeyCode::Char('s') => {
++            if let Some(bot) = state.twaps_view.selected_mut() {
++                bot.stop();
++                state
++                    .trading
++                    .set_status_title(strings().bots_stopped_status);
++            }
++            KeyAction::Redraw
++        }
++        KeyCode::Char('r') => {
++            if let Some(bot) = state.twaps_view.selected_mut() {
++                bot.restart();
++                state
++                    .trading
++                    .set_status_title(strings().bots_restarted_status);
++            }
++            KeyAction::Redraw
++        }
++        KeyCode::Char('x') => {
++            if state.twaps_view.remove_selected().is_some() {
++                state
++                    .trading
++                    .set_status_title(strings().bots_removed_status);
++            }
++            KeyAction::Redraw
++        }
++        KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('q') => {
++            state.trading.input_mode = InputMode::Normal;
++            KeyAction::Redraw
++        }
++        _ => KeyAction::Nothing,
++    }
++}
+diff --git a/src/tui/runtime/keyboard.rs b/src/tui/runtime/keyboard.rs
+index e4976de..7d50840 100644
+--- a/src/tui/runtime/keyboard.rs
++++ b/src/tui/runtime/keyboard.rs
+@@ -134,6 +134,10 @@ pub(super) fn handle_key_press(
+         }
+         InputMode::ViewingOrders => input::handle_orders_view_key(key.code, state),
+         InputMode::ViewingLedger => input::handle_ledger_view_key(key.code, &mut state.trading),
++        InputMode::EditingTwap => input::handle_editing_twap_key(key.code, state, configs),
++        InputMode::ViewingBots => {
++            input::handle_bots_view_key(key.code, state, cfg, pending_market_switch)
++        }
+         InputMode::ConfirmQuit => match key.code {
+             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => KeyAction::BreakOuter,
+             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+diff --git a/src/tui/runtime/mod.rs b/src/tui/runtime/mod.rs
+index 4832e40..b76d376 100644
+--- a/src/tui/runtime/mod.rs
++++ b/src/tui/runtime/mod.rs
+@@ -10,6 +10,7 @@ mod keyboard;
+ mod redraw;
+ mod submit;
+ mod tasks;
++mod twap_scheduler;
+ mod update_handlers;
+ mod wallet;
+ 
+diff --git a/src/tui/runtime/redraw.rs b/src/tui/runtime/redraw.rs
+index 4b20106..04491a3 100644
+--- a/src/tui/runtime/redraw.rs
++++ b/src/tui/runtime/redraw.rs
+@@ -41,6 +41,7 @@ pub(super) fn redraw_tui(
+             &state.orders_view,
+             &state.top_positions_view,
+             &state.liquidation_feed_view,
++            &state.twaps_view,
+             &state.order_chart_markers,
+             rpc_host,
+             &state.switching_to,
+@@ -74,6 +75,7 @@ pub(super) fn redraw_tui_force(
+             &state.orders_view,
+             &state.top_positions_view,
+             &state.liquidation_feed_view,
++            &state.twaps_view,
+             &state.order_chart_markers,
+             rpc_host,
+             &state.switching_to,
+diff --git a/src/tui/runtime/submit.rs b/src/tui/runtime/submit.rs
+index 4db7d2a..2100369 100644
+--- a/src/tui/runtime/submit.rs
++++ b/src/tui/runtime/submit.rs
+@@ -348,6 +348,10 @@ pub(super) fn execute_confirmed_action(
+                         tx_status.clone(),
+                     );
+                 }
++                // TWAP orders are routed through the TWAP modal, not the
++                // confirm prompt. We never construct a `PlaceOrder` with
++                // `OrderKind::Twap`.
++                OrderKind::Twap => {}
+             }
+         }
+         PendingAction::ClosePosition => {
+@@ -455,6 +459,16 @@ pub(super) fn cancel_message(
+                 size,
+                 cfg.symbol
+             ),
++            // Unreachable in practice — TWAP doesn't route through
++            // PendingAction::PlaceOrder. The arm exists so the match is total.
++            OrderKind::Twap => format!(
++                "{} {} {} {} {}",
++                s.st_cancelled,
++                s.twap,
++                side_lbl(side),
++                size,
++                cfg.symbol
++            ),
+         },
+         PendingAction::DepositFunds { amount } => {
+             format!(
+diff --git a/src/tui/runtime/tasks/orders.rs b/src/tui/runtime/tasks/orders.rs
+index c6e9350..afc4cae 100644
+--- a/src/tui/runtime/tasks/orders.rs
++++ b/src/tui/runtime/tasks/orders.rs
+@@ -244,6 +244,7 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
+     kp: Arc<Keypair>,
+     orders_tx: UnboundedSender<Vec<OrderInfo>>,
+     conditional_asset_symbols: HashMap<u32, String>,
++    shared_trader: Arc<std::sync::RwLock<Trader>>,
+ ) -> tokio::task::JoinHandle<()> {
+     tokio::spawn(async move {
+         let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
+@@ -282,6 +283,12 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
+                 CommitmentConfig::processed(),
+             );
+             let mut trader = Trader::new(key);
++            // Seed the shared trader to the freshly-keyed instance so any read
++            // before the first WS update still gets a coherent view (matching
++            // authority, empty subaccounts).
++            if let Ok(mut guard) = shared_trader.write() {
++                *guard = trader.clone();
++            }
+             // Stop-loss triggers live on `TraderStatePositionRow`, not in
+             // `subaccount.orders`, so the SDK's `Trader::all_orders()` never
+             // surfaces them. Track them ourselves from the raw ws payload so
+@@ -312,6 +319,14 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
+                             break;
+                         };
+                         trader.apply_update(&msg);
++                        // Mirror the freshly-applied state for any tx-side
++                        // reader (isolated-margin order builders snapshot the
++                        // trader under a read lock to build instructions
++                        // locally — no HTTP round-trip needed for collateral
++                        // routing or subaccount registration).
++                        if let Ok(mut guard) = shared_trader.write() {
++                            *guard = trader.clone();
++                        }
+ 
+                         match &msg.content {
+                             TraderStatePayload::Snapshot(s) => {
+diff --git a/src/tui/runtime/tasks/tx_context.rs b/src/tui/runtime/tasks/tx_context.rs
+index 25ca630..4913d8b 100644
+--- a/src/tui/runtime/tasks/tx_context.rs
++++ b/src/tui/runtime/tasks/tx_context.rs
+@@ -6,6 +6,7 @@ pub(in crate::tui::runtime) fn spawn_tx_context_task(
+     kp: Arc<Keypair>,
+     symbol: String,
+     http: Arc<PhoenixHttpClient>,
++    shared_trader: Arc<std::sync::RwLock<Trader>>,
+     ctx_chan: UnboundedSender<TxCtxMsg>,
+     status_chan: UnboundedSender<TxStatusMsg>,
+ ) -> tokio::task::JoinHandle<()> {
+@@ -22,7 +23,7 @@ pub(in crate::tui::runtime) fn spawn_tx_context_task(
+         }
+     };
+     tokio::spawn(async move {
+-        match TxContext::new(&kp, &symbol, Arc::clone(&http)).await {
++        match TxContext::new(&kp, &symbol, Arc::clone(&http), shared_trader).await {
+             Ok(ctx) => {
+                 let ctx = Arc::new(ctx);
+                 let _ = ctx_chan.send((wallet, symbol, ctx));
+diff --git a/src/tui/runtime/twap_scheduler.rs b/src/tui/runtime/twap_scheduler.rs
+new file mode 100644
+index 0000000..49fcda3
+--- /dev/null
++++ b/src/tui/runtime/twap_scheduler.rs
+@@ -0,0 +1,142 @@
++//! TWAP slice scheduler.
++//!
++//! Driven from the event loop on a 1-second tick (`tick_twap_scheduler`). For
++//! every active bot whose `slice_due` predicate fires, this dispatches a
++//! market order via the existing `submit_market_order` path and records the
++//! slice on the bot. Pause/stop are reflected in `TwapBot::is_active`, so
++//! the scheduler simply skips them.
++
++use std::time::Instant;
++
++use tokio::sync::mpsc::UnboundedSender;
++
++use super::super::config::SplineConfig;
++use super::super::i18n::strings;
++use super::super::math::ui_size_to_num_base_lots;
++use super::super::state::{TuiState, TxStatusMsg};
++use super::super::trading::TradingSide;
++use super::super::tx::submit_market_order;
++
++pub(in crate::tui::runtime) fn tick_twap_scheduler(
++    state: &mut TuiState,
++    configs: &std::collections::HashMap<String, SplineConfig>,
++    tx_status: &UnboundedSender<TxStatusMsg>,
++) -> bool {
++    let mut dispatched_any = false;
++    let now = Instant::now();
++
++    // Snapshot the keypair + tx context once. Both are required to submit
++    // any order; if either is missing the bot will just defer this tick and
++    // try again on the next.
++    let Some(kp) = state.trading.keypair.clone() else {
++        return false;
++    };
++    let Some(ctx) = state.trading.tx_context.clone() else {
++        return false;
++    };
++
++    // Iterate by index because we mutate each bot in place and don't want to
++    // hold an immutable borrow of the Vec across the submit call.
++    let bot_count = state.twaps_view.bots.len();
++    for i in 0..bot_count {
++        // Decide upfront whether this bot fires this tick. Read-only borrow.
++        let Some(bot) = state.twaps_view.bots.get(i) else {
++            continue;
++        };
++        if !bot.slice_due(now) {
++            continue;
++        }
++
++        let symbol = bot.symbol.clone();
++        let side = bot.side;
++        let slice_size = bot.slice_size;
++        let total_slices = bot.slice_count;
++        let next_slice_number = bot.slices_submitted + 1;
++
++        // Pull the market config for the bot's symbol. If the user has
++        // configs for the active symbol but not for a bot's symbol (rare —
++        // would require the market to be delisted mid-bot), surface a
++        // status line and stop the bot to prevent a busy retry loop.
++        let market_cfg = match configs.get(&symbol) {
++            Some(cfg) => cfg.clone(),
++            None => {
++                if let Some(bot) = state.twaps_view.bots.get_mut(i) {
++                    bot.stop();
++                    bot.last_status = format!(
++                        "{} {}: {}",
++                        strings().st_cannot_close,
++                        symbol,
++                        strings().st_no_market_cfg
++                    );
++                }
++                continue;
++            }
++        };
++
++        let num_base_lots = match ui_size_to_num_base_lots(slice_size, market_cfg.base_lot_decimals)
++        {
++            Ok(n) if n > 0 => n,
++            _ => {
++                if let Some(bot) = state.twaps_view.bots.get_mut(i) {
++                    bot.stop();
++                    bot.last_status = strings().twap_err_size_too_small.to_string();
++                }
++                continue;
++            }
++        };
++
++        // Reference price for isolated-mode collateral sizing. Use the same
++        // resolver as a normal market order would.
++        let reference_price_usd = market_price_for_symbol(state, &symbol);
++
++        submit_market_order(
++            kp.clone(),
++            ctx.clone(),
++            symbol.clone(),
++            side,
++            num_base_lots,
++            false,
++            slice_size,
++            0,
++            market_cfg.isolated_only,
++            market_cfg.max_leverage,
++            reference_price_usd,
++            tx_status.clone(),
++        );
++
++        let s = strings();
++        let side_lbl = match side {
++            TradingSide::Long => s.long_label,
++            TradingSide::Short => s.short_label,
++        };
++        let status_line = format!(
++            "{}: {} {} {} ({} {}/{})",
++            s.twap_slice_sent,
++            side_lbl,
++            slice_size,
++            symbol,
++            s.twap_slice_word,
++            next_slice_number,
++            total_slices,
++        );
++        if let Some(bot) = state.twaps_view.bots.get_mut(i) {
++            bot.record_slice_submitted(now, status_line.clone());
++        }
++        state.trading.set_status_title(status_line);
++        dispatched_any = true;
++    }
++
++    dispatched_any
++}
++
++fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
++    state
++        .market_selector
++        .markets
++        .iter()
++        .find(|m| m.symbol == symbol)
++        .map(|m| m.price)
++        .filter(|price| price.is_finite() && *price > 0.0)
++        .or_else(|| state.price_history.back().copied())
++        .unwrap_or(0.0)
++}
+diff --git a/src/tui/runtime/wallet.rs b/src/tui/runtime/wallet.rs
+index d81d221..623498d 100644
+--- a/src/tui/runtime/wallet.rs
++++ b/src/tui/runtime/wallet.rs
+@@ -1,7 +1,8 @@
+ //! Wallet connect / disconnect helpers.
+ 
+ use std::collections::HashMap;
+-use std::sync::Arc;
++use std::str::FromStr;
++use std::sync::{Arc, RwLock};
+ 
+ use phoenix_rise::PhoenixHttpClient;
+ use solana_keypair::Keypair;
+@@ -9,6 +10,7 @@ use solana_keypair::Keypair;
+ use super::super::config::SplineConfig;
+ use super::super::i18n::strings;
+ use super::super::state::TuiState;
++use super::super::tx::TxContext;
+ use super::tasks::{
+     spawn_initial_connect_flow, spawn_trader_orders_ws, spawn_tx_context_task, spawn_wallet_wss,
+ };
+@@ -48,10 +50,23 @@ pub(super) fn connect_wallet_with_keypair(
+     state.trading.referral_choice_shown = false;
+     state.trading.set_status_title(strings().st_loading_ctx);
+ 
++    // Shared `Trader` mirror used by both the trader-state WS task (writer) and
++    // the isolated-margin tx builders (readers). Seeded empty here so the
++    // `TxContext` future can move it into place even if it resolves before the
++    // first WS update. Stored on `TradingState` so RPC swaps and market
++    // switches can rebuild a `TxContext` against the same live trader.
++    let authority = match solana_pubkey::Pubkey::from_str(&kp_arc.pubkey().to_string()) {
++        Ok(pk) => pk,
++        Err(_) => solana_pubkey::Pubkey::default(),
++    };
++    let shared_trader = Arc::new(RwLock::new(TxContext::empty_trader(authority)));
++    state.trading.shared_trader = Some(Arc::clone(&shared_trader));
++
+     let tx_ctx = spawn_tx_context_task(
+         Arc::clone(&kp_arc),
+         cfg.symbol.clone(),
+         Arc::clone(&http),
++        Arc::clone(&shared_trader),
+         channels.tx_ctx_tx.clone(),
+         channels.tx_status.clone(),
+     );
+@@ -86,6 +101,7 @@ pub(super) fn connect_wallet_with_keypair(
+         Arc::clone(&kp_arc),
+         channels.orders_tx.clone(),
+         conditional_asset_symbols,
++        Arc::clone(&shared_trader),
+     );
+ 
+     WalletHandles {
+@@ -125,6 +141,7 @@ pub(super) fn disconnect_wallet(
+     state.trading.wallet_label.clear();
+     state.trading.keypair = None;
+     state.trading.tx_context = None;
++    state.trading.shared_trader = None;
+     state.trading.referral_choice_shown = false;
+     state.trading.position = None;
+     state.trading.usdc_balance = None;
+diff --git a/src/tui/state/mod.rs b/src/tui/state/mod.rs
+index b213420..13d5ad8 100644
+--- a/src/tui/state/mod.rs
++++ b/src/tui/state/mod.rs
+@@ -11,6 +11,7 @@ pub mod position_leaderboard_view;
+ pub mod positions_view;
+ pub mod trade_panel;
+ pub mod tui;
++pub mod twap_bots_view;
+ pub mod updates;
+ 
+ pub use book::*;
+@@ -22,6 +23,7 @@ pub use position_leaderboard_view::*;
+ pub use positions_view::*;
+ pub use trade_panel::*;
+ pub use tui::*;
++pub use twap_bots_view::*;
+ pub use updates::*;
+ 
+ /// Returns a timestamp string formatted as `[HH:MM:SS UTC]`.
+diff --git a/src/tui/state/trade_panel.rs b/src/tui/state/trade_panel.rs
+index 5d3cae9..cc6eef4 100644
+--- a/src/tui/state/trade_panel.rs
++++ b/src/tui/state/trade_panel.rs
+@@ -1,8 +1,9 @@
+ //! TradingState: in-flight order inputs, wallet connection, and status display.
+ 
+ use std::collections::VecDeque;
+-use std::sync::Arc;
++use std::sync::{Arc, RwLock};
+ 
++use phoenix_rise::Trader;
+ use solana_keypair::Keypair;
+ 
+ use super::super::config::{current_user_config, UserConfig};
+@@ -30,6 +31,12 @@ pub struct TradingState {
+     pub status_detail: String,
+     pub keypair: Option<Arc<Keypair>>,
+     pub tx_context: Option<Arc<TxContext>>,
++    /// Shared mirror of the wallet's on-chain `Trader` state. Owned by
++    /// `TradingState` so connection-change paths (RPC swap, market switch)
++    /// can rebuild a fresh `TxContext` against the same live trader without
++    /// re-subscribing the WS stream from scratch. Set on wallet connect,
++    /// cleared on disconnect.
++    pub shared_trader: Option<Arc<RwLock<Trader>>>,
+     pub input_mode: InputMode,
+     pub input_buffer: String,
+     pub deposit_buffer: String,
+@@ -71,6 +78,77 @@ pub struct TradingState {
+     pub ledger: VecDeque<LedgerEntry>,
+     /// Selected row in the ledger modal.
+     pub ledger_selected: usize,
++    /// In-progress draft for the "New TWAP" modal. Reset to defaults each
++    /// time the modal opens via [`reset_twap_draft`](Self::reset_twap_draft).
++    pub twap_draft: TwapDraft,
++}
++
++/// Editable form state backing the "New TWAP" modal. Field layout mirrors
++/// the Binance TWAP modal: market, side, total size, and total time
++/// (hours + minutes). Side is selectable from any field via [Tab]. Slice
++/// cadence is fixed at one market slice per minute.
++#[derive(Debug, Clone)]
++pub struct TwapDraft {
++    /// Cursor row: 0 = market, 1 = side, 2 = total size, 3 = total time
++    /// hours, 4 = total time minutes.
++    pub selected_field: usize,
++    /// Symbol of the market the TWAP will run against. Seeded from the
++    /// active market when the modal opens; cycled with ←/→ when the market
++    /// field is focused.
++    pub market: String,
++    pub side: super::super::trading::TradingSide,
++    pub size_buffer: String,
++    pub duration_hour_buffer: String,
++    pub duration_min_buffer: String,
++    /// Set when the user presses [Enter] but a field fails validation —
++    /// rendered below the form until the next keystroke.
++    pub error: Option<String>,
++}
++
++impl TwapDraft {
++    /// Index of the Total Size row in the form. Cursor starts here on open
++    /// — Market and Side both default to sensible values, so the user almost
++    /// always wants to type a size first.
++    pub const DEFAULT_FIELD: usize = 2;
++    pub const FIELD_COUNT: usize = 5;
++
++    pub fn new(market: String, side: super::super::trading::TradingSide) -> Self {
++        Self {
++            selected_field: Self::DEFAULT_FIELD,
++            market,
++            side,
++            size_buffer: String::new(),
++            duration_hour_buffer: String::new(),
++            duration_min_buffer: String::new(),
++            error: None,
++        }
++    }
++
++    pub fn move_field_up(&mut self) {
++        if self.selected_field > 0 {
++            self.selected_field -= 1;
++        }
++    }
++
++    pub fn move_field_down(&mut self) {
++        if self.selected_field + 1 < Self::FIELD_COUNT {
++            self.selected_field += 1;
++        }
++    }
++
++    /// Step to the previous or next market in `markets` (wrapping). No-op if
++    /// the current market isn't in the list (shouldn't happen — the draft is
++    /// always seeded from the active market) or the list is empty.
++    pub fn cycle_market(&mut self, markets: &[String], step: i32) {
++        if markets.is_empty() {
++            return;
++        }
++        let idx = markets.iter().position(|s| *s == self.market).unwrap_or(0);
++        let len = markets.len() as i32;
++        let new_idx = ((idx as i32 + step).rem_euclid(len)) as usize;
++        self.market = markets[new_idx].clone();
++        self.error = None;
++    }
+ }
+ 
+ impl TradingState {
+@@ -87,6 +165,7 @@ impl TradingState {
+             status_detail: String::new(),
+             keypair: None,
+             tx_context: None,
++            shared_trader: None,
+             input_mode: InputMode::Normal,
+             input_buffer: String::new(),
+             deposit_buffer: String::new(),
+@@ -110,9 +189,17 @@ impl TradingState {
+             referral_choice_shown: false,
+             ledger: VecDeque::with_capacity(LEDGER_CAPACITY),
+             ledger_selected: 0,
++            twap_draft: TwapDraft::new(String::new(), TradingSide::Long),
+         }
+     }
+ 
++    /// Reset the TWAP draft form to default values, seeding the market and
++    /// side from the active context. Called when the "New TWAP" modal opens
++    /// so each entry starts from a known-good baseline.
++    pub fn reset_twap_draft(&mut self, market: String) {
++        self.twap_draft = TwapDraft::new(market, self.side);
++    }
++
+     /// Record a user action in the ledger. If the same txid already appears as
+     /// the most recent entry (e.g. an "awaiting confirm" status followed by a
+     /// "confirmed" status for the same signature), update that entry in place
+@@ -222,6 +309,46 @@ mod tests {
+         assert_eq!(s.ledger.back().unwrap().txid, "sig1");
+     }
+ 
++    #[test]
++    fn twap_draft_field_nav_clamps_at_bounds() {
++        let mut d = TwapDraft::new("SOL".into(), TradingSide::Long);
++        assert_eq!(d.selected_field, TwapDraft::DEFAULT_FIELD);
++        for _ in 0..10 {
++            d.move_field_up();
++        }
++        assert_eq!(d.selected_field, 0);
++        for _ in 0..10 {
++            d.move_field_down();
++        }
++        assert_eq!(d.selected_field, TwapDraft::FIELD_COUNT - 1);
++    }
++
++    #[test]
++    fn reset_twap_draft_seeds_market_and_side() {
++        let mut s = TradingState::new();
++        s.side = TradingSide::Short;
++        s.twap_draft.size_buffer = "leftover".to_string();
++        s.reset_twap_draft("BTC".to_string());
++        assert_eq!(s.twap_draft.market, "BTC");
++        assert_eq!(s.twap_draft.side, TradingSide::Short);
++        assert!(s.twap_draft.size_buffer.is_empty());
++        assert_eq!(s.twap_draft.selected_field, TwapDraft::DEFAULT_FIELD);
++    }
++
++    #[test]
++    fn cycle_market_wraps_at_ends() {
++        let mut d = TwapDraft::new("SOL".into(), TradingSide::Long);
++        let markets = vec!["SOL".to_string(), "BTC".to_string(), "ETH".to_string()];
++        d.cycle_market(&markets, 1);
++        assert_eq!(d.market, "BTC");
++        d.cycle_market(&markets, 1);
++        assert_eq!(d.market, "ETH");
++        d.cycle_market(&markets, 1);
++        assert_eq!(d.market, "SOL");
++        d.cycle_market(&markets, -1);
++        assert_eq!(d.market, "ETH");
++    }
++
+     #[test]
+     fn record_ledger_updates_in_place_for_same_txid() {
+         let mut s = TradingState::new();
+diff --git a/src/tui/state/tui.rs b/src/tui/state/tui.rs
+index 8d6a148..dbd95da 100644
+--- a/src/tui/state/tui.rs
++++ b/src/tui/state/tui.rs
+@@ -16,6 +16,7 @@ use super::orders_view::OrdersView;
+ use super::position_leaderboard_view::TopPositionsView;
+ use super::positions_view::PositionsView;
+ use super::trade_panel::TradingState;
++use super::twap_bots_view::TwapsView;
+ 
+ pub struct TuiState {
+     pub price_history: VecDeque<f64>,
+@@ -49,6 +50,10 @@ pub struct TuiState {
+     /// Live liquidation feed: most-recent `LiquidationEvent`s decoded from
+     /// inner instructions on Phoenix Eternal txs.
+     pub liquidation_feed_view: LiquidationFeedView,
++    /// Active TWAP bots (running, paused, stopped, completed) — surfaced by
++    /// the bots modal (toggled with [b]) and advanced from the 1-second
++    /// scheduler tick in the event loop.
++    pub twaps_view: TwapsView,
+     /// One chart marker per active-market open order, keyed by `(symbol,
+     /// subaccount_index, order_sequence_number)`. Kept separate from `orders_view` because it
+     /// tracks chart-geometry state (x-coordinate that scrolls with
+@@ -87,6 +92,7 @@ impl TuiState {
+             orders_view: OrdersView::new(),
+             top_positions_view: TopPositionsView::new(),
+             liquidation_feed_view: LiquidationFeedView::new(),
++            twaps_view: TwapsView::new(),
+             order_chart_markers: HashMap::new(),
+             switching_to: None,
+             chart_data_cache: Vec::with_capacity(MAX_PRICE_HISTORY),
+diff --git a/src/tui/state/twap_bots_view.rs b/src/tui/state/twap_bots_view.rs
+new file mode 100644
+index 0000000..9562312
+--- /dev/null
++++ b/src/tui/state/twap_bots_view.rs
+@@ -0,0 +1,289 @@
++//! TWAP bot runtime state.
++//!
++//! Each [`TwapBot`] represents a running time-weighted-average-price execution.
++//! Bots are owned by [`TwapsView`] and advanced on a 1-second tick from the
++//! event loop: when `elapsed_since(last_slice_at) >= slice_interval`, the next
++//! slice is dispatched as a market order via the normal submit path.
++//!
++//! Bots are in-memory only — they don't survive process exit. The user
++//! interacts with them through the bots modal (toggle with [b]):
++//! pause/unpause, stop, restart, and remove.
++
++use std::time::{Duration, Instant};
++
++use super::super::trading::TradingSide;
++
++/// Lifecycle of a running TWAP.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum TwapStatus {
++    Running,
++    Paused,
++    Stopped,
++    Completed,
++}
++
++impl TwapStatus {
++    pub fn is_terminal(self) -> bool {
++        matches!(self, TwapStatus::Stopped | TwapStatus::Completed)
++    }
++}
++
++/// A single TWAP bot. The slice scheduler ticks at most once per second from
++/// the event loop and submits one slice when due. `last_status` is a short
++/// human-readable line (e.g. "slice 3/10 broadcast") that the bots modal
++/// renders alongside the status pill.
++#[derive(Debug, Clone)]
++pub struct TwapBot {
++    pub symbol: String,
++    pub side: TradingSide,
++    pub total_size: f64,
++    pub slice_count: u32,
++    pub slice_interval: Duration,
++    pub slice_size: f64,
++    pub slices_submitted: u32,
++    pub status: TwapStatus,
++    pub started_at: Instant,
++    pub last_slice_at: Option<Instant>,
++    pub last_status: String,
++}
++
++impl TwapBot {
++    /// Construct a fresh bot. The first slice is scheduled to fire immediately
++    /// on the next event-loop tick (no initial delay) — TWAP execution is
++    /// front-loaded so the user sees activity right away.
++    pub fn new(
++        symbol: String,
++        side: TradingSide,
++        total_size: f64,
++        slice_count: u32,
++        duration_secs: u64,
++    ) -> Self {
++        let slice_size = if slice_count == 0 {
++            0.0
++        } else {
++            total_size / slice_count as f64
++        };
++        let slice_interval = if slice_count <= 1 {
++            Duration::ZERO
++        } else {
++            Duration::from_secs(duration_secs / slice_count as u64)
++        };
++        Self {
++            symbol,
++            side,
++            total_size,
++            slice_count,
++            slice_interval,
++            slice_size,
++            slices_submitted: 0,
++            status: TwapStatus::Running,
++            started_at: Instant::now(),
++            last_slice_at: None,
++            last_status: String::new(),
++        }
++    }
++
++    /// True if the bot is in a state that consumes scheduler ticks.
++    pub fn is_active(&self) -> bool {
++        matches!(self.status, TwapStatus::Running)
++    }
++
++    /// True if it's time to fire the next slice. `now` is supplied so tests
++    /// can pin time.
++    pub fn slice_due(&self, now: Instant) -> bool {
++        if !self.is_active() {
++            return false;
++        }
++        if self.slices_submitted >= self.slice_count {
++            return false;
++        }
++        match self.last_slice_at {
++            None => true,
++            Some(prev) => now.duration_since(prev) >= self.slice_interval,
++        }
++    }
++
++    /// Record that a slice was just dispatched. Bumps the counter and flips to
++    /// `Completed` once the last slice has been submitted.
++    pub fn record_slice_submitted(&mut self, now: Instant, status_line: impl Into<String>) {
++        self.slices_submitted += 1;
++        self.last_slice_at = Some(now);
++        self.last_status = status_line.into();
++        if self.slices_submitted >= self.slice_count {
++            self.status = TwapStatus::Completed;
++        }
++    }
++
++    pub fn pause(&mut self) {
++        if matches!(self.status, TwapStatus::Running) {
++            self.status = TwapStatus::Paused;
++        }
++    }
++
++    pub fn resume(&mut self) {
++        if matches!(self.status, TwapStatus::Paused) {
++            self.status = TwapStatus::Running;
++        }
++    }
++
++    pub fn stop(&mut self) {
++        if !self.status.is_terminal() {
++            self.status = TwapStatus::Stopped;
++        }
++    }
++
++    /// Reset progress and re-arm. Used by the bots-modal [r] hotkey to re-run
++    /// a finished or stopped bot from scratch.
++    pub fn restart(&mut self) {
++        self.slices_submitted = 0;
++        self.last_slice_at = None;
++        self.status = TwapStatus::Running;
++        self.started_at = Instant::now();
++        self.last_status.clear();
++    }
++}
++
++/// Top-level container for all running TWAP bots plus the bots modal cursor.
++pub struct TwapsView {
++    pub bots: Vec<TwapBot>,
++    pub selected_index: usize,
++}
++
++impl TwapsView {
++    pub fn new() -> Self {
++        Self {
++            bots: Vec::new(),
++            selected_index: 0,
++        }
++    }
++
++    pub fn push(&mut self, bot: TwapBot) {
++        self.bots.push(bot);
++    }
++
++    pub fn move_up(&mut self) {
++        if self.selected_index > 0 {
++            self.selected_index -= 1;
++        }
++    }
++
++    pub fn move_down(&mut self) {
++        if self.selected_index + 1 < self.bots.len() {
++            self.selected_index += 1;
++        }
++    }
++
++    pub fn clamp_index(&mut self) {
++        if !self.bots.is_empty() {
++            self.selected_index = self.selected_index.min(self.bots.len() - 1);
++        } else {
++            self.selected_index = 0;
++        }
++    }
++
++    pub fn selected_mut(&mut self) -> Option<&mut TwapBot> {
++        self.bots.get_mut(self.selected_index)
++    }
++
++    pub fn remove_selected(&mut self) -> Option<TwapBot> {
++        if self.selected_index >= self.bots.len() {
++            return None;
++        }
++        let bot = self.bots.remove(self.selected_index);
++        self.clamp_index();
++        Some(bot)
++    }
++}
++
++impl Default for TwapsView {
++    fn default() -> Self {
++        Self::new()
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn make_bot() -> TwapBot {
++        TwapBot::new("SOL".to_string(), TradingSide::Long, 1.0, 4, 40)
++    }
++
++    #[test]
++    fn slice_size_divides_total_evenly() {
++        let bot = make_bot();
++        assert_eq!(bot.slice_size, 0.25);
++        assert_eq!(bot.slice_interval, Duration::from_secs(10));
++    }
++
++    #[test]
++    fn first_slice_due_immediately() {
++        let bot = make_bot();
++        assert!(bot.slice_due(Instant::now()));
++    }
++
++    #[test]
++    fn after_submit_not_due_until_interval_passes() {
++        let mut bot = make_bot();
++        let t0 = Instant::now();
++        bot.record_slice_submitted(t0, "slice 1/4");
++        // Not yet — interval is 10s but no time has passed.
++        assert!(!bot.slice_due(t0));
++        // After the interval, due again.
++        assert!(bot.slice_due(t0 + Duration::from_secs(10)));
++    }
++
++    #[test]
++    fn completes_after_last_slice() {
++        let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 2, 2);
++        let t0 = Instant::now();
++        bot.record_slice_submitted(t0, "1/2");
++        assert_eq!(bot.status, TwapStatus::Running);
++        bot.record_slice_submitted(t0 + Duration::from_secs(1), "2/2");
++        assert_eq!(bot.status, TwapStatus::Completed);
++        assert_eq!(bot.slices_submitted, bot.slice_count);
++    }
++
++    #[test]
++    fn paused_bot_does_not_fire_slices() {
++        let mut bot = make_bot();
++        bot.pause();
++        assert!(!bot.slice_due(Instant::now()));
++        bot.resume();
++        assert!(bot.slice_due(Instant::now()));
++    }
++
++    #[test]
++    fn stopped_bot_is_terminal() {
++        let mut bot = make_bot();
++        bot.stop();
++        assert!(bot.status.is_terminal());
++        // Resume from terminal is a no-op.
++        bot.resume();
++        assert_eq!(bot.status, TwapStatus::Stopped);
++    }
++
++    #[test]
++    fn restart_clears_progress() {
++        let mut bot = make_bot();
++        bot.record_slice_submitted(Instant::now(), "1/4");
++        bot.stop();
++        bot.restart();
++        assert_eq!(bot.slices_submitted, 0);
++        assert_eq!(bot.status, TwapStatus::Running);
++        assert!(bot.slice_due(Instant::now()));
++    }
++
++    #[test]
++    fn view_remove_selected_keeps_cursor_valid() {
++        let mut v = TwapsView::new();
++        v.push(make_bot());
++        v.push(make_bot());
++        v.selected_index = 1;
++        v.remove_selected();
++        assert_eq!(v.selected_index, 0);
++        v.remove_selected();
++        assert_eq!(v.selected_index, 0);
++        assert!(v.bots.is_empty());
++    }
++}
+diff --git a/src/tui/trading/input_mode.rs b/src/tui/trading/input_mode.rs
+index 04e7e0e..1014a04 100644
+--- a/src/tui/trading/input_mode.rs
++++ b/src/tui/trading/input_mode.rs
+@@ -46,5 +46,13 @@ pub enum InputMode {
+     /// `ChoosingReferral` modal's "Use custom code" option. Empty + Enter or
+     /// Esc skips and points the user at phoenix.trade.
+     EditingReferralCode,
++    /// "New TWAP" modal opened from Normal mode by pressing [Enter] while the
++    /// active `OrderKind` is `Twap`. Collects side, total size, duration, and
++    /// slice count via a four-row field editor; [Enter] starts the bot and
++    /// returns to Normal mode, [Esc] discards.
++    EditingTwap,
++    /// "Bots" modal opened by [b] — lists running TWAP bots with
++    /// pause/unpause/stop/restart/remove hotkeys.
++    ViewingBots,
+     ConfirmQuit,
+ }
+diff --git a/src/tui/trading/order_kind.rs b/src/tui/trading/order_kind.rs
+index bef8d5e..98e4a43 100644
+--- a/src/tui/trading/order_kind.rs
++++ b/src/tui/trading/order_kind.rs
+@@ -15,13 +15,19 @@ pub enum OrderKind {
+     StopMarket {
+         trigger: f64,
+     },
++    /// Time-Weighted Average Price: splits the order into `slice_count`
++    /// equal-sized market orders spaced evenly across `duration_secs`. The
++    /// order entry row is intentionally not used to collect TWAP parameters;
++    /// selecting this kind and pressing Enter opens the TWAP modal which
++    /// owns the inputs (side, total size, duration, slice count).
++    Twap,
+ }
+ 
+ impl OrderKind {
+-    /// USD price attached to the kind, if any. `None` for `Market`.
++    /// USD price attached to the kind, if any. `None` for `Market` and `Twap`.
+     pub fn price(&self) -> Option<f64> {
+         match self {
+-            OrderKind::Market => None,
++            OrderKind::Market | OrderKind::Twap => None,
+             OrderKind::Limit { price } => Some(*price),
+             OrderKind::StopMarket { trigger } => Some(*trigger),
+         }
+@@ -46,4 +52,9 @@ mod tests {
+     fn stop_market_returns_trigger() {
+         assert_eq!(OrderKind::StopMarket { trigger: 99.5 }.price(), Some(99.5));
+     }
++
++    #[test]
++    fn twap_has_no_price() {
++        assert_eq!(OrderKind::Twap.price(), None);
++    }
+ }
+diff --git a/src/tui/tx/context.rs b/src/tui/tx/context.rs
+index 2bce385..49987d4 100644
+--- a/src/tui/tx/context.rs
++++ b/src/tui/tx/context.rs
+@@ -4,10 +4,11 @@
+ 
+ use std::collections::VecDeque;
+ use std::str::FromStr;
+-use std::sync::Arc;
++use std::sync::{Arc, RwLock};
+ use std::time::Duration;
+ 
+ use phoenix_eternal_types::program_ids;
++use phoenix_rise::{Trader, TraderKey};
+ use solana_commitment_config::CommitmentConfig;
+ use solana_keypair::Keypair;
+ use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
+@@ -73,6 +74,11 @@ pub struct TxContext {
+     /// Confirmation still listens exclusively on `rpc_client`. `None` when the
+     /// primary already targets the public mainnet-beta endpoint.
+     pub secondary_send_rpc: Option<Arc<solana_rpc_client::nonblocking::rpc_client::RpcClient>>,
++    /// Phoenix HTTP SDK client. Kept on the context as a connection-pool
++    /// holder even though signed-order construction now builds instructions
++    /// locally via `PhoenixTxBuilder`; future flows (e.g. metadata refresh,
++    /// account-info helpers) reuse this handle instead of opening a second.
++    #[allow(dead_code)]
+     pub http_client: Arc<phoenix_rise::PhoenixHttpClient>,
+     pub metadata: phoenix_rise::PhoenixMetadata,
+     pub authority_v2: solana_pubkey::Pubkey,
+@@ -84,6 +90,12 @@ pub struct TxContext {
+     /// Shared WSS client for signature confirmations — all orders multiplex
+     /// through a single WebSocket instead of opening one per transaction.
+     pub(super) sig_pubsub: tokio::sync::Mutex<Option<Arc<PubsubClient>>>,
++    /// Live mirror of the wallet's `Trader` state — written by the trader-state
++    /// WS subscription, read by isolated-margin order builders so they can
++    /// construct subaccount-aware instructions locally without round-tripping
++    /// through the Phoenix HTTP API. Starts empty and is hydrated by the WS
++    /// task on the first `TraderUpdate`.
++    pub shared_trader: Arc<RwLock<Trader>>,
+ }
+ 
+ impl TxContext {
+@@ -94,6 +106,7 @@ impl TxContext {
+         keypair: &Keypair,
+         symbol: &str,
+         http: Arc<phoenix_rise::PhoenixHttpClient>,
++        shared_trader: Arc<RwLock<Trader>>,
+     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+ 
+@@ -150,9 +163,27 @@ impl TxContext {
+             blockhash_pool: tokio::sync::Mutex::new(VecDeque::with_capacity(30)),
+             ws_url: ws_url_from_env(),
+             sig_pubsub: tokio::sync::Mutex::new(None),
++            shared_trader,
+         })
+     }
+ 
++    /// Snapshot the shared `Trader` state under a short read lock. The clone
++    /// keeps the lock window minimal so the WS task can keep applying updates
++    /// while order construction runs.
++    pub fn snapshot_trader(&self) -> Trader {
++        match self.shared_trader.read() {
++            Ok(guard) => guard.clone(),
++            Err(poisoned) => poisoned.into_inner().clone(),
++        }
++    }
++
++    /// Construct an empty `Trader` keyed to the supplied authority. Used as the
++    /// initial value for the shared trader before the WS subscription delivers
++    /// its first snapshot.
++    pub fn empty_trader(authority: solana_pubkey::Pubkey) -> Trader {
++        Trader::new(TraderKey::new(authority))
++    }
++
+     /// Pushes the latest blockhash from the network into the rotating memory
+     /// pool.
+     pub async fn push_blockhash(&self) {
+diff --git a/src/tui/tx/limit_order.rs b/src/tui/tx/limit_order.rs
+index 58529f9..37a4a11 100644
+--- a/src/tui/tx/limit_order.rs
++++ b/src/tui/tx/limit_order.rs
+@@ -36,6 +36,7 @@ pub fn submit_limit_order(
+     tokio::spawn(async move {
+         use phoenix_rise::ix::{create_place_limit_order_ix, LimitOrderParams, OrderFlags, Side};
+         use phoenix_rise::math::WrapperNum;
++        use phoenix_rise::PhoenixTxBuilder;
+ 
+         let s = strings();
+         let side_lbl = match side {
+@@ -69,19 +70,21 @@ pub fn submit_limit_order(
+                         return;
+                     }
+                 };
+-            let (mut ixs, _) = match ctx
+-                .http_client
+-                .build_isolated_limit_order_tx_enhanced(
+-                    &ctx.authority_v2,
+-                    &symbol,
+-                    phx_side,
+-                    limit_price_usd,
+-                    num_base_lots,
+-                    Some(collateral),
+-                    false,
+-                )
+-                .await
+-            {
++            // Same rationale as the isolated market path: build locally via
++            // `PhoenixTxBuilder` to avoid the API endpoint's mid-price
++            // dependency. The on-chain limit-order builder needs only trader
++            // state + market metadata, both of which we already mirror.
++            let trader_snapshot = ctx.snapshot_trader();
++            let builder = PhoenixTxBuilder::new(&ctx.metadata);
++            let mut ixs = match builder.build_isolated_limit_order(
++                &trader_snapshot,
++                &symbol,
++                phx_side,
++                limit_price_usd,
++                num_base_lots,
++                Some(collateral),
++                false,
++            ) {
+                 Ok(ixs) => ixs,
+                 Err(e) => {
+                     let detail = parse_phoenix_tx_error(&format!("{}", e));
+diff --git a/src/tui/tx/market_order.rs b/src/tui/tx/market_order.rs
+index e7f8dbe..fe5d6e1 100644
+--- a/src/tui/tx/market_order.rs
++++ b/src/tui/tx/market_order.rs
+@@ -37,6 +37,7 @@ pub fn submit_market_order(
+ ) {
+     tokio::spawn(async move {
+         use phoenix_rise::ix::{create_place_market_order_ix, MarketOrderParams, OrderFlags, Side};
++        use phoenix_rise::PhoenixTxBuilder;
+ 
+         let s = strings();
+         let side_lbl = match side {
+@@ -81,19 +82,22 @@ pub fn submit_market_order(
+                         return;
+                     }
+                 };
+-            let (mut ixs, _) = match ctx
+-                .http_client
+-                .build_isolated_market_order_tx_enhanced(
+-                    &ctx.authority_v2,
+-                    &symbol,
+-                    phx_side,
+-                    num_base_lots,
+-                    Some(collateral),
+-                    false,
+-                    None,
+-                )
+-                .await
+-            {
++            // Build locally via `PhoenixTxBuilder` so we don't round-trip
++            // through the Phoenix HTTP API just to estimate a liquidation
++            // price we discard anyway. The API path failed with "No mid price
++            // available (insufficient liquidity)" when the server-side mid
++            // couldn't be computed; the on-chain builder needs none of that.
++            let trader_snapshot = ctx.snapshot_trader();
++            let builder = PhoenixTxBuilder::new(&ctx.metadata);
++            let mut ixs = match builder.build_isolated_market_order(
++                &trader_snapshot,
++                &symbol,
++                phx_side,
++                num_base_lots,
++                Some(collateral),
++                false,
++                None,
++            ) {
+                 Ok(ixs) => ixs,
+                 Err(e) => {
+                     let detail = parse_phoenix_tx_error(&format!("{}", e));
+diff --git a/src/tui/ui/mod.rs b/src/tui/ui/mod.rs
+index f2908ae..83c0348 100644
+--- a/src/tui/ui/mod.rs
++++ b/src/tui/ui/mod.rs
+@@ -9,7 +9,7 @@ use solana_signer::Signer;
+ use super::config::SplineConfig;
+ use super::state::{
+     LiquidationFeedView, MarketSelector, MergedBook, OrderChartMarker, OrdersView, PositionsView,
+-    TopPositionsView, TradeMarker, TradingState,
++    TopPositionsView, TradeMarker, TradingState, TwapsView,
+ };
+ use super::trading::InputMode;
+ 
+@@ -76,6 +76,7 @@ pub fn render_frame(
+     orders_view: &OrdersView,
+     top_positions_view: &TopPositionsView,
+     liquidation_feed_view: &LiquidationFeedView,
++    twaps_view: &TwapsView,
+     order_chart_markers: &std::collections::HashMap<(String, u8, u64), OrderChartMarker>,
+     rpc_host: &str,
+     switching_to: &Option<String>,
+@@ -174,6 +175,14 @@ pub fn render_frame(
+         modals::render_liquidation_feed_modal(f, area, liquidation_feed_view);
+     }
+ 
++    if trading.input_mode == InputMode::EditingTwap {
++        modals::render_twap_modal(f, area, trading, &cfg.symbol);
++    }
++
++    if trading.input_mode == InputMode::ViewingBots {
++        modals::render_bots_modal(f, area, twaps_view, &cfg.symbol);
++    }
++
+     if trading.input_mode == InputMode::ViewingOrders {
+         modals::render_orders_modal(f, area, orders_view, &cfg.symbol);
+     }
+diff --git a/src/tui/ui/modals/mod.rs b/src/tui/ui/modals/mod.rs
+index 6ab3ba3..5c6cab6 100644
+--- a/src/tui/ui/modals/mod.rs
++++ b/src/tui/ui/modals/mod.rs
+@@ -28,6 +28,7 @@ mod positions;
+ mod quit;
+ mod referral_choice;
+ mod referral_code;
++mod twap;
+ mod wallet_path;
+ 
+ pub(in crate::tui::ui) use chrome::*;
+@@ -41,4 +42,5 @@ pub(in crate::tui::ui) use positions::*;
+ pub(in crate::tui::ui) use quit::*;
+ pub(in crate::tui::ui) use referral_choice::*;
+ pub(in crate::tui::ui) use referral_code::*;
++pub(in crate::tui::ui) use twap::*;
+ pub(in crate::tui::ui) use wallet_path::*;
+diff --git a/src/tui/ui/modals/twap.rs b/src/tui/ui/modals/twap.rs
+new file mode 100644
+index 0000000..4b61495
+--- /dev/null
++++ b/src/tui/ui/modals/twap.rs
+@@ -0,0 +1,624 @@
++//! "New TWAP" and "Bots" modals.
++//!
++//! `render_twap_modal` collects side / total size / total time
++//! (hours + minutes) from the user; slice cadence is fixed at one market
++//! slice per minute so total time fully determines the schedule.
++//! `render_bots_modal` lists every TWAP bot tracked by [`TwapsView`] with
++//! status and lifecycle hotkeys.
++//!
++//! NOTE: total time is measured in whole minutes — seconds aren't a
++//! supported input unit. The slice interval is always 60 s.
++
++use std::time::Instant;
++
++use super::*;
++
++use super::super::super::state::{TwapBot, TwapStatus, TwapsView};
++use super::super::super::trading::TradingSide;
++
++/// "Phoenix TWAP" modal.
++pub(in crate::tui::ui) fn render_twap_modal(
++    f: &mut Frame,
++    area: ratatui::layout::Rect,
++    trading: &TradingState,
++    _symbol: &str,
++) {
++    let s = strings();
++    let draft = &trading.twap_draft;
++    let has_error = draft.error.is_some();
++    // Header block (intro + summary) + spacer + 6 form rows, plus an
++    // optional 2-row error tail. +2 for the top/bottom border.
++    let desired_h: u16 = if has_error { 13 } else { 11 };
++    let popup_h: u16 = desired_h.min(area.height.saturating_sub(2));
++    let popup_w: u16 = 72.min(area.width.saturating_sub(4));
++    let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
++    let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
++    let popup_area = ratatui::layout::Rect::new(x, y, popup_w, popup_h);
++
++    f.render_widget(ratatui::widgets::Clear, popup_area);
++
++    let title = Line::from(vec![
++        Span::raw(" "),
++        Span::styled(
++            "🐦‍🔥 ",
++            Style::default()
++                .fg(FIRE_ORANGE)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            "Phoenix ",
++            Style::default()
++                .fg(FIRE_ORANGE)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{} ", s.twap_modal_title),
++            Style::default()
++                .fg(Color::White)
++                .add_modifier(Modifier::BOLD),
++        ),
++    ]);
++
++    let footer = Line::from(vec![
++        Span::styled(
++            " ↑↓ ",
++            Style::default()
++                .fg(Color::Cyan)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.twap_nav_field),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "←→ ",
++            Style::default()
++                .fg(Color::Cyan)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.twap_cycle_market),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "Tab ",
++            Style::default()
++                .fg(Color::Cyan)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.twap_toggle_side),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "Enter ",
++            Style::default()
++                .fg(Color::Green)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.twap_start),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "Esc ",
++            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{} ", s.cancel),
++            Style::default().fg(Color::DarkGray),
++        ),
++    ])
++    .left_aligned();
++
++    let block = Block::default()
++        .title(title)
++        .title_bottom(footer)
++        .borders(Borders::ALL)
++        .border_style(Style::default().fg(MODAL_BORDER));
++
++    let inner = block.inner(popup_area);
++    f.render_widget(block, popup_area);
++
++    // Header (intro + schedule preview) at the top, form below.
++    let mut constraints = vec![
++        Constraint::Length(1), // intro
++        Constraint::Length(1), // derived summary
++        Constraint::Length(1), // spacer
++        Constraint::Length(1), // market
++        Constraint::Length(1), // side
++        Constraint::Length(1), // total size
++        Constraint::Length(1), // total time header
++        Constraint::Length(1), // hours
++        Constraint::Length(1), // minutes
++    ];
++    if has_error {
++        constraints.push(Constraint::Length(1)); // spacer before error
++        constraints.push(Constraint::Length(1)); // error
++    }
++    constraints.push(Constraint::Min(0));
++    let rows = Layout::default()
++        .direction(Direction::Vertical)
++        .constraints(constraints)
++        .split(inner);
++
++    // — Top header: intro + schedule preview —
++    f.render_widget(
++        Paragraph::new(Line::from(Span::styled(
++            format!(" {}", s.twap_modal_intro),
++            Style::default().fg(Color::DarkGray),
++        ))),
++        rows[0],
++    );
++    let summary = derive_summary(draft);
++    f.render_widget(
++        Paragraph::new(Line::from(vec![
++            Span::raw(" "),
++            Span::styled(summary, Style::default().fg(Color::DarkGray)),
++        ])),
++        rows[1],
++    );
++
++    // Field 0 — Market: shown with ←→ hint when focused so the user knows
++    // it's a cyclable picker rather than a text input.
++    let market_value = if draft.selected_field == 0 {
++        format!("{}  [←→]", draft.market)
++    } else {
++        draft.market.clone()
++    };
++    render_form_row(
++        f,
++        rows[3],
++        s.twap_field_market,
++        Span::styled(
++            market_value,
++            Style::default()
++                .fg(if draft.selected_field == 0 {
++                    Color::Cyan
++                } else {
++                    Color::White
++                })
++                .add_modifier(Modifier::BOLD),
++        ),
++        draft.selected_field == 0,
++    );
++
++    let side_value: String = match draft.side {
++        TradingSide::Long => format!("{}  [Tab]", s.long_label),
++        TradingSide::Short => format!("{}  [Tab]", s.short_label),
++    };
++    let side_color = draft.side.color();
++    render_form_row(
++        f,
++        rows[4],
++        s.twap_field_side,
++        Span::styled(
++            side_value,
++            Style::default().fg(side_color).add_modifier(Modifier::BOLD),
++        ),
++        draft.selected_field == 1,
++    );
++    render_form_row(
++        f,
++        rows[5],
++        s.twap_field_size,
++        editable_value_span(&draft.size_buffer, draft.selected_field == 2, &draft.market),
++        draft.selected_field == 2,
++    );
++
++    // Total Time header (label-only).
++    f.render_widget(
++        Paragraph::new(Line::from(Span::styled(
++            format!("  {}", s.twap_field_total_time),
++            Style::default()
++                .fg(Color::DarkGray)
++                .add_modifier(Modifier::BOLD),
++        ))),
++        rows[6],
++    );
++
++    render_form_row(
++        f,
++        rows[7],
++        s.twap_field_hours,
++        editable_value_span(
++            &draft.duration_hour_buffer,
++            draft.selected_field == 3,
++            s.twap_unit_hr,
++        ),
++        draft.selected_field == 3,
++    );
++    render_form_row(
++        f,
++        rows[8],
++        s.twap_field_mins,
++        editable_value_span(
++            &draft.duration_min_buffer,
++            draft.selected_field == 4,
++            s.twap_unit_min,
++        ),
++        draft.selected_field == 4,
++    );
++
++    if has_error {
++        let err = draft.error.as_deref().unwrap_or("");
++        f.render_widget(
++            Paragraph::new(Line::from(vec![
++                Span::styled(
++                    " ✗ ",
++                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
++                ),
++                Span::styled(err.to_string(), Style::default().fg(Color::LightRed)),
++            ])),
++            rows[10],
++        );
++    }
++}
++
++fn editable_value_span<'a>(buffer: &'a str, is_selected: bool, unit: &'a str) -> Span<'a> {
++    let cursor = if is_selected { "_" } else { "" };
++    if buffer.is_empty() && !is_selected {
++        Span::styled(format!("— {}", unit), Style::default().fg(Color::DarkGray))
++    } else {
++        Span::styled(
++            format!("{}{}  {}", buffer, cursor, unit),
++            Style::default()
++                .fg(if is_selected {
++                    Color::Cyan
++                } else {
++                    Color::White
++                })
++                .add_modifier(if is_selected {
++                    Modifier::BOLD | Modifier::UNDERLINED
++                } else {
++                    Modifier::BOLD
++                }),
++        )
++    }
++}
++
++fn render_form_row(
++    f: &mut Frame,
++    rect: ratatui::layout::Rect,
++    label: &str,
++    value: Span<'_>,
++    is_selected: bool,
++) {
++    let cursor = if is_selected { "▸" } else { " " };
++    let label_style = if is_selected {
++        Style::default()
++            .fg(Color::Cyan)
++            .add_modifier(Modifier::BOLD)
++    } else {
++        Style::default().fg(Color::DarkGray)
++    };
++    let line = Line::from(vec![
++        Span::styled(format!(" {} ", cursor), label_style),
++        Span::styled(format!("{:<12}", label), label_style),
++        Span::raw("  "),
++        value,
++    ]);
++    f.render_widget(Paragraph::new(line), rect);
++}
++
++fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
++    let s = strings();
++    let size: Option<f64> = draft.size_buffer.parse::<f64>().ok().filter(|v| *v > 0.0);
++    let hours: u32 = draft.duration_hour_buffer.parse::<u32>().unwrap_or(0);
++    let mins: u32 = draft.duration_min_buffer.parse::<u32>().unwrap_or(0);
++    let total_minutes: u32 = hours * 60 + mins;
++    if let (Some(size), true) = (size, total_minutes >= 1) {
++        let slice_count = total_minutes;
++        let slice_size = size / slice_count as f64;
++        format!(
++            "{} {} {} {} ({:.4} {}/{}, 1 {} {})",
++            s.twap_summary_prefix,
++            slice_count,
++            s.twap_summary_slices_of,
++            size,
++            slice_size,
++            draft.market,
++            s.twap_summary_per_slice_suf,
++            s.twap_unit_min,
++            s.twap_summary_interval_suf,
++        )
++    } else {
++        s.twap_summary_placeholder.to_string()
++    }
++}
++
++/// "Bots" modal (toggled with [b]).
++pub(in crate::tui::ui) fn render_bots_modal(
++    f: &mut Frame,
++    area: ratatui::layout::Rect,
++    view: &TwapsView,
++    active_symbol: &str,
++) {
++    let row_count = view.bots.len().max(1) as u16;
++    // Sized to the sum of the fixed column widths below + spacing + borders.
++    // Wider than this just leaves dead space after the State column.
++    let max_width: u16 = 79;
++    let popup_w = max_width.min(area.width.saturating_sub(4));
++    let popup_h = (row_count + 6).min(area.height.saturating_sub(2));
++
++    let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
++    let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
++    let popup_area = ratatui::layout::Rect::new(x, y, popup_w, popup_h);
++
++    f.render_widget(ratatui::widgets::Clear, popup_area);
++
++    let s = strings();
++    let title = Line::from(vec![
++        Span::styled(
++            " 🐦‍🔥 ",
++            Style::default()
++                .fg(FIRE_ORANGE)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            "Phoenix ",
++            Style::default()
++                .fg(FIRE_ORANGE)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{} ", s.bots_title),
++            Style::default()
++                .fg(Color::White)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("({}) ", view.bots.len()),
++            Style::default().fg(Color::DarkGray),
++        ),
++    ]);
++
++    let footer = Line::from(vec![
++        Span::styled(
++            " ↑↓ ",
++            Style::default()
++                .fg(Color::Cyan)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.select),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "p ",
++            Style::default()
++                .fg(Color::Cyan)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.bots_pause_resume),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "s ",
++            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.bots_stop),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "r ",
++            Style::default()
++                .fg(Color::Green)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.bots_restart),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "x ",
++            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(
++            format!("{}  ", s.bots_remove),
++            Style::default().fg(Color::DarkGray),
++        ),
++        Span::styled(
++            "Esc ",
++            Style::default()
++                .fg(Color::Cyan)
++                .add_modifier(Modifier::BOLD),
++        ),
++        Span::styled(format!("{} ", s.back), Style::default().fg(Color::DarkGray)),
++    ])
++    .left_aligned();
++
++    let block = Block::default()
++        .title(title)
++        .title_bottom(footer)
++        .borders(Borders::ALL)
++        .border_style(Style::default().fg(MODAL_BORDER));
++
++    let inner = block.inner(popup_area);
++    f.render_widget(block, popup_area);
++
++    if view.bots.is_empty() {
++        let empty = Paragraph::new(Line::from(Span::styled(
++            format!(" {}", s.bots_empty),
++            Style::default().fg(Color::DarkGray),
++        )));
++        f.render_widget(empty, inner);
++        return;
++    }
++
++    let header = Row::new(vec![
++        Cell::from(Span::styled(
++            format!("  {}", s.market),
++            Style::default().fg(Color::DarkGray),
++        )),
++        Cell::from(Span::styled(
++            s.bots_kind,
++            Style::default().fg(Color::DarkGray),
++        )),
++        Cell::from(Span::styled(s.side, Style::default().fg(Color::DarkGray))),
++        Cell::from(Span::styled(
++            s.bots_progress,
++            Style::default().fg(Color::DarkGray),
++        )),
++        Cell::from(Span::styled(s.size, Style::default().fg(Color::DarkGray))),
++        Cell::from(Span::styled(
++            s.bots_interval,
++            Style::default().fg(Color::DarkGray),
++        )),
++        Cell::from(Span::styled(
++            s.bots_next,
++            Style::default().fg(Color::DarkGray),
++        )),
++        Cell::from(Span::styled(
++            s.bots_state,
++            Style::default().fg(Color::DarkGray),
++        )),
++    ]);
++
++    let visible_slots = inner.height.saturating_sub(1) as usize;
++    let scroll_offset = if view.selected_index >= visible_slots {
++        view.selected_index - visible_slots + 1
++    } else {
++        0
++    };
++
++    // Snap once per frame so all rows in this redraw share the same
++    // reference clock — keeps the countdown column monotonic across rows.
++    let now = Instant::now();
++    let table_rows: Vec<Row> = view
++        .bots
++        .iter()
++        .enumerate()
++        .skip(scroll_offset)
++        .take(visible_slots)
++        .map(|(i, b)| bot_row(b, active_symbol, i == view.selected_index, now))
++        .collect();
++
++    let widths = [
++        Constraint::Length(13),
++        Constraint::Length(6),
++        Constraint::Length(6),
++        Constraint::Length(8),
++        Constraint::Length(9),
++        Constraint::Length(10),
++        Constraint::Length(10),
++        Constraint::Length(8),
++    ];
++    let table = Table::new(table_rows, widths)
++        .header(header)
++        .column_spacing(1);
++    f.render_widget(table, inner);
++}
++
++fn bot_row<'a>(b: &'a TwapBot, active_symbol: &str, is_selected: bool, now: Instant) -> Row<'a> {
++    let s = strings();
++    let cursor_str = if is_selected { "▸" } else { " " };
++    let is_active_market = b.symbol == active_symbol;
++    let sym_str = if is_active_market {
++        format!("{} {} ●", cursor_str, b.symbol)
++    } else {
++        format!("{} {}", cursor_str, b.symbol)
++    };
++
++    let side_color = b.side.color();
++    let side_label = match b.side {
++        TradingSide::Long => s.buy,
++        TradingSide::Short => s.sell,
++    };
++
++    let status_label = match b.status {
++        TwapStatus::Running => s.bots_status_running,
++        TwapStatus::Paused => s.bots_status_paused,
++        TwapStatus::Stopped => s.bots_status_stopped,
++        TwapStatus::Completed => s.bots_status_completed,
++    };
++    let status_color = match b.status {
++        TwapStatus::Running => Color::Green,
++        TwapStatus::Paused => Color::Yellow,
++        TwapStatus::Stopped => Color::Red,
++        TwapStatus::Completed => Color::DarkGray,
++    };
++
++    let interval_secs = b.slice_interval.as_secs();
++    let interval_str = if interval_secs == 0 {
++        "instant".to_string()
++    } else {
++        format!("{}s", interval_secs)
++    };
++
++    // Countdown to the next scheduler tick that would fire a slice. For a
++    // running bot this is `(last_slice_at + slice_interval) - now`, clamped
++    // at zero. The scheduler tick still runs at 1Hz so the value updates as
++    // the modal redraws.
++    let next_str = match b.status {
++        TwapStatus::Running => match b.last_slice_at {
++            None => "now".to_string(),
++            Some(prev) => {
++                let target = prev + b.slice_interval;
++                if target <= now {
++                    "now".to_string()
++                } else {
++                    let remaining = target.saturating_duration_since(now);
++                    let secs = remaining.as_secs();
++                    if secs >= 60 {
++                        format!("{}m{:02}s", secs / 60, secs % 60)
++                    } else {
++                        format!("{}s", secs)
++                    }
++                }
++            }
++        },
++        TwapStatus::Paused | TwapStatus::Stopped | TwapStatus::Completed => "—".to_string(),
++    };
++    let next_color = match b.status {
++        TwapStatus::Running => Color::White,
++        _ => Color::DarkGray,
++    };
++
++    let row_style = if is_selected {
++        Style::default()
++            .fg(Color::White)
++            .bg(MODAL_HIGHLIGHT_BG)
++            .add_modifier(Modifier::BOLD)
++    } else if is_active_market {
++        Style::default().fg(Color::Cyan)
++    } else {
++        Style::default().fg(Color::White)
++    };
++
++    Row::new(vec![
++        Cell::from(Span::styled(
++            sym_str,
++            Style::default()
++                .fg(Color::White)
++                .add_modifier(Modifier::BOLD),
++        )),
++        Cell::from(Span::styled("TWAP", Style::default().fg(Color::White))),
++        Cell::from(Span::styled(
++            side_label,
++            Style::default().fg(side_color).add_modifier(Modifier::BOLD),
++        )),
++        Cell::from(Span::styled(
++            format!("{}/{}", b.slices_submitted, b.slice_count),
++            Style::default().fg(Color::White),
++        )),
++        Cell::from(Span::styled(
++            fmt_size(b.total_size, 4),
++            Style::default().fg(Color::White),
++        )),
++        Cell::from(Span::styled(
++            interval_str,
++            Style::default().fg(Color::DarkGray),
++        )),
++        Cell::from(Span::styled(next_str, Style::default().fg(next_color))),
++        Cell::from(Span::styled(
++            status_label,
++            Style::default()
++                .fg(status_color)
++                .add_modifier(Modifier::BOLD),
++        )),
++    ])
++    .style(row_style)
++}
+diff --git a/src/tui/ui/status.rs b/src/tui/ui/status.rs
+index 4a183d8..64bf620 100644
+--- a/src/tui/ui/status.rs
++++ b/src/tui/ui/status.rs
+@@ -58,33 +58,31 @@ pub(super) fn render_status_tray(
+     ])
+     .left_aligned();
+ 
+-    // Hotkey row labels — full forms by default, with compact fallbacks for
+-    // narrow terminals (e.g. 80x24) where the full row would overflow and
+-    // truncate. Chinese labels are mostly already short; only the four-glyph
+-    // "top positions" needs squeezing. Russian uses short Cyrillic abbrevs.
+-    let full_labels: [&str; 6] = [
+-        s.orders,
+-        s.positions,
+-        s.top_positions_title,
+-        s.liquidations_title,
+-        s.markets,
+-        s.quit,
+-    ];
+-    let short_labels: [&str; 6] = match super::super::config::current_user_config().language {
++    // Compact hotkey row labels. Always-short form per the project style —
++    // the previous full/short fallback was dropped because the full row
++    // overflowed at common widths and the short row reads cleanly enough.
++    let labels: [&str; 7] = match super::super::config::current_user_config().language {
+         super::super::config::Language::Chinese => [
+             s.orders,
+             s.positions,
+             "顶级",
+-            s.liquidations_title,
++            "强平",
++            s.bots_title,
+             s.markets,
+             s.quit,
+         ],
+-        super::super::config::Language::English => ["ord", "pos", "top", "liq", "mkt", "quit"],
+-        super::super::config::Language::Russian => ["орд", "поз", "топ", "лик", "рын", "вых"],
+-        super::super::config::Language::Spanish => ["ord", "pos", "top", "liq", "mer", "sal"],
++        super::super::config::Language::English => {
++            ["orders", "pos", "top", "liqs", "bots", "mkts", "quit"]
++        }
++        super::super::config::Language::Russian => {
++            ["орд", "поз", "топ", "лик", "боты", "рын", "вых"]
++        }
++        super::super::config::Language::Spanish => {
++            ["ord", "pos", "top", "liqs", "bots", "mer", "sal"]
++        }
+     };
+ 
+-    let build_quit_hint = |labels: &[&str; 6]| -> Line<'static> {
++    let quit_hint = {
+         let key_style = Style::default()
+             .fg(Color::Cyan)
+             .add_modifier(Modifier::BOLD);
+@@ -98,23 +96,16 @@ pub(super) fn render_status_tray(
+             Span::styled(format!(" {} ", labels[2]), label_style),
+             Span::styled("[F]", key_style),
+             Span::styled(format!(" {} ", labels[3]), label_style),
+-            Span::styled("[m]", key_style),
++            Span::styled("[b]", key_style),
+             Span::styled(format!(" {} ", labels[4]), label_style),
+-            Span::styled("[q]", key_style),
++            Span::styled("[m]", key_style),
+             Span::styled(format!(" {} ", labels[5]), label_style),
++            Span::styled("[q]", key_style),
++            Span::styled(format!(" {} ", labels[6]), label_style),
+         ])
+         .right_aligned()
+     };
+ 
+-    let full_hint = build_quit_hint(&full_labels);
+-    // Reserve room for the two border columns plus the bottom-left RPC label.
+-    let reserved = (rpc_bottom_left.width() as u16).saturating_add(2);
+-    let quit_hint = if (full_hint.width() as u16).saturating_add(reserved) > area.width {
+-        build_quit_hint(&short_labels)
+-    } else {
+-        full_hint
+-    };
+-
+     let block = Block::default()
+         .title_top(status_label)
+         .title_top(ledger_top_right)
+diff --git a/src/tui/ui/trade_panel/actions.rs b/src/tui/ui/trade_panel/actions.rs
+index 2e09904..689365a 100644
+--- a/src/tui/ui/trade_panel/actions.rs
++++ b/src/tui/ui/trade_panel/actions.rs
+@@ -28,6 +28,7 @@ pub(super) fn render_actions(
+                 OrderKind::Market => tp_s.mkt,
+                 OrderKind::Limit { .. } => tp_s.lmt,
+                 OrderKind::StopMarket { .. } => tp_s.stp,
++                OrderKind::Twap => tp_s.twap,
+             };
+             let msg = format!(" {} {} {} {}? ", tp_s.confirm, side_lbl, size, kind_lbl);
+             let bg = side.color();
+@@ -167,10 +168,13 @@ pub(super) fn render_actions(
+             f.render_widget(Paragraph::new(line), rows[2]);
+         }
+         _ => {
++            let is_twap = matches!(trading.order_kind, OrderKind::Twap);
+             let verb = if is_limit {
+                 tp_s.limit_order
+             } else if is_stop {
+                 tp_s.stop_order
++            } else if is_twap {
++                tp_s.twap_order
+             } else {
+                 tp_s.market_order
+             };
+diff --git a/src/tui/ui/trade_panel/layout.rs b/src/tui/ui/trade_panel/layout.rs
+index 86a33d6..d050061 100644
+--- a/src/tui/ui/trade_panel/layout.rs
++++ b/src/tui/ui/trade_panel/layout.rs
+@@ -127,6 +127,7 @@ pub(super) fn render_panel_frame(
+     let is_limit = matches!(trading.order_kind, OrderKind::Limit { .. });
+     let is_stop = matches!(trading.order_kind, OrderKind::StopMarket { .. });
+     let is_market = matches!(trading.order_kind, OrderKind::Market);
++    let is_twap = matches!(trading.order_kind, OrderKind::Twap);
+ 
+     let active_style = Style::default()
+         .fg(Color::Black)
+@@ -136,6 +137,7 @@ pub(super) fn render_panel_frame(
+     let market_style = if is_market { active_style } else { idle_style };
+     let limit_style = if is_limit { active_style } else { idle_style };
+     let stop_style = if is_stop { active_style } else { idle_style };
++    let twap_style = if is_twap { active_style } else { idle_style };
+ 
+     // Two-column split: left column = side/qty, right column = type/price.
+     // Fixed left width keeps BUY aligned with Qty, and MARKET/LIMIT aligned with
+@@ -160,13 +162,17 @@ pub(super) fn render_panel_frame(
+     ]);
+     f.render_widget(Paragraph::new(side_toggle), row0_cols[0]);
+ 
+-    // Row 0 right: MKT / LMT / STP toggle (same pattern as BUY / SELL + hotkey).
++    // Row 0 right: MKT/LMT/STP/TWAP toggle (same pattern as BUY/SELL + hotkey).
++    // Tighter separator than the BUY/SELL row because four items don't fit
++    // with " / " padding on a narrow trade panel.
+     let type_toggle = Line::from(vec![
+         Span::styled(format!(" {} ", tp_s.mkt), market_style),
+-        Span::styled(" / ", Style::default().fg(Color::DarkGray)),
++        Span::styled("/", Style::default().fg(Color::DarkGray)),
+         Span::styled(format!(" {} ", tp_s.lmt), limit_style),
+-        Span::styled(" / ", Style::default().fg(Color::DarkGray)),
++        Span::styled("/", Style::default().fg(Color::DarkGray)),
+         Span::styled(format!(" {} ", tp_s.stp), stop_style),
++        Span::styled("/", Style::default().fg(Color::DarkGray)),
++        Span::styled(format!(" {} ", tp_s.twap), twap_style),
+         Span::styled(
+             " [t]",
+             Style::default()
+diff --git a/src/tui/ui/trade_panel/order_entry.rs b/src/tui/ui/trade_panel/order_entry.rs
+index 5903b25..ae938bb 100644
+--- a/src/tui/ui/trade_panel/order_entry.rs
++++ b/src/tui/ui/trade_panel/order_entry.rs
+@@ -103,25 +103,48 @@ pub(super) fn render_order_entry(
+             f.render_widget(Paragraph::new(line), rows[1]);
+         }
+         _ => {
+-            let qty_line = Line::from(vec![
+-                Span::styled(format!(" {}:", tp_s.size), trade_field_label_style),
+-                Span::styled(" ", Style::default()),
+-                Span::styled(
+-                    format!("{}", trading.order_size()),
+-                    Style::default()
+-                        .fg(Color::White)
+-                        .add_modifier(Modifier::UNDERLINED),
+-                ),
+-                Span::styled(format!(" {} ", symbol), Style::default().fg(Color::White)),
+-                Span::styled(
+-                    "[s]",
+-                    Style::default()
+-                        .fg(Color::Cyan)
+-                        .add_modifier(Modifier::BOLD),
+-                ),
+-            ]);
++            // TWAP doesn't have a single size — its total size, duration, and
++            // slice cadence are all collected in the modal. Show "TWAP"
++            // underlined in the size slot as a visual hint that the normal
++            // size entry doesn't apply.
++            let qty_line = if matches!(trading.order_kind, OrderKind::Twap) {
++                Line::from(vec![
++                    Span::styled(format!(" {}:", tp_s.size), trade_field_label_style),
++                    Span::styled(" ", Style::default()),
++                    Span::styled(
++                        tp_s.twap,
++                        Style::default()
++                            .fg(Color::White)
++                            .add_modifier(Modifier::UNDERLINED),
++                    ),
++                ])
++            } else {
++                Line::from(vec![
++                    Span::styled(format!(" {}:", tp_s.size), trade_field_label_style),
++                    Span::styled(" ", Style::default()),
++                    Span::styled(
++                        format!("{}", trading.order_size()),
++                        Style::default()
++                            .fg(Color::White)
++                            .add_modifier(Modifier::UNDERLINED),
++                    ),
++                    Span::styled(format!(" {} ", symbol), Style::default().fg(Color::White)),
++                    Span::styled(
++                        "[s]",
++                        Style::default()
++                            .fg(Color::Cyan)
++                            .add_modifier(Modifier::BOLD),
++                    ),
++                ])
++            };
+             f.render_widget(Paragraph::new(qty_line), row1_cols[0]);
+ 
++            // TWAP has no single price; the left column already shows
++            // "TWAP" as the type indicator, so leave the price column blank
++            // rather than printing a misleading "Px: TWAP".
++            if matches!(trading.order_kind, OrderKind::Twap) {
++                return;
++            }
+             let mut price_spans = vec![Span::styled(
+                 format!("{}:", tp_s.px),
+                 trade_field_label_style,
+@@ -157,6 +180,8 @@ pub(super) fn render_order_entry(
+                             .add_modifier(Modifier::BOLD),
+                     ));
+                 }
++                // Twap is short-circuited above; this match never sees it.
++                OrderKind::Twap => unreachable!(),
+                 _ => {
+                     price_spans.push(Span::styled(" ", Style::default().fg(Color::White)));
+                     price_spans.push(Span::styled(

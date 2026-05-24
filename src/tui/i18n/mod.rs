@@ -611,6 +611,29 @@ pub struct Strings {
     pub bots_restarted_status: &'static str,
     /// Status line — removed.
     pub bots_removed_status: &'static str,
+    /// Bot `last_status` while waiting for the bot's symbol to appear in the
+    /// market-config map (e.g. during RPC swap).
+    pub twap_waiting_market_cfg: &'static str,
+    /// Bot `last_status` while waiting for the wallet's trader-state WS
+    /// snapshot to hydrate.
+    pub twap_waiting_trader_sync: &'static str,
+    /// Bot `last_status` when a slice can't fire because the bot's symbol
+    /// isn't the active market and isn't isolated-only.
+    pub twap_waiting_active_market: &'static str,
+    /// Bot `last_status` while no wallet is connected.
+    pub twap_waiting_wallet: &'static str,
+    /// Bot `last_status` line: slice confirmed on-chain.
+    pub twap_slice_confirmed: &'static str,
+    /// Bot `last_status` line: slice failed.
+    pub twap_slice_failed: &'static str,
+    /// Confirmation prompt — start TWAP from form.
+    pub twap_confirm_start: &'static str,
+    /// Confirmation prompt — restart finished/stopped bot.
+    pub twap_confirm_restart: &'static str,
+    /// Confirmation prompt — stop a running bot.
+    pub twap_confirm_stop: &'static str,
+    /// Confirmation prompt — remove a bot from the list.
+    pub twap_confirm_remove: &'static str,
 }
 
 mod en;

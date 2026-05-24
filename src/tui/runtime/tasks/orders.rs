@@ -244,7 +244,7 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
     kp: Arc<Keypair>,
     orders_tx: UnboundedSender<Vec<OrderInfo>>,
     conditional_asset_symbols: HashMap<u32, String>,
-    shared_trader: Arc<std::sync::RwLock<Trader>>,
+    shared_trader: Arc<std::sync::RwLock<crate::tui::tx::TraderMirror>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
@@ -282,13 +282,25 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
                 rpc_http_url_from_env(),
                 CommitmentConfig::processed(),
             );
-            let mut trader = Trader::new(key);
-            // Seed the shared trader to the freshly-keyed instance so any read
-            // before the first WS update still gets a coherent view (matching
-            // authority, empty subaccounts).
-            if let Ok(mut guard) = shared_trader.write() {
-                *guard = trader.clone();
-            }
+            // Seed the local mutable trader from whatever the shared mirror
+            // already holds, or a fresh empty one. On reconnect (same wallet)
+            // this preserves subaccount state in the shared mirror so order
+            // builders firing during the reconnect window keep reading the
+            // last known good state; the first applied WS update then
+            // overwrites it. Critically, do NOT clobber `hydrated` here —
+            // only the first apply_update below should flip it from false →
+            // true, and once true, reconnect must leave it alone.
+            let mut trader = {
+                let guard = match shared_trader.read() {
+                    Ok(g) => g,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                if guard.hydrated {
+                    guard.trader.clone()
+                } else {
+                    Trader::new(key)
+                }
+            };
             // Stop-loss triggers live on `TraderStatePositionRow`, not in
             // `subaccount.orders`, so the SDK's `Trader::all_orders()` never
             // surfaces them. Track them ourselves from the raw ws payload so
@@ -323,9 +335,12 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
                         // reader (isolated-margin order builders snapshot the
                         // trader under a read lock to build instructions
                         // locally — no HTTP round-trip needed for collateral
-                        // routing or subaccount registration).
+                        // routing or subaccount registration). Mark hydrated
+                        // so readers can distinguish "wallet empty" from
+                        // "WS hasn't delivered the first snapshot yet".
                         if let Ok(mut guard) = shared_trader.write() {
-                            *guard = trader.clone();
+                            guard.trader = trader.clone();
+                            guard.hydrated = true;
                         }
 
                         match &msg.content {

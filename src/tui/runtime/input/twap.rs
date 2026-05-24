@@ -3,10 +3,10 @@
 
 use crossterm::event::KeyCode;
 
-use super::super::super::config::SplineConfig;
+use super::super::super::config::{current_user_config, SplineConfig};
 use super::super::super::i18n::strings;
 use super::super::super::math::{ui_size_to_num_base_lots, MAX_UI_ORDER_SIZE_UNITS};
-use super::super::super::state::{TuiState, TwapBot, TwapDraft};
+use super::super::super::state::{TuiState, TwapBot, TwapBotConfirm, TwapDraft};
 use super::super::super::trading::{InputMode, OrderKind, TradingSide};
 use super::super::KeyAction;
 
@@ -14,13 +14,19 @@ use super::super::KeyAction;
 /// 2 = total size, 3 = total time hours, 4 = total time minutes.
 /// ↑↓ moves between fields, Tab toggles side, ←→ cycles the market when
 /// row 0 is focused, digits/`.` edit numeric fields, Enter advances the
-/// cursor through the form (validates & spawns on the final row), Esc
-/// discards.
+/// cursor through the form (validates & opens confirm prompt on the
+/// final row), Esc discards.
 pub(in crate::tui::runtime) fn handle_editing_twap_key(
     code: KeyCode,
     state: &mut TuiState,
     configs: &std::collections::HashMap<String, SplineConfig>,
 ) -> KeyAction {
+    // When the confirmation prompt is showing, route keys through a
+    // separate Y/N handler so the user can't keep editing fields underneath.
+    if state.trading.twap_draft.pending_confirm {
+        return handle_twap_confirm_key(code, state, configs);
+    }
+
     match code {
         KeyCode::Esc => {
             state.trading.input_mode = InputMode::Normal;
@@ -69,7 +75,9 @@ pub(in crate::tui::runtime) fn handle_editing_twap_key(
         KeyCode::Enter => {
             // Enter advances through the form like Tab on a web form: on
             // any non-final row it moves the cursor down. On the last row
-            // (minutes) it validates and spawns the bot.
+            // (minutes) it validates and either opens the confirm prompt
+            // or — if the user enabled `skip_order_confirmation` — pushes
+            // the bot immediately.
             if state.trading.twap_draft.selected_field + 1 < TwapDraft::FIELD_COUNT {
                 state.trading.twap_draft.move_field_down();
                 state.trading.twap_draft.error = None;
@@ -79,34 +87,18 @@ pub(in crate::tui::runtime) fn handle_editing_twap_key(
                 state.trading.twap_draft.error = Some(strings().twap_err_no_wallet.to_string());
                 return KeyAction::Redraw;
             }
-            match build_bot_from_draft(state, configs) {
-                Ok(bot) => {
-                    let total = bot.total_size;
-                    let slices = bot.slice_count;
-                    let symbol = bot.symbol.clone();
-                    let side = bot.side;
-                    state.twaps_view.push(bot);
-                    state.trading.input_mode = InputMode::Normal;
-                    // Drop back to Market mode so a follow-up Enter doesn't
-                    // immediately reopen the TWAP modal — most users will
-                    // want to do something else next.
-                    state.trading.order_kind = OrderKind::Market;
-                    let s = strings();
-                    let side_lbl = match side {
-                        TradingSide::Long => s.long_label,
-                        TradingSide::Short => s.short_label,
-                    };
-                    state.trading.set_status_title(format!(
-                        "{}: {} {} {} \u{2014} {} {}",
-                        s.twap_started, side_lbl, total, symbol, slices, s.twap_unit_slices
-                    ));
-                    KeyAction::Redraw
-                }
-                Err(msg) => {
-                    state.trading.twap_draft.error = Some(msg);
-                    KeyAction::Redraw
-                }
+            // Validate now so the user sees the error before reaching the
+            // confirm prompt.
+            if let Err(msg) = build_bot_from_draft(state, configs) {
+                state.trading.twap_draft.error = Some(msg);
+                return KeyAction::Redraw;
             }
+            if current_user_config().skip_order_confirmation {
+                submit_pending_twap(state, configs);
+            } else {
+                state.trading.twap_draft.pending_confirm = true;
+            }
+            KeyAction::Redraw
         }
         KeyCode::Backspace => {
             if let Some(buf) = field_buffer_mut(state) {
@@ -131,6 +123,66 @@ pub(in crate::tui::runtime) fn handle_editing_twap_key(
             KeyAction::Redraw
         }
         _ => KeyAction::Nothing,
+    }
+}
+
+/// Y/N gate shown after the user passes form validation on the final row.
+/// Y / Enter pushes the bot; N / Esc cancels back to editing.
+fn handle_twap_confirm_key(
+    code: KeyCode,
+    state: &mut TuiState,
+    configs: &std::collections::HashMap<String, SplineConfig>,
+) -> KeyAction {
+    match code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            submit_pending_twap(state, configs);
+            KeyAction::Redraw
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            state.trading.twap_draft.pending_confirm = false;
+            state.trading.twap_draft.error = None;
+            KeyAction::Redraw
+        }
+        _ => KeyAction::Nothing,
+    }
+}
+
+/// Build the bot from the validated draft and push it onto the running list.
+/// Called from both the immediate-submit path (skip_order_confirmation=true)
+/// and the Y branch of the confirm prompt.
+fn submit_pending_twap(
+    state: &mut TuiState,
+    configs: &std::collections::HashMap<String, SplineConfig>,
+) {
+    let s = strings();
+    match build_bot_from_draft(state, configs) {
+        Ok(bot) => {
+            let total = bot.total_size;
+            let slices = bot.slice_count;
+            let symbol = bot.symbol.clone();
+            let side = bot.side;
+            state.twaps_view.push(bot);
+            state.trading.twap_draft.pending_confirm = false;
+            state.trading.input_mode = InputMode::Normal;
+            // Drop back to Market mode so a follow-up Enter doesn't
+            // immediately reopen the TWAP modal — most users will
+            // want to do something else next.
+            state.trading.order_kind = OrderKind::Market;
+            let side_lbl = match side {
+                TradingSide::Long => s.long_label,
+                TradingSide::Short => s.short_label,
+            };
+            state.trading.set_status_title(format!(
+                "{}: {} {} {} \u{2014} {} {}",
+                s.twap_started, side_lbl, total, symbol, slices, s.twap_unit_slices
+            ));
+        }
+        Err(msg) => {
+            // Validation regressed between original validation and now (e.g.
+            // wallet disconnected). Drop confirmation, surface the error.
+            state.trading.twap_draft.pending_confirm = false;
+            state.trading.twap_draft.error = Some(msg);
+        }
     }
 }
 
@@ -218,12 +270,22 @@ fn build_bot_from_draft(
 }
 
 /// Bots modal — pause/resume, stop, restart, remove, scroll, switch market.
+///
+/// `[s]` (stop), `[r]` (restart), and `[x]` (remove) all open a Y/N
+/// confirmation overlay rather than firing immediately, because each one
+/// either moves real capital (restart) or cancels in-flight execution (stop,
+/// remove). `[p]` (pause/resume) is unguarded because it's reversible.
 pub(in crate::tui::runtime) fn handle_bots_view_key(
     code: KeyCode,
     state: &mut TuiState,
     cfg: &SplineConfig,
     pending_market_switch: &mut Option<String>,
 ) -> KeyAction {
+    // Y/N gate for the destructive actions.
+    if let Some(pending) = state.twaps_view.pending_confirm {
+        return handle_bots_confirm_key(code, state, pending);
+    }
+
     match code {
         KeyCode::Up => {
             state.twaps_view.move_up();
@@ -279,33 +341,93 @@ pub(in crate::tui::runtime) fn handle_bots_view_key(
             KeyAction::Redraw
         }
         KeyCode::Char('s') => {
-            if let Some(bot) = state.twaps_view.selected_mut() {
-                bot.stop();
-                state
-                    .trading
-                    .set_status_title(strings().bots_stopped_status);
+            // Guard: only confirm if there's actually a Running/Paused bot
+            // to stop — pressing [s] on a Completed or Stopped row is a no-op.
+            let can_stop = state
+                .twaps_view
+                .bots
+                .get(state.twaps_view.selected_index)
+                .map(|b| !b.status.is_terminal())
+                .unwrap_or(false);
+            if can_stop {
+                state.twaps_view.pending_confirm =
+                    Some(TwapBotConfirm::Stop(state.twaps_view.selected_index));
             }
             KeyAction::Redraw
         }
         KeyCode::Char('r') => {
-            if let Some(bot) = state.twaps_view.selected_mut() {
-                bot.restart();
-                state
-                    .trading
-                    .set_status_title(strings().bots_restarted_status);
+            if state
+                .twaps_view
+                .bots
+                .get(state.twaps_view.selected_index)
+                .is_some()
+            {
+                state.twaps_view.pending_confirm =
+                    Some(TwapBotConfirm::Restart(state.twaps_view.selected_index));
             }
             KeyAction::Redraw
         }
         KeyCode::Char('x') => {
-            if state.twaps_view.remove_selected().is_some() {
-                state
-                    .trading
-                    .set_status_title(strings().bots_removed_status);
+            if state
+                .twaps_view
+                .bots
+                .get(state.twaps_view.selected_index)
+                .is_some()
+            {
+                state.twaps_view.pending_confirm =
+                    Some(TwapBotConfirm::Remove(state.twaps_view.selected_index));
             }
             KeyAction::Redraw
         }
         KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('q') => {
             state.trading.input_mode = InputMode::Normal;
+            KeyAction::Redraw
+        }
+        _ => KeyAction::Nothing,
+    }
+}
+
+/// Y/N gate for the bots modal's destructive actions (stop / restart /
+/// remove). Executes the action on Y, cancels on N/Esc. Other keys ignored
+/// so the user can't accidentally scroll or open another modal mid-prompt.
+fn handle_bots_confirm_key(
+    code: KeyCode,
+    state: &mut TuiState,
+    pending: TwapBotConfirm,
+) -> KeyAction {
+    match code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            let s = strings();
+            match pending {
+                TwapBotConfirm::Stop(i) => {
+                    if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+                        bot.stop();
+                        state.trading.set_status_title(s.bots_stopped_status);
+                    }
+                }
+                TwapBotConfirm::Restart(i) => {
+                    if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+                        bot.restart();
+                        state.trading.set_status_title(s.bots_restarted_status);
+                    }
+                }
+                TwapBotConfirm::Remove(i) => {
+                    // The prompt was created with `i == selected_index`, and
+                    // the prompt handler intercepts every key — `selected_index`
+                    // can't have moved since then. `remove_selected` removes
+                    // the currently-selected row and clamps the cursor.
+                    if i == state.twaps_view.selected_index
+                        && state.twaps_view.remove_selected().is_some()
+                    {
+                        state.trading.set_status_title(s.bots_removed_status);
+                    }
+                }
+            }
+            state.twaps_view.pending_confirm = None;
+            KeyAction::Redraw
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            state.twaps_view.pending_confirm = None;
             KeyAction::Redraw
         }
         _ => KeyAction::Nothing,

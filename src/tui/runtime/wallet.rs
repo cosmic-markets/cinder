@@ -10,6 +10,7 @@ use solana_keypair::Keypair;
 use super::super::config::SplineConfig;
 use super::super::i18n::strings;
 use super::super::state::TuiState;
+use super::super::state::TwapStatus;
 use super::super::tx::TxContext;
 use super::tasks::{
     spawn_initial_connect_flow, spawn_trader_orders_ws, spawn_tx_context_task, spawn_wallet_wss,
@@ -57,9 +58,27 @@ pub(super) fn connect_wallet_with_keypair(
     // switches can rebuild a `TxContext` against the same live trader.
     let authority = match solana_pubkey::Pubkey::from_str(&kp_arc.pubkey().to_string()) {
         Ok(pk) => pk,
-        Err(_) => solana_pubkey::Pubkey::default(),
+        Err(e) => {
+            // A keypair-to-pubkey parse failure means the trader-state WS
+            // would key against the wrong pubkey and silently exit (see
+            // spawn_trader_orders_ws), leaving the user with a "connected"
+            // wallet whose orders all fail on-chain. Refuse the connect
+            // outright so the user sees the error and can retry.
+            state.trading.wallet_loaded = false;
+            state.trading.wallet_label.clear();
+            state.trading.keypair = None;
+            state
+                .trading
+                .set_status_title(format!("{}: {}", strings().st_wallet_load_failed, e));
+            return WalletHandles {
+                wallet_wss: tokio::spawn(async {}),
+                initial_balance: tokio::spawn(async {}),
+                trader_orders: tokio::spawn(async {}),
+                tx_ctx: tokio::spawn(async {}),
+            };
+        }
     };
-    let shared_trader = Arc::new(RwLock::new(TxContext::empty_trader(authority)));
+    let shared_trader = Arc::new(RwLock::new(TxContext::empty_trader_mirror(authority)));
     state.trading.shared_trader = Some(Arc::clone(&shared_trader));
 
     let tx_ctx = spawn_tx_context_task(
@@ -137,6 +156,16 @@ pub(super) fn disconnect_wallet(
         h.abort();
     }
     *awaiting_first_tx_ctx = false;
+    // Stop every running TWAP bot. Bots fire against `state.trading.keypair`,
+    // which we're about to clear; if the user reconnects a different wallet
+    // and a bot is still Running, the next scheduler tick would dispatch the
+    // bot's remaining slices against the new wallet's funds.
+    for bot in state.twaps_view.bots.iter_mut() {
+        if matches!(bot.status, TwapStatus::Running | TwapStatus::Paused) {
+            bot.stop();
+            bot.last_status = strings().twap_waiting_wallet.to_string();
+        }
+    }
     state.trading.wallet_loaded = false;
     state.trading.wallet_label.clear();
     state.trading.keypair = None;

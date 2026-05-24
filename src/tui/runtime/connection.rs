@@ -95,6 +95,7 @@ pub(super) fn handle_full_rpc_reconnect(
     gti_refresh: &Arc<tokio::sync::Notify>,
     wallet_wss_handle: &mut Option<tokio::task::JoinHandle<()>>,
     blockhash_refresh_handle: &mut Option<tokio::task::JoinHandle<()>>,
+    trader_orders_handle: &mut Option<tokio::task::JoinHandle<()>>,
     tx_ctx_task: &mut Option<tokio::task::JoinHandle<()>>,
     liquidation_task: &mut tokio::task::JoinHandle<()>,
     state: &mut TuiState,
@@ -146,25 +147,56 @@ pub(super) fn handle_full_rpc_reconnect(
             channels.wallet_sol_tx.clone(),
         ));
         // Reuse the existing shared `Trader` so the rebuilt `TxContext` sees
-        // the live state populated by the still-running trader-orders WS
-        // task. Fall back to a fresh empty trader if (somehow) the wallet
-        // load path didn't initialize one.
-        let shared_trader = state.trading.shared_trader.clone().unwrap_or_else(|| {
-            std::sync::Arc::new(std::sync::RwLock::new(
-                crate::tui::tx::TxContext::empty_trader(
-                    solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()).unwrap_or_default(),
-                ),
-            ))
-        });
+        // the live state populated by the trader-orders WS task. If the
+        // shared mirror is somehow missing, build a fresh empty one AND
+        // write it back to `state.trading.shared_trader` so the restarted
+        // trader-orders task below writes into the same Arc that the new
+        // TxContext reads from.
+        let shared_trader = match state.trading.shared_trader.as_ref() {
+            Some(arc) => Arc::clone(arc),
+            None => {
+                let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
+                    Ok(pk) => pk,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "shared_trader rebuild aborted: bad pubkey");
+                        return true;
+                    }
+                };
+                let arc = std::sync::Arc::new(std::sync::RwLock::new(
+                    crate::tui::tx::TxContext::empty_trader_mirror(authority),
+                ));
+                state.trading.shared_trader = Some(Arc::clone(&arc));
+                arc
+            }
+        };
         let new_tx_ctx = tasks::spawn_tx_context_task(
-            kp,
+            Arc::clone(&kp),
             cfg.symbol.clone(),
             Arc::clone(balance_http),
-            shared_trader,
+            Arc::clone(&shared_trader),
             channels.tx_ctx_tx.clone(),
             channels.tx_status.clone(),
         );
         if let Some(h) = tx_ctx_task.replace(new_tx_ctx) {
+            h.abort();
+        }
+        // Restart the trader-orders WS too. Without this, the WS keeps
+        // streaming subaccount state resolved against the previous RPC into
+        // `shared_trader`, while order builders now sign and broadcast on
+        // the freshly-rebuilt `TxContext` (new RPC) — a devnet/mainnet swap
+        // would have the WS feed stale devnet subaccount data into mainnet
+        // submissions.
+        let conditional_asset_symbols = configs
+            .values()
+            .map(|c| (c.asset_id, c.symbol.clone()))
+            .collect();
+        let new_trader_orders = tasks::spawn_trader_orders_ws(
+            Arc::clone(&kp),
+            channels.orders_tx.clone(),
+            conditional_asset_symbols,
+            Arc::clone(&shared_trader),
+        );
+        if let Some(h) = trader_orders_handle.replace(new_trader_orders) {
             h.abort();
         }
     }
@@ -203,14 +235,27 @@ pub(super) fn handle_pending_market_switch(
 
         if let Some(kp) = &state.trading.keypair {
             state.trading.tx_context = None;
-            let shared_trader = state.trading.shared_trader.clone().unwrap_or_else(|| {
-                std::sync::Arc::new(std::sync::RwLock::new(
-                    crate::tui::tx::TxContext::empty_trader(
-                        solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
-                            .unwrap_or_default(),
-                    ),
-                ))
-            });
+            let shared_trader = match state.trading.shared_trader.as_ref() {
+                Some(arc) => Arc::clone(arc),
+                None => {
+                    let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
+                    {
+                        Ok(pk) => pk,
+                        Err(e) => {
+                            tracing::warn!(
+                                error = %e,
+                                "market switch skipped: bad wallet pubkey"
+                            );
+                            return true;
+                        }
+                    };
+                    let arc = std::sync::Arc::new(std::sync::RwLock::new(
+                        crate::tui::tx::TxContext::empty_trader_mirror(authority),
+                    ));
+                    state.trading.shared_trader = Some(Arc::clone(&arc));
+                    arc
+                }
+            };
             let new_tx_ctx = tasks::spawn_tx_context_task(
                 Arc::clone(kp),
                 cfg.symbol.clone(),

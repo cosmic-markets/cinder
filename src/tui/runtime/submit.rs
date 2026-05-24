@@ -346,6 +346,7 @@ pub(super) fn execute_confirmed_action(
                         cfg.max_leverage,
                         reference_price_usd,
                         tx_status.clone(),
+                        None,
                     );
                 }
                 // TWAP orders are routed through the TWAP modal, not the
@@ -393,6 +394,7 @@ pub(super) fn execute_confirmed_action(
                 cfg.max_leverage,
                 pos.entry_price,
                 tx_status.clone(),
+                None,
             );
         }
         PendingAction::DepositFunds { amount } => {

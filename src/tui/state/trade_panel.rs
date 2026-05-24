@@ -3,12 +3,11 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
-use phoenix_rise::Trader;
 use solana_keypair::Keypair;
 
 use super::super::config::{current_user_config, UserConfig};
 use super::super::trading::{InputMode, OrderKind, PositionInfo, TradingSide};
-use super::super::tx::TxContext;
+use super::super::tx::{TraderMirror, TxContext};
 use super::make_status_timestamp;
 use super::markers::LedgerEntry;
 
@@ -36,7 +35,7 @@ pub struct TradingState {
     /// can rebuild a fresh `TxContext` against the same live trader without
     /// re-subscribing the WS stream from scratch. Set on wallet connect,
     /// cleared on disconnect.
-    pub shared_trader: Option<Arc<RwLock<Trader>>>,
+    pub shared_trader: Option<Arc<RwLock<TraderMirror>>>,
     pub input_mode: InputMode,
     pub input_buffer: String,
     pub deposit_buffer: String,
@@ -103,6 +102,11 @@ pub struct TwapDraft {
     /// Set when the user presses [Enter] but a field fails validation —
     /// rendered below the form until the next keystroke.
     pub error: Option<String>,
+    /// True after the user passed validation on the final row — the modal
+    /// renders a "Start TWAP? [Y/N]" prompt instead of immediately spawning
+    /// the bot. Y/Enter submits, N/Esc cancels back to editing.
+    /// Bypassed when `skip_order_confirmation` is enabled.
+    pub pending_confirm: bool,
 }
 
 impl TwapDraft {
@@ -121,6 +125,7 @@ impl TwapDraft {
             duration_hour_buffer: String::new(),
             duration_min_buffer: String::new(),
             error: None,
+            pending_confirm: false,
         }
     }
 

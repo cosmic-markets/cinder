@@ -9,6 +9,30 @@ use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
 use phoenix_rise::{Trader, TraderKey};
+
+/// Shared wallet `Trader` mirror with a hydration flag. Written by the
+/// trader-state WS task once it applies its first update; read by isolated-
+/// margin order builders so they can construct instructions locally without
+/// round-tripping through the Phoenix HTTP API.
+///
+/// Splitting `hydrated` from the `Trader` lets readers distinguish "wallet
+/// truly has no positions" from "WS hasn't delivered the first snapshot yet"
+/// — the latter must NOT be used to build orders because the missing
+/// subaccount state would cause the local builder to create a brand-new
+/// subaccount on top of an existing one.
+pub struct TraderMirror {
+    pub trader: Trader,
+    pub hydrated: bool,
+}
+
+impl TraderMirror {
+    pub fn empty(authority: solana_pubkey::Pubkey) -> Self {
+        Self {
+            trader: Trader::new(TraderKey::new(authority)),
+            hydrated: false,
+        }
+    }
+}
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
@@ -84,6 +108,11 @@ pub struct TxContext {
     pub authority_v2: solana_pubkey::Pubkey,
     pub trader_pda_v2: solana_pubkey::Pubkey,
     pub market_addrs: MarketAddrs,
+    /// Symbol the `market_addrs` were built for. The non-isolated order
+    /// builders use `market_addrs.orderbook` etc. directly, so submissions
+    /// for a different symbol would target the wrong on-chain accounts.
+    /// Compared against the caller-supplied `symbol` at submit time.
+    pub active_symbol: String,
     pub blockhash_pool: tokio::sync::Mutex<VecDeque<[u8; 32]>>,
     /// Cached WS URL for signature confirmations.
     pub(super) ws_url: String,
@@ -94,8 +123,9 @@ pub struct TxContext {
     /// WS subscription, read by isolated-margin order builders so they can
     /// construct subaccount-aware instructions locally without round-tripping
     /// through the Phoenix HTTP API. Starts empty and is hydrated by the WS
-    /// task on the first `TraderUpdate`.
-    pub shared_trader: Arc<RwLock<Trader>>,
+    /// task on the first `TraderUpdate`. Readers must check
+    /// `TraderMirror::hydrated` before using the snapshot.
+    pub shared_trader: Arc<RwLock<TraderMirror>>,
 }
 
 impl TxContext {
@@ -106,7 +136,7 @@ impl TxContext {
         keypair: &Keypair,
         symbol: &str,
         http: Arc<phoenix_rise::PhoenixHttpClient>,
-        shared_trader: Arc<RwLock<Trader>>,
+        shared_trader: Arc<RwLock<TraderMirror>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
@@ -160,6 +190,7 @@ impl TxContext {
             authority_v2,
             trader_pda_v2,
             market_addrs,
+            active_symbol: symbol.to_string(),
             blockhash_pool: tokio::sync::Mutex::new(VecDeque::with_capacity(30)),
             ws_url: ws_url_from_env(),
             sig_pubsub: tokio::sync::Mutex::new(None),
@@ -167,21 +198,28 @@ impl TxContext {
         })
     }
 
-    /// Snapshot the shared `Trader` state under a short read lock. The clone
-    /// keeps the lock window minimal so the WS task can keep applying updates
-    /// while order construction runs.
-    pub fn snapshot_trader(&self) -> Trader {
-        match self.shared_trader.read() {
-            Ok(guard) => guard.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
+    /// Snapshot the shared `Trader` state under a short read lock if the WS
+    /// task has hydrated it. Returns `None` when the wallet is connected but
+    /// the trader-state WS hasn't delivered its first snapshot yet — order
+    /// builders must surface a "waiting for trader state" status rather than
+    /// build against an empty `Trader`, which would create a new isolated
+    /// subaccount on top of any existing one.
+    pub fn snapshot_trader(&self) -> Option<Trader> {
+        let guard = match self.shared_trader.read() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if !guard.hydrated {
+            return None;
         }
+        Some(guard.trader.clone())
     }
 
-    /// Construct an empty `Trader` keyed to the supplied authority. Used as the
-    /// initial value for the shared trader before the WS subscription delivers
-    /// its first snapshot.
-    pub fn empty_trader(authority: solana_pubkey::Pubkey) -> Trader {
-        Trader::new(TraderKey::new(authority))
+    /// Construct an empty (un-hydrated) trader mirror keyed to the supplied
+    /// authority. Used as the initial value for the shared trader before the
+    /// WS subscription delivers its first snapshot.
+    pub fn empty_trader_mirror(authority: solana_pubkey::Pubkey) -> TraderMirror {
+        TraderMirror::empty(authority)
     }
 
     /// Pushes the latest blockhash from the network into the rotating memory
