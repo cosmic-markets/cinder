@@ -8,6 +8,7 @@ use super::super::super::i18n::strings;
 use super::super::super::math::{ui_size_to_num_base_lots, MAX_UI_ORDER_SIZE_UNITS};
 use super::super::super::state::{TuiState, TwapBot, TwapBotConfirm, TwapDraft};
 use super::super::super::trading::{InputMode, OrderKind, TradingSide};
+use super::super::twap_scheduler;
 use super::super::KeyAction;
 
 /// Editor for the TWAP form. Field layout: 0 = market, 1 = side,
@@ -464,6 +465,11 @@ fn handle_bots_confirm_key(
                         .unwrap_or(false);
                     if was_active {
                         if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+                            twap_scheduler::settle_in_flight_for_interrupt(
+                                bot,
+                                std::time::Instant::now(),
+                                s.bots_stopped_status,
+                            );
                             bot.stop();
                             state.trading.set_status_title(s.bots_stopped_status);
                         }
@@ -480,8 +486,18 @@ fn handle_bots_confirm_key(
                     match (bot_authority, live_authority) {
                         (Some(bot_auth), Some(live)) if bot_auth == live => {
                             if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                                bot.restart();
-                                state.trading.set_status_title(s.bots_restarted_status);
+                                if bot.in_flight.is_some() {
+                                    twap_scheduler::settle_in_flight_for_interrupt(
+                                        bot,
+                                        std::time::Instant::now(),
+                                        s.bots_stopped_status,
+                                    );
+                                    bot.stop();
+                                    state.trading.set_status_title(s.bots_stopped_status);
+                                } else {
+                                    bot.restart();
+                                    state.trading.set_status_title(s.bots_restarted_status);
+                                }
                             }
                         }
                         (Some(_), None) => {
@@ -496,10 +512,26 @@ fn handle_bots_confirm_key(
                     }
                 }
                 TwapBotConfirm::Remove(i) => {
-                    if i == state.twaps_view.selected_index
-                        && state.twaps_view.remove_selected().is_some()
-                    {
-                        state.trading.set_status_title(s.bots_removed_status);
+                    if i == state.twaps_view.selected_index {
+                        let has_in_flight = state
+                            .twaps_view
+                            .bots
+                            .get(i)
+                            .map(|bot| bot.in_flight.is_some())
+                            .unwrap_or(false);
+                        if has_in_flight {
+                            if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+                                twap_scheduler::settle_in_flight_for_interrupt(
+                                    bot,
+                                    std::time::Instant::now(),
+                                    s.bots_stopped_status,
+                                );
+                                bot.stop();
+                            }
+                            state.trading.set_status_title(s.bots_stopped_status);
+                        } else if state.twaps_view.remove_selected().is_some() {
+                            state.trading.set_status_title(s.bots_removed_status);
+                        }
                     }
                 }
             }

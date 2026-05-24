@@ -116,8 +116,10 @@ pub(super) fn handle_tx_status_update(
     last_feed_paint: &mut Instant,
 ) {
     match msg {
-        TxStatusMsg::TradeMarker { is_buy } => {
-            state.add_trade_marker(is_buy);
+        TxStatusMsg::TradeMarker { symbol, is_buy } => {
+            if symbol == cfg.symbol {
+                state.add_trade_marker(is_buy);
+            }
         }
         TxStatusMsg::SetStatus { title, detail } => {
             state.trading.status_timestamp = super::super::state::make_status_timestamp();

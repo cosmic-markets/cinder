@@ -372,10 +372,19 @@ impl TwapBot {
     }
 
     pub fn stop(&mut self) {
-        // Cancel any in-flight broadcast so the user's "stop" actually
-        // stops the on-chain side instead of just the bookkeeping side.
+        // If a slice has already been signed/broadcast, aborting the task
+        // cannot guarantee the tx will not land. Count it as unknown so a
+        // later restart/reconnect does not repeat the same slice silently.
         if let Some(in_flight) = self.in_flight.take() {
+            let slice_number = in_flight.slice_number;
             in_flight.abort();
+            self.record_slice_unconfirmed(
+                Instant::now(),
+                format!(
+                    "slice {}/{}: interrupted (may have landed)",
+                    slice_number, self.slice_count
+                ),
+            );
         }
         if !self.status.is_terminal() {
             self.status = TwapStatus::Stopped;
@@ -388,11 +397,12 @@ impl TwapBot {
     /// a finished or stopped bot from scratch. Caller is responsible for
     /// confirming with the user — restart re-deploys live capital.
     pub fn restart(&mut self) {
-        // Abort any in-flight slice from a previous run before re-arming —
-        // otherwise the old tx lands AND slice 1 fires again on the next
-        // tick.
-        if let Some(in_flight) = self.in_flight.take() {
-            in_flight.abort();
+        // A live in-flight tx may still land after task abort. Stop and
+        // surface it as unknown instead of resetting counters and double
+        // deploying from slice 1.
+        if self.in_flight.is_some() {
+            self.stop();
+            return;
         }
         self.slices_submitted = 0;
         self.slices_failed = 0;
@@ -489,6 +499,14 @@ mod tests {
 
     fn make_bot() -> TwapBot {
         TwapBot::new("SOL".to_string(), TradingSide::Long, 1.0, 4, 40, auth())
+    }
+
+    fn noop_task() -> tokio::task::JoinHandle<()> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async { tokio::spawn(async {}) })
     }
 
     #[test]
@@ -603,6 +621,17 @@ mod tests {
     }
 
     #[test]
+    fn stop_counts_in_flight_as_unknown() {
+        let mut bot = make_bot();
+        let (_tx, rx) = oneshot::channel();
+        bot.record_slice_dispatched(Instant::now(), 1, rx, noop_task());
+        bot.stop();
+        assert_eq!(bot.status, TwapStatus::Stopped);
+        assert_eq!(bot.slices_unconfirmed, 1);
+        assert!(bot.in_flight.is_none());
+    }
+
+    #[test]
     fn restart_clears_progress_and_failures() {
         let mut bot = make_bot();
         bot.record_slice_confirmed(Instant::now(), "1/4");
@@ -614,6 +643,18 @@ mod tests {
         assert_eq!(bot.slices_unconfirmed, 0);
         assert_eq!(bot.status, TwapStatus::Running);
         assert!(bot.slice_due(Instant::now()));
+    }
+
+    #[test]
+    fn restart_with_in_flight_stops_instead_of_resetting() {
+        let mut bot = make_bot();
+        let (_tx, rx) = oneshot::channel();
+        bot.record_slice_dispatched(Instant::now(), 1, rx, noop_task());
+        bot.restart();
+        assert_eq!(bot.status, TwapStatus::Stopped);
+        assert_eq!(bot.slices_unconfirmed, 1);
+        assert_eq!(bot.slices_submitted, 0);
+        assert!(bot.in_flight.is_none());
     }
 
     #[test]
@@ -643,12 +684,7 @@ mod tests {
     fn slice_due_false_while_slice_in_flight() {
         let mut bot = make_bot();
         let (_tx, rx) = oneshot::channel();
-        let task = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async { tokio::spawn(async {}) });
-        bot.record_slice_dispatched(Instant::now(), 1, rx, task);
+        bot.record_slice_dispatched(Instant::now(), 1, rx, noop_task());
         assert!(!bot.slice_due(Instant::now()));
     }
 

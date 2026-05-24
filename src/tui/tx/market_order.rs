@@ -233,6 +233,7 @@ pub fn submit_market_order(
             match subscribe_send_confirm(&ctx, &tx, &sig).await {
                 Ok(()) => {
                     send_status(TxStatusMsg::TradeMarker {
+                        symbol: symbol.clone(),
                         is_buy: matches!(side, TradingSide::Long),
                     });
                     let confirmed_title = format!("{} {}", s.tx_order_confirmed, order_summary);
@@ -409,6 +410,7 @@ pub fn submit_market_order(
         match subscribe_send_confirm(&ctx, &tx, &sig).await {
             Ok(()) => {
                 send_status(TxStatusMsg::TradeMarker {
+                    symbol: symbol.clone(),
                     is_buy: matches!(side, TradingSide::Long),
                 });
                 let title = format!("{} {}", s.tx_order_confirmed, order_summary);

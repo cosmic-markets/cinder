@@ -34,7 +34,7 @@ use tokio::sync::oneshot;
 use super::super::config::SplineConfig;
 use super::super::i18n::strings;
 use super::super::math::ui_size_to_num_base_lots;
-use super::super::state::{SliceOutcome, TuiState, TxStatusMsg};
+use super::super::state::{SliceOutcome, TuiState, TwapBot, TxStatusMsg};
 use super::super::trading::TradingSide;
 use super::super::tx::submit_market_order;
 
@@ -63,37 +63,8 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
         // Paused.
         if let Some(bot) = state.twaps_view.bots.get_mut(i) {
             if let Some((slice_number, outcome)) = bot.try_take_outcome() {
-                let s = strings();
-                match outcome {
-                    SliceOutcome::Confirmed => {
-                        let line = format!(
-                            "{} {}/{}",
-                            s.twap_slice_confirmed, slice_number, bot.slice_count
-                        );
-                        bot.record_slice_confirmed(now, line);
-                        dispatched_any = true;
-                    }
-                    SliceOutcome::Failed(detail) => {
-                        // Cap detail length so a runaway error string can't
-                        // blow the bots-modal column width.
-                        let short = truncate_status(&detail, 120);
-                        let line = format!(
-                            "{} {}/{}: {}",
-                            s.twap_slice_failed, slice_number, bot.slice_count, short
-                        );
-                        bot.record_slice_failed(now, line);
-                        dispatched_any = true;
-                    }
-                    SliceOutcome::Unknown(detail) => {
-                        let short = truncate_status(&detail, 120);
-                        let line = format!(
-                            "{} {}/{}: {}",
-                            s.twap_slice_unconfirmed, slice_number, bot.slice_count, short
-                        );
-                        bot.record_slice_unconfirmed(now, line);
-                        dispatched_any = true;
-                    }
-                }
+                record_resolved_slice_outcome(bot, now, slice_number, outcome);
+                dispatched_any = true;
             }
         }
 
@@ -181,7 +152,16 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
             }
         };
 
-        let reference_price_usd = market_price_for_symbol(state, &symbol);
+        let reference_price_usd = match market_price_for_symbol(state, &symbol, &active_cfg.symbol)
+        {
+            Some(price) => price,
+            None if market_cfg.isolated_only => {
+                let reason = format!("{} ({})", strings().waiting_data, symbol);
+                defer_with_reason_owned(state, i, now, reason);
+                continue;
+            }
+            None => 0.0,
+        };
 
         // Create the outcome oneshot before spawning so we can park the
         // receiver on the bot atomically with the dispatch — the next tick
@@ -231,6 +211,67 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
     dispatched_any
 }
 
+pub(in crate::tui::runtime) fn settle_in_flight_for_interrupt(
+    bot: &mut TwapBot,
+    now: Instant,
+    unknown_detail: impl Into<String>,
+) -> bool {
+    if let Some((slice_number, outcome)) = bot.try_take_outcome() {
+        record_resolved_slice_outcome(bot, now, slice_number, outcome);
+        return true;
+    }
+
+    if let Some(in_flight) = bot.in_flight.take() {
+        let slice_number = in_flight.slice_number;
+        in_flight.task.abort();
+        record_resolved_slice_outcome(
+            bot,
+            now,
+            slice_number,
+            SliceOutcome::Unknown(unknown_detail.into()),
+        );
+        return true;
+    }
+
+    false
+}
+
+fn record_resolved_slice_outcome(
+    bot: &mut TwapBot,
+    now: Instant,
+    slice_number: u32,
+    outcome: SliceOutcome,
+) {
+    let s = strings();
+    match outcome {
+        SliceOutcome::Confirmed => {
+            let line = format!(
+                "{} {}/{}",
+                s.twap_slice_confirmed, slice_number, bot.slice_count
+            );
+            bot.record_slice_confirmed(now, line);
+        }
+        SliceOutcome::Failed(detail) => {
+            // Cap detail length so a runaway error string can't blow the
+            // bots-modal column width.
+            let short = truncate_status(&detail, 120);
+            let line = format!(
+                "{} {}/{}: {}",
+                s.twap_slice_failed, slice_number, bot.slice_count, short
+            );
+            bot.record_slice_failed(now, line);
+        }
+        SliceOutcome::Unknown(detail) => {
+            let short = truncate_status(&detail, 120);
+            let line = format!(
+                "{} {}/{}: {}",
+                s.twap_slice_unconfirmed, slice_number, bot.slice_count, short
+            );
+            bot.record_slice_unconfirmed(now, line);
+        }
+    }
+}
+
 fn defer_with_reason(state: &mut TuiState, i: usize, now: Instant, reason: &str) {
     if let Some(bot) = state.twaps_view.bots.get_mut(i) {
         bot.set_defer_reason(reason);
@@ -255,14 +296,24 @@ fn truncate_status(s: &str, max_chars: usize) -> String {
     }
 }
 
-fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
-    state
+fn market_price_for_symbol(state: &TuiState, symbol: &str, active_symbol: &str) -> Option<f64> {
+    let market_mark = state
         .market_selector
         .markets
         .iter()
         .find(|m| m.symbol == symbol)
         .map(|m| m.price)
-        .filter(|price| price.is_finite() && *price > 0.0)
-        .or_else(|| state.price_history.back().copied())
-        .unwrap_or(0.0)
+        .filter(|price| price.is_finite() && *price > 0.0);
+    if market_mark.is_some() {
+        return market_mark;
+    }
+    if symbol == active_symbol {
+        state
+            .price_history
+            .back()
+            .copied()
+            .filter(|price| price.is_finite() && *price > 0.0)
+    } else {
+        None
+    }
 }

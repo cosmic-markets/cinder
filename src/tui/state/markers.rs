@@ -20,6 +20,7 @@ pub struct OrderChartMarker {
 #[derive(Clone, Debug)]
 pub enum TxStatusMsg {
     TradeMarker {
+        symbol: String,
         is_buy: bool,
     },
     SetStatus {
@@ -53,7 +54,7 @@ impl TxStatusMsg {
     pub fn is_per_slice_chatter(&self) -> bool {
         match self {
             TxStatusMsg::SetStatus { .. } => true,
-            // Chart pin: every fill belongs on the chart regardless of source.
+            // Chart pin: every fill belongs on its own market's chart.
             TxStatusMsg::TradeMarker { .. } => false,
             // Ledger entry: TWAP slices want these recorded.
             TxStatusMsg::LedgerOnly { .. } => false,

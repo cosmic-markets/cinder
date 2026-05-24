@@ -19,7 +19,7 @@ use super::super::state::{L2BookStreamMsg, TuiState};
 use super::super::terminal::restore_terminal;
 use super::super::ui;
 use super::redraw::{redraw_tui, redraw_tui_force};
-use super::{tasks, Channels, FEED_REDRAW_MIN_INTERVAL};
+use super::{tasks, twap_scheduler, Channels, FEED_REDRAW_MIN_INTERVAL};
 
 pub(super) fn initial_config(
     market_list: &[super::super::state::MarketInfo],
@@ -138,6 +138,11 @@ pub(super) fn handle_full_rpc_reconnect(
     );
 
     if let Some(kp) = state.trading.keypair.clone() {
+        let now = Instant::now();
+        for bot in state.twaps_view.bots.iter_mut() {
+            twap_scheduler::settle_in_flight_for_interrupt(bot, now, strings().st_reconnecting);
+        }
+
         state.trading.tx_context = None;
         *wallet_wss_handle = Some(tasks::spawn_wallet_wss(
             kp.pubkey().to_bytes(),
@@ -145,40 +150,17 @@ pub(super) fn handle_full_rpc_reconnect(
             channels.wallet_usdc_tx.clone(),
             channels.wallet_sol_tx.clone(),
         ));
-        // Reuse the existing shared `Trader` Arc so the rebuilt `TxContext`
-        // sees the same mirror the trader-orders WS task writes into. If
-        // the shared mirror is somehow missing, build a fresh empty one
-        // AND write it back to `state.trading.shared_trader`.
-        let shared_trader = match state.trading.shared_trader.as_ref() {
-            Some(arc) => Arc::clone(arc),
-            None => {
-                let authority: solana_pubkey::Pubkey = kp.pubkey();
-                let arc = std::sync::Arc::new(std::sync::RwLock::new(
-                    crate::tui::tx::TxContext::empty_trader_mirror(authority),
-                ));
-                state.trading.shared_trader = Some(Arc::clone(&arc));
-                arc
-            }
-        };
-        // Critical: reset `hydrated = false` so a cross-network RPC swap
-        // (e.g. devnet → mainnet) doesn't let order builders read the old
-        // network's subaccount layout while the new WS catches up. The
-        // pre-swap snapshot's `Trader` value is left in place so the
-        // bots-modal renderer can still see "last known" subaccounts, but
-        // submit-time `snapshot_trader()` returns None until the new WS
-        // pushes its first `Snapshot`. Recover from a poisoned lock so a
-        // prior reader panic doesn't permanently wedge the order system.
-        {
-            let mut guard = match shared_trader.write() {
-                Ok(g) => g,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            guard.hydrated = false;
-        }
-        // Abort the OLD trader-orders task BEFORE spawning the new one —
-        // otherwise both tasks hold the same shared_trader Arc and the
-        // old (pre-swap) task's in-flight write can land AFTER the new
-        // task's first apply, clobbering with stale data.
+        // Full RPC reconnect can cross networks/endpoints. Use a fresh trader
+        // mirror so any post-abort write from the old WS task lands on an
+        // orphaned Arc instead of clobbering the new TxContext's snapshot.
+        let authority: solana_pubkey::Pubkey = kp.pubkey();
+        let shared_trader = std::sync::Arc::new(std::sync::RwLock::new(
+            crate::tui::tx::TxContext::empty_trader_mirror(authority),
+        ));
+        state.trading.shared_trader = Some(Arc::clone(&shared_trader));
+        // Abort the OLD trader-orders task before spawning the new one. If
+        // an old in-flight write still completes after abort, it now writes
+        // only to the orphaned pre-reconnect Arc above.
         if let Some(h) = trader_orders_handle.take() {
             h.abort();
         }
