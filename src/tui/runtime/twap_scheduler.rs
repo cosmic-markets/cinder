@@ -2,16 +2,26 @@
 //!
 //! Driven from the event loop on a 1-second tick (`tick_twap_scheduler`). For
 //! every active bot the scheduler does two things:
-//! 1. Polls any in-flight slice's outcome oneshot. A `Confirmed` advances
-//!    `slices_submitted`; a `Failed` advances `slices_failed`. Both update
-//!    `last_slice_at`, so the next slice waits the full interval.
+//! 1. Polls any in-flight slice's outcome oneshot. `Confirmed` advances
+//!    `slices_submitted`; `Failed` advances `slices_failed`; `Unknown`
+//!    advances `slices_unconfirmed`. Every variant updates `last_slice_at`,
+//!    so the next slice waits the full interval.
 //! 2. If no slice is in flight and `slice_due` returns true, dispatches the
 //!    next slice via `submit_market_order` with an outcome oneshot whose
-//!    receiver is parked on the bot.
+//!    receiver is parked on the bot, alongside the spawned task's
+//!    JoinHandle (so a later stop/restart/remove can abort the broadcast).
 //!
-//! Status updates are written to `bot.last_status` — NOT to
-//! `state.trading.status_title`, which would race with manual-tx confirmations
-//! and clobber the visible signature/detail line.
+//! Status updates flow through two channels:
+//! - `bot.last_status` captures slice events (dispatched / confirmed /
+//!   failed) and persists across transient defers.
+//! - `bot.defer_reason` captures transient "waiting for wallet/cfg/sync"
+//!   states. The bots-modal renderer prefers `last_status` and falls back to
+//!   `defer_reason` when no slice event has happened recently.
+//!
+//! `submit_market_order` is invoked with `silent_status = true` so each
+//! slice's broadcast/confirm milestones do NOT clobber the global
+//! `state.trading.status_title` — that field is reserved for manual orders
+//! and lifecycle events.
 
 use std::time::Instant;
 
@@ -34,12 +44,25 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
     let mut dispatched_any = false;
     let now = Instant::now();
 
-    // Iterate by index because we mutate each bot in place and don't want to
-    // hold an immutable borrow of the Vec across mutation.
+    // Snapshot the live wallet authority once per tick so each bot can
+    // verify it owns the connected wallet before dispatching a slice.
+    let live_authority = state
+        .trading
+        .keypair
+        .as_ref()
+        .map(|kp| {
+            use solana_signer::Signer;
+            solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()).ok()
+        })
+        .unwrap_or_default();
+
     let bot_count = state.twaps_view.bots.len();
     for i in 0..bot_count {
-        // Step 1 — poll any in-flight slice's outcome. Done before reading
-        // keypair/ctx so a stuck wallet still allows bookkeeping to advance.
+        // Step 1 — poll any in-flight slice's outcome. Run even when the bot
+        // is Paused so the receiver doesn't bloat indefinitely; pause-aware
+        // bookkeeping in `record_slice_*` will anchor `last_slice_at` to
+        // `paused_at` and `maybe_complete` will refuse to flip status while
+        // Paused.
         if let Some(bot) = state.twaps_view.bots.get_mut(i) {
             if let Some((slice_number, outcome)) = bot.try_take_outcome() {
                 let s = strings();
@@ -53,11 +76,23 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
                         dispatched_any = true;
                     }
                     SliceOutcome::Failed(detail) => {
+                        // Cap detail length so a runaway error string can't
+                        // blow the bots-modal column width.
+                        let short = truncate_status(&detail, 120);
                         let line = format!(
                             "{} {}/{}: {}",
-                            s.twap_slice_failed, slice_number, bot.slice_count, detail
+                            s.twap_slice_failed, slice_number, bot.slice_count, short
                         );
                         bot.record_slice_failed(now, line);
+                        dispatched_any = true;
+                    }
+                    SliceOutcome::Unknown(detail) => {
+                        let short = truncate_status(&detail, 120);
+                        let line = format!(
+                            "{} {}/{}: {}",
+                            s.twap_slice_unconfirmed, slice_number, bot.slice_count, short
+                        );
+                        bot.record_slice_unconfirmed(now, line);
                         dispatched_any = true;
                     }
                 }
@@ -75,51 +110,64 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
         let symbol = bot.symbol.clone();
         let side = bot.side;
         let slice_size = bot.slice_size;
-        let next_slice_number = bot.slices_submitted + bot.slices_failed + 1;
+        let bot_authority = bot.authority;
+        let next_slice_number =
+            bot.slices_submitted + bot.slices_failed + bot.slices_unconfirmed + 1;
+
+        // Authority check: the connected wallet must match the wallet that
+        // created the bot. Without this, a disconnect-then-reconnect-with-a-
+        // different-wallet would silently redirect remaining slices.
+        let Some(live_authority) = live_authority else {
+            defer_with_reason(state, i, now, strings().twap_waiting_wallet);
+            continue;
+        };
+        if live_authority != bot_authority {
+            defer_with_reason(state, i, now, strings().twap_waiting_authority);
+            continue;
+        }
 
         // Wallet + context must be live to dispatch. Both can be transiently
-        // missing during a reconnect; surface the wait state on the bot and
-        // try again next tick. Critically, do NOT stop the bot — connect
-        // races shouldn't permanently kill it.
+        // missing during a reconnect. Defer paths now touch `last_slice_at`
+        // so the bot waits at least one full interval after recovery
+        // instead of burst-firing the moment hydration completes.
         let Some(kp) = state.trading.keypair.clone() else {
-            if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                bot.last_status = strings().twap_waiting_wallet.to_string();
-            }
+            defer_with_reason(state, i, now, strings().twap_waiting_wallet);
             continue;
         };
         let Some(ctx) = state.trading.tx_context.clone() else {
-            if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                bot.last_status = strings().twap_waiting_trader_sync.to_string();
-            }
+            defer_with_reason(state, i, now, strings().twap_waiting_trader_sync);
             continue;
         };
 
-        // Pull the market config for the bot's symbol. If it's missing —
-        // e.g. during an RPC swap while the configs map is being rebuilt —
-        // surface the wait and skip the tick. Don't stop the bot.
+        // Pull the market config for the bot's symbol. Missing → defer.
         let market_cfg = match configs.get(&symbol) {
             Some(cfg) => cfg.clone(),
             None => {
-                if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                    bot.last_status = format!("{} ({})", strings().twap_waiting_market_cfg, symbol);
-                }
+                let reason = format!("{} ({})", strings().twap_waiting_market_cfg, symbol);
+                defer_with_reason_owned(state, i, now, reason);
                 continue;
             }
         };
 
         // If this bot is on a non-isolated market that isn't the active one,
         // we can't safely dispatch — the local non-isolated builder uses
-        // `ctx.market_addrs.*` which is pinned to the active symbol. Defer
-        // and surface a status so the user can switch markets to resume.
+        // `ctx.market_addrs.*` which is pinned to the active symbol.
         if !market_cfg.isolated_only && symbol != active_cfg.symbol {
-            if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                bot.last_status = format!(
-                    "{} ({} \u{2192} {})",
-                    strings().twap_waiting_active_market,
-                    active_cfg.symbol,
-                    symbol
-                );
-            }
+            let reason = format!(
+                "{} ({} \u{2192} {})",
+                strings().twap_waiting_active_market,
+                active_cfg.symbol,
+                symbol
+            );
+            defer_with_reason_owned(state, i, now, reason);
+            continue;
+        }
+
+        // For isolated markets, also require trader-state hydration before
+        // dispatching — `submit_market_order` would otherwise fail
+        // synchronously, consuming a slot in the failure budget.
+        if market_cfg.isolated_only && ctx.snapshot_trader().is_none() {
+            defer_with_reason(state, i, now, strings().twap_waiting_trader_sync);
             continue;
         }
 
@@ -127,9 +175,6 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
         {
             Ok(n) if n > 0 => n,
             _ => {
-                // Slice rounds to zero base lots — this can only happen if
-                // the market's lot decimals changed under us. Stop the bot;
-                // no amount of retrying will fix it without user intervention.
                 if let Some(bot) = state.twaps_view.bots.get_mut(i) {
                     bot.stop();
                     bot.last_status = strings().twap_err_size_too_small.to_string();
@@ -138,8 +183,6 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
             }
         };
 
-        // Reference price for isolated-mode collateral sizing. Use the same
-        // resolver as a normal market order would.
         let reference_price_usd = market_price_for_symbol(state, &symbol);
 
         // Create the outcome oneshot before spawning so we can park the
@@ -147,7 +190,7 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
         // sees in_flight=Some and won't double-fire.
         let (otx, orx) = oneshot::channel();
 
-        submit_market_order(
+        let task = submit_market_order(
             kp.clone(),
             ctx.clone(),
             symbol.clone(),
@@ -161,6 +204,7 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
             reference_price_usd,
             tx_status.clone(),
             Some(otx),
+            true, // silent_status — slice updates go to bot.last_status only
         );
 
         let s = strings();
@@ -179,13 +223,38 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
             bot.slice_count,
         );
         if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-            bot.record_slice_dispatched(now, next_slice_number, orx);
+            bot.record_slice_dispatched(now, next_slice_number, orx, task);
             bot.last_status = status_line;
+            bot.clear_defer_reason();
         }
         dispatched_any = true;
     }
 
     dispatched_any
+}
+
+fn defer_with_reason(state: &mut TuiState, i: usize, now: Instant, reason: &str) {
+    if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+        bot.set_defer_reason(reason);
+        bot.touch_last_slice_at(now);
+    }
+}
+
+fn defer_with_reason_owned(state: &mut TuiState, i: usize, now: Instant, reason: String) {
+    if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+        bot.set_defer_reason(reason);
+        bot.touch_last_slice_at(now);
+    }
+}
+
+fn truncate_status(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        out.push('\u{2026}');
+        out
+    }
 }
 
 fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
@@ -199,3 +268,6 @@ fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
         .or_else(|| state.price_history.back().copied())
         .unwrap_or(0.0)
 }
+
+// `Pubkey::from_str` lives behind FromStr; bring it into the trait namespace.
+use std::str::FromStr;

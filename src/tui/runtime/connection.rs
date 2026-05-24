@@ -146,12 +146,10 @@ pub(super) fn handle_full_rpc_reconnect(
             channels.wallet_usdc_tx.clone(),
             channels.wallet_sol_tx.clone(),
         ));
-        // Reuse the existing shared `Trader` so the rebuilt `TxContext` sees
-        // the live state populated by the trader-orders WS task. If the
-        // shared mirror is somehow missing, build a fresh empty one AND
-        // write it back to `state.trading.shared_trader` so the restarted
-        // trader-orders task below writes into the same Arc that the new
-        // TxContext reads from.
+        // Reuse the existing shared `Trader` Arc so the rebuilt `TxContext`
+        // sees the same mirror the trader-orders WS task writes into. If
+        // the shared mirror is somehow missing, build a fresh empty one
+        // AND write it back to `state.trading.shared_trader`.
         let shared_trader = match state.trading.shared_trader.as_ref() {
             Some(arc) => Arc::clone(arc),
             None => {
@@ -169,6 +167,36 @@ pub(super) fn handle_full_rpc_reconnect(
                 arc
             }
         };
+        // Critical: reset `hydrated = false` so a cross-network RPC swap
+        // (e.g. devnet → mainnet) doesn't let order builders read the old
+        // network's subaccount layout while the new WS catches up. The
+        // pre-swap snapshot's `Trader` value is left in place so the
+        // bots-modal renderer can still see "last known" subaccounts, but
+        // submit-time `snapshot_trader()` returns None until the new WS
+        // pushes its first `Snapshot`.
+        if let Ok(mut guard) = shared_trader.write() {
+            guard.hydrated = false;
+        }
+        // Abort the OLD trader-orders task BEFORE spawning the new one —
+        // otherwise both tasks hold the same shared_trader Arc and the
+        // old (pre-swap) task's in-flight write can land AFTER the new
+        // task's first apply, clobbering with stale data.
+        if let Some(h) = trader_orders_handle.take() {
+            h.abort();
+        }
+        let conditional_asset_symbols = configs
+            .values()
+            .map(|c| (c.asset_id, c.symbol.clone()))
+            .collect();
+        *trader_orders_handle = Some(tasks::spawn_trader_orders_ws(
+            Arc::clone(&kp),
+            channels.orders_tx.clone(),
+            conditional_asset_symbols,
+            Arc::clone(&shared_trader),
+        ));
+        // Old tx_ctx_task is fine to abort after spawning the new one (no
+        // shared writable state — it just delivers a freshly-built
+        // TxContext once and returns).
         let new_tx_ctx = tasks::spawn_tx_context_task(
             Arc::clone(&kp),
             cfg.symbol.clone(),
@@ -178,25 +206,6 @@ pub(super) fn handle_full_rpc_reconnect(
             channels.tx_status.clone(),
         );
         if let Some(h) = tx_ctx_task.replace(new_tx_ctx) {
-            h.abort();
-        }
-        // Restart the trader-orders WS too. Without this, the WS keeps
-        // streaming subaccount state resolved against the previous RPC into
-        // `shared_trader`, while order builders now sign and broadcast on
-        // the freshly-rebuilt `TxContext` (new RPC) — a devnet/mainnet swap
-        // would have the WS feed stale devnet subaccount data into mainnet
-        // submissions.
-        let conditional_asset_symbols = configs
-            .values()
-            .map(|c| (c.asset_id, c.symbol.clone()))
-            .collect();
-        let new_trader_orders = tasks::spawn_trader_orders_ws(
-            Arc::clone(&kp),
-            channels.orders_tx.clone(),
-            conditional_asset_symbols,
-            Arc::clone(&shared_trader),
-        );
-        if let Some(h) = trader_orders_handle.replace(new_trader_orders) {
             h.abort();
         }
     }

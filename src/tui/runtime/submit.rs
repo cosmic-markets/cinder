@@ -347,6 +347,7 @@ pub(super) fn execute_confirmed_action(
                         reference_price_usd,
                         tx_status.clone(),
                         None,
+                        false,
                     );
                 }
                 // TWAP orders are routed through the TWAP modal, not the
@@ -395,6 +396,7 @@ pub(super) fn execute_confirmed_action(
                 pos.entry_price,
                 tx_status.clone(),
                 None,
+                false,
             );
         }
         PendingAction::DepositFunds { amount } => {

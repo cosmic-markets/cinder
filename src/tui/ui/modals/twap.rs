@@ -519,8 +519,16 @@ pub(in crate::tui::ui) fn render_bots_modal(
         )),
     ]);
 
-    let visible_slots = inner.height.saturating_sub(1) as usize;
-    let scroll_offset = if view.selected_index >= visible_slots {
+    // Reserve a 1-row footer for the selected bot's last_status /
+    // defer_reason — without this the user has no visible signal that a
+    // slice failed or that the bot is waiting for hydration.
+    let detail_h: u16 = if inner.height >= 3 { 1 } else { 0 };
+    let table_h = inner.height.saturating_sub(detail_h);
+    let table_area = ratatui::layout::Rect::new(inner.x, inner.y, inner.width, table_h);
+    let detail_area = ratatui::layout::Rect::new(inner.x, inner.y + table_h, inner.width, detail_h);
+
+    let visible_slots = table_h.saturating_sub(1) as usize;
+    let scroll_offset = if view.selected_index >= visible_slots && visible_slots > 0 {
         view.selected_index - visible_slots + 1
     } else {
         0
@@ -551,10 +559,44 @@ pub(in crate::tui::ui) fn render_bots_modal(
     let table = Table::new(table_rows, widths)
         .header(header)
         .column_spacing(1);
-    f.render_widget(table, inner);
+    f.render_widget(table, table_area);
+
+    // Detail footer for the currently-selected bot. Prefer the persistent
+    // `last_status` (real slice events — confirmed / failed / dispatched);
+    // fall back to `defer_reason` (transient "waiting for ..." messages)
+    // when no slice event has happened yet. The two-channel design keeps a
+    // real failure detail visible across a brief reconnect window — a 1-Hz
+    // defer update can't clobber it.
+    if detail_h > 0 {
+        if let Some(b) = view.bots.get(view.selected_index) {
+            let (text, color) = if !b.last_status.is_empty() {
+                let color = if b.slices_failed > 0 || b.slices_unconfirmed > 0 {
+                    Color::LightYellow
+                } else {
+                    Color::Gray
+                };
+                (b.last_status.clone(), color)
+            } else if let Some(reason) = b.defer_reason.as_deref() {
+                (reason.to_string(), Color::DarkGray)
+            } else {
+                (String::new(), Color::DarkGray)
+            };
+            if !text.is_empty() {
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        format!(" {}", text),
+                        Style::default().fg(color),
+                    ))),
+                    detail_area,
+                );
+            }
+        }
+    }
 
     // Y/N confirmation overlay for [s]/[r]/[x]. Drawn on top of the table
-    // so the user can still see which bot they're acting on.
+    // so the user can still see which bot they're acting on. Skipped if the
+    // popup is too small to fit a 3-row overlay without overdrawing the
+    // surrounding chart/panel buffers.
     if let Some(pending) = view.pending_confirm {
         use super::super::super::state::TwapBotConfirm;
         let prompt = match pending {
@@ -563,32 +605,34 @@ pub(in crate::tui::ui) fn render_bots_modal(
             TwapBotConfirm::Remove(_) => s.twap_confirm_remove,
         };
         let confirm_h: u16 = 3;
-        let confirm_w = inner.width;
-        let confirm_y = inner.y + inner.height.saturating_sub(confirm_h);
-        let confirm_area = ratatui::layout::Rect::new(inner.x, confirm_y, confirm_w, confirm_h);
-        f.render_widget(ratatui::widgets::Clear, confirm_area);
-        let confirm_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow));
-        let confirm_inner = confirm_block.inner(confirm_area);
-        f.render_widget(confirm_block, confirm_area);
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    " ⚠ ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    prompt.to_string(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ])),
-            confirm_inner,
-        );
+        if inner.height >= confirm_h {
+            let confirm_w = inner.width;
+            let confirm_y = inner.y + inner.height.saturating_sub(confirm_h);
+            let confirm_area = ratatui::layout::Rect::new(inner.x, confirm_y, confirm_w, confirm_h);
+            f.render_widget(ratatui::widgets::Clear, confirm_area);
+            let confirm_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow));
+            let confirm_inner = confirm_block.inner(confirm_area);
+            f.render_widget(confirm_block, confirm_area);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(
+                        " ⚠ ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        prompt.to_string(),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])),
+                confirm_inner,
+            );
+        }
     }
 }
 
@@ -636,7 +680,10 @@ fn bot_row<'a>(b: &'a TwapBot, active_symbol: &str, is_selected: bool, now: Inst
         TwapStatus::Running => match b.last_slice_at {
             None => "now".to_string(),
             Some(prev) => {
-                let target = prev + b.slice_interval;
+                // `Instant + Duration` can panic on overflow; saturate
+                // instead so a corrupt interval doesn't bring down the
+                // renderer.
+                let target = prev.checked_add(b.slice_interval).unwrap_or(now);
                 if target <= now {
                     "now".to_string()
                 } else {

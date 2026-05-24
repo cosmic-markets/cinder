@@ -10,7 +10,6 @@ use solana_keypair::Keypair;
 use super::super::config::SplineConfig;
 use super::super::i18n::strings;
 use super::super::state::TuiState;
-use super::super::state::TwapStatus;
 use super::super::tx::TxContext;
 use super::tasks::{
     spawn_initial_connect_flow, spawn_trader_orders_ws, spawn_tx_context_task, spawn_wallet_wss,
@@ -36,11 +35,18 @@ pub(super) fn connect_wallet_with_keypair(
     channels: &Channels,
     ws_url: &str,
     http: Arc<PhoenixHttpClient>,
-) -> WalletHandles {
+) -> Result<WalletHandles, String> {
     use solana_signer::Signer;
-    state.trading.wallet_label = kp.pubkey().to_string();
-    state.trading.wallet_loaded = true;
+    // Resolve the pubkey BEFORE mutating any state, so an early-failure
+    // path doesn't tear down a previously-loaded wallet. The previous
+    // version returned no-op task handles and let the caller mistakenly
+    // replace its real handles with them.
     let kp_arc = Arc::new(kp);
+    let authority = solana_pubkey::Pubkey::from_str(&kp_arc.pubkey().to_string())
+        .map_err(|e| format!("{}: {}", strings().st_wallet_load_failed, e))?;
+
+    state.trading.wallet_label = kp_arc.pubkey().to_string();
+    state.trading.wallet_loaded = true;
     state.trading.keypair = Some(Arc::clone(&kp_arc));
     // Reset the "modal already shown" flag on every (re)connect — without
     // this, a user who pressed Esc out of the choice modal during a
@@ -56,28 +62,6 @@ pub(super) fn connect_wallet_with_keypair(
     // `TxContext` future can move it into place even if it resolves before the
     // first WS update. Stored on `TradingState` so RPC swaps and market
     // switches can rebuild a `TxContext` against the same live trader.
-    let authority = match solana_pubkey::Pubkey::from_str(&kp_arc.pubkey().to_string()) {
-        Ok(pk) => pk,
-        Err(e) => {
-            // A keypair-to-pubkey parse failure means the trader-state WS
-            // would key against the wrong pubkey and silently exit (see
-            // spawn_trader_orders_ws), leaving the user with a "connected"
-            // wallet whose orders all fail on-chain. Refuse the connect
-            // outright so the user sees the error and can retry.
-            state.trading.wallet_loaded = false;
-            state.trading.wallet_label.clear();
-            state.trading.keypair = None;
-            state
-                .trading
-                .set_status_title(format!("{}: {}", strings().st_wallet_load_failed, e));
-            return WalletHandles {
-                wallet_wss: tokio::spawn(async {}),
-                initial_balance: tokio::spawn(async {}),
-                trader_orders: tokio::spawn(async {}),
-                tx_ctx: tokio::spawn(async {}),
-            };
-        }
-    };
     let shared_trader = Arc::new(RwLock::new(TxContext::empty_trader_mirror(authority)));
     state.trading.shared_trader = Some(Arc::clone(&shared_trader));
 
@@ -123,12 +107,12 @@ pub(super) fn connect_wallet_with_keypair(
         Arc::clone(&shared_trader),
     );
 
-    WalletHandles {
+    Ok(WalletHandles {
         wallet_wss,
         initial_balance,
         trader_orders,
         tx_ctx,
-    }
+    })
 }
 
 pub(super) fn disconnect_wallet(
@@ -156,15 +140,19 @@ pub(super) fn disconnect_wallet(
         h.abort();
     }
     *awaiting_first_tx_ctx = false;
-    // Stop every running TWAP bot. Bots fire against `state.trading.keypair`,
-    // which we're about to clear; if the user reconnects a different wallet
-    // and a bot is still Running, the next scheduler tick would dispatch the
-    // bot's remaining slices against the new wallet's funds.
+    // Bots are authority-bound now — the scheduler refuses to fire when
+    // `state.trading.keypair`'s pubkey doesn't match `bot.authority`. So
+    // they can stay Running across a disconnect; if the user reconnects
+    // the same wallet they resume firing, and if they connect a different
+    // wallet the scheduler defers with `twap_waiting_authority`. Cancel
+    // any in-flight broadcast though — the spawned task still holds the
+    // OLD keypair Arc and would happily land an order against the wallet
+    // the user just disconnected from.
     for bot in state.twaps_view.bots.iter_mut() {
-        if matches!(bot.status, TwapStatus::Running | TwapStatus::Paused) {
-            bot.stop();
-            bot.last_status = strings().twap_waiting_wallet.to_string();
+        if let Some(in_flight) = bot.in_flight.take() {
+            in_flight.task.abort();
         }
+        bot.defer_reason = Some(strings().twap_waiting_wallet.to_string());
     }
     state.trading.wallet_loaded = false;
     state.trading.wallet_label.clear();

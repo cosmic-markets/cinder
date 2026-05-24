@@ -626,6 +626,14 @@ pub struct Strings {
     pub twap_slice_confirmed: &'static str,
     /// Bot `last_status` line: slice failed.
     pub twap_slice_failed: &'static str,
+    /// Bot `last_status` line: slice tx broadcast but never confirmed.
+    pub twap_slice_unconfirmed: &'static str,
+    /// Bot defer reason — connected wallet authority differs from the wallet
+    /// that created the bot.
+    pub twap_waiting_authority: &'static str,
+    /// Status line — restart refused because the connected wallet differs
+    /// from the wallet the bot was created with.
+    pub twap_restart_wallet_mismatch: &'static str,
     /// Confirmation prompt — start TWAP from form.
     pub twap_confirm_start: &'static str,
     /// Confirmation prompt — restart finished/stopped bot.

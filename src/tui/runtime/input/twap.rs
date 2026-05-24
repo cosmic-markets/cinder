@@ -1,6 +1,8 @@
 //! Input handlers for the "New TWAP" modal (`EditingTwap`) and the bots
 //! modal (`ViewingBots`).
 
+use std::str::FromStr;
+
 use crossterm::event::KeyCode;
 
 use super::super::super::config::{current_user_config, SplineConfig};
@@ -201,6 +203,10 @@ fn field_buffer_mut(state: &mut TuiState) -> Option<&mut String> {
 /// Validate the TWAP draft and assemble a `TwapBot`. Returns a localized
 /// error message string on failure. Slice cadence is fixed at one market
 /// slice per minute (`slice_count = total_minutes`), matching Binance.
+///
+/// Re-checks `wallet_loaded` so the submit path can't create a bot that
+/// would never fire (e.g. wallet disconnected between Enter-validate and
+/// Y-confirm) — the bot needs the wallet's authority to bind its identity.
 fn build_bot_from_draft(
     state: &TuiState,
     configs: &std::collections::HashMap<String, SplineConfig>,
@@ -211,6 +217,17 @@ fn build_bot_from_draft(
     let market_cfg = configs
         .get(&draft.market)
         .ok_or_else(|| format!("{} {}", s.st_market_switch_failed, draft.market))?;
+
+    // Resolve the wallet authority now — bind the bot to this wallet so a
+    // later wallet-swap can't redirect its slices.
+    let authority = match state.trading.keypair.as_ref() {
+        Some(kp) => {
+            use solana_signer::Signer;
+            solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
+                .map_err(|_| s.twap_err_no_wallet.to_string())?
+        }
+        None => return Err(s.twap_err_no_wallet.to_string()),
+    };
 
     let size: f64 = draft
         .size_buffer
@@ -266,6 +283,7 @@ fn build_bot_from_draft(
         size,
         slice_count,
         total_seconds.max(1),
+        authority,
     ))
 }
 
@@ -380,6 +398,9 @@ pub(in crate::tui::runtime) fn handle_bots_view_key(
             KeyAction::Redraw
         }
         KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('q') => {
+            // Drop any stale confirmation prompt on close so a re-open
+            // doesn't surface a destructive prompt the user never armed.
+            state.twaps_view.pending_confirm = None;
             state.trading.input_mode = InputMode::Normal;
             KeyAction::Redraw
         }
@@ -398,24 +419,57 @@ fn handle_bots_confirm_key(
     match code {
         KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
             let s = strings();
+            // Cache live authority so Restart can refuse to fire against the
+            // wrong wallet without re-reading state inside the match arm.
+            let live_authority = state.trading.keypair.as_ref().and_then(|kp| {
+                use solana_signer::Signer;
+                solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()).ok()
+            });
             match pending {
                 TwapBotConfirm::Stop(i) => {
-                    if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                        bot.stop();
-                        state.trading.set_status_title(s.bots_stopped_status);
+                    // Re-check terminal status — the bot may have completed
+                    // between arm and confirm, in which case stop() is a
+                    // no-op and we shouldn't lie to the user about "stopped".
+                    let was_active = state
+                        .twaps_view
+                        .bots
+                        .get(i)
+                        .map(|b| !b.status.is_terminal())
+                        .unwrap_or(false);
+                    if was_active {
+                        if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+                            bot.stop();
+                            state.trading.set_status_title(s.bots_stopped_status);
+                        }
+                    } else {
+                        // No-op: bot already terminal. Don't claim it stopped.
                     }
                 }
                 TwapBotConfirm::Restart(i) => {
-                    if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-                        bot.restart();
-                        state.trading.set_status_title(s.bots_restarted_status);
+                    // Refuse restart when no wallet is connected or the
+                    // connected wallet isn't the bot's original wallet —
+                    // restart re-deploys capital and must not silently
+                    // redirect to a different wallet's funds.
+                    let bot_authority = state.twaps_view.bots.get(i).map(|b| b.authority);
+                    match (bot_authority, live_authority) {
+                        (Some(bot_auth), Some(live)) if bot_auth == live => {
+                            if let Some(bot) = state.twaps_view.bots.get_mut(i) {
+                                bot.restart();
+                                state.trading.set_status_title(s.bots_restarted_status);
+                            }
+                        }
+                        (Some(_), None) => {
+                            state.trading.set_status_title(s.twap_err_no_wallet);
+                        }
+                        (Some(_), Some(_)) => {
+                            state
+                                .trading
+                                .set_status_title(s.twap_restart_wallet_mismatch);
+                        }
+                        _ => {}
                     }
                 }
                 TwapBotConfirm::Remove(i) => {
-                    // The prompt was created with `i == selected_index`, and
-                    // the prompt handler intercepts every key — `selected_index`
-                    // can't have moved since then. `remove_selected` removes
-                    // the currently-selected row and clamps the cursor.
                     if i == state.twaps_view.selected_index
                         && state.twaps_view.remove_selected().is_some()
                     {

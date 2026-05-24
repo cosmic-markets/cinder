@@ -315,6 +315,11 @@ pub(in crate::tui::runtime) fn handle_normal_key(
         // pause/unpause/stop/restart/remove hotkeys.
         KeyCode::Char('b') => {
             state.twaps_view.clamp_index();
+            // Clear any confirmation that survived a forced mode switch
+            // (e.g. PromptReferralChoice yanked the user out of the bots
+            // modal while a Stop/Restart/Remove prompt was armed) — without
+            // this, the first Enter on re-open would execute the prompt.
+            state.twaps_view.pending_confirm = None;
             state.trading.input_mode = InputMode::ViewingBots;
             KeyAction::Redraw
         }

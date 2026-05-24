@@ -335,12 +335,22 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
                         // reader (isolated-margin order builders snapshot the
                         // trader under a read lock to build instructions
                         // locally — no HTTP round-trip needed for collateral
-                        // routing or subaccount registration). Mark hydrated
-                        // so readers can distinguish "wallet empty" from
-                        // "WS hasn't delivered the first snapshot yet".
+                        // routing or subaccount registration).
+                        //
+                        // Only flip `hydrated` to true on a `Snapshot` —
+                        // a Delta-first stream (server resumption that
+                        // skipped the snapshot, partial subscription) would
+                        // otherwise mark the mirror "ready" with only one
+                        // subaccount populated, causing the builder to
+                        // create a fresh isolated subaccount on top of an
+                        // existing one.
+                        let is_snapshot =
+                            matches!(msg.content, TraderStatePayload::Snapshot(_));
                         if let Ok(mut guard) = shared_trader.write() {
                             guard.trader = trader.clone();
-                            guard.hydrated = true;
+                            if is_snapshot {
+                                guard.hydrated = true;
+                            }
                         }
 
                         match &msg.content {

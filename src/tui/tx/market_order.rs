@@ -23,8 +23,16 @@ use super::isolated_margin::estimate_collateral_transfer;
 /// onto the network.
 ///
 /// If `outcome_tx` is supplied, the spawned task signals slice completion
-/// (success or failure) before it returns. The TWAP scheduler uses this to
-/// avoid advancing `slices_submitted` on a failed broadcast.
+/// (success / failure / unconfirmed) before it returns. The TWAP scheduler
+/// uses this to avoid advancing `slices_submitted` on a failed broadcast.
+///
+/// If `silent_status` is true, suppresses every `TxStatusMsg::SetStatus` and
+/// `TradeMarker` write. The TWAP scheduler passes true so each slice doesn't
+/// clobber the user's manual-tx status line or spam the ledger modal with
+/// per-slice signatures.
+///
+/// Returns the spawned task's `JoinHandle` so the caller can abort the
+/// broadcast if the user stops/restarts/removes the bot mid-slice.
 #[allow(clippy::too_many_arguments)]
 pub fn submit_market_order(
     keypair: Arc<Keypair>,
@@ -41,8 +49,21 @@ pub fn submit_market_order(
     reference_price_usd: f64,
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
     outcome_tx: Option<oneshot::Sender<SliceOutcome>>,
-) {
+    silent_status: bool,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        // Filter outbound `TxStatusMsg`s when running silent. TWAP slices set
+        // `silent_status = true` so the noisy per-slice status-line + ledger
+        // updates don't clobber manual-tx state. `TradeMarker` is the chart
+        // pin (a buy/sell triangle on the price chart) and MUST always go
+        // through — without it, TWAP fills wouldn't show on the chart.
+        // `SetStatus` is the only variant silenced.
+        let send_status = |msg: TxStatusMsg| match (&msg, silent_status) {
+            (TxStatusMsg::SetStatus { .. }, true) => {}
+            _ => {
+                let _ = tx_status.send(msg);
+            }
+        };
         // Helper: send an outcome and return. `outcome_tx` is `Option` so the
         // non-TWAP call sites (manual orders) can pass `None`.
         let notify_failed = |sender: Option<oneshot::Sender<SliceOutcome>>, detail: String| {
@@ -53,6 +74,11 @@ pub fn submit_market_order(
         let notify_confirmed = |sender: Option<oneshot::Sender<SliceOutcome>>| {
             if let Some(tx) = sender {
                 let _ = tx.send(SliceOutcome::Confirmed);
+            }
+        };
+        let notify_unconfirmed = |sender: Option<oneshot::Sender<SliceOutcome>>, detail: String| {
+            if let Some(tx) = sender {
+                let _ = tx.send(SliceOutcome::Unknown(detail));
             }
         };
         // Take ownership of the sender so we can move it into the helpers
@@ -85,7 +111,7 @@ pub fn submit_market_order(
 
         if isolated_only && reduce_only && subaccount_index == 0 {
             let detail = "isolated reduce-only orders require an isolated subaccount".to_string();
-            let _ = tx_status.send(TxStatusMsg::SetStatus {
+            send_status(TxStatusMsg::SetStatus {
                 title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                 detail: detail.clone(),
             });
@@ -99,7 +125,7 @@ pub fn submit_market_order(
                 {
                     Ok(collateral) => collateral,
                     Err(e) => {
-                        let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        send_status(TxStatusMsg::SetStatus {
                             title: format!("{} — {}", s.tx_failed_build_params, order_summary),
                             detail: e.clone(),
                         });
@@ -121,7 +147,7 @@ pub fn submit_market_order(
                 Some(t) => t,
                 None => {
                     let detail = s.twap_waiting_trader_sync.to_string();
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    send_status(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_failed_build_params, order_summary),
                         detail: detail.clone(),
                     });
@@ -142,7 +168,7 @@ pub fn submit_market_order(
                 Ok(ixs) => ixs,
                 Err(e) => {
                     let detail = parse_phoenix_tx_error(&format!("{}", e));
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    send_status(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                         detail: detail.clone(),
                     });
@@ -153,7 +179,7 @@ pub fn submit_market_order(
             ixs = match wrap_order_ixs(ixs, ctx.authority_v2) {
                 Ok(ixs) => ixs,
                 Err(e) => {
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    send_status(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                         detail: e.clone(),
                     });
@@ -164,7 +190,7 @@ pub fn submit_market_order(
             let cu_positions = ixs.len().max(1) as u32;
             ixs.extend(build_compute_budget_ixs(cu_positions));
 
-            let _ = tx_status.send(TxStatusMsg::SetStatus {
+            send_status(TxStatusMsg::SetStatus {
                 title: format!("{} {}…", s.tx_broadcasting, order_summary),
                 detail: String::new(),
             });
@@ -172,7 +198,7 @@ pub fn submit_market_order(
             let (tx, sig) = match compile_and_sign(&ctx, &keypair, &ixs).await {
                 Ok(pair) => pair,
                 Err(e) => {
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    send_status(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_failed_prepare, order_summary),
                         detail: e.clone(),
                     });
@@ -181,17 +207,17 @@ pub fn submit_market_order(
                 }
             };
             let sig_str = sig.to_string();
-            let _ = tx_status.send(TxStatusMsg::SetStatus {
+            send_status(TxStatusMsg::SetStatus {
                 title: format!("{} — {}…", s.tx_awaiting_confirm, order_summary),
                 detail: sig_str.clone(),
             });
 
             match subscribe_send_confirm(&ctx, &tx, &sig).await {
                 Ok(()) => {
-                    let _ = tx_status.send(TxStatusMsg::TradeMarker {
+                    send_status(TxStatusMsg::TradeMarker {
                         is_buy: matches!(side, TradingSide::Long),
                     });
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    send_status(TxStatusMsg::SetStatus {
                         title: format!("{} {}", s.tx_order_confirmed, order_summary),
                         detail: sig_str,
                     });
@@ -204,7 +230,7 @@ pub fn submit_market_order(
                         &e,
                     );
                     let detail = parse_phoenix_tx_error(&e);
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                    send_status(TxStatusMsg::SetStatus {
                         title: format!("{} — {}", s.tx_tx_rejected, order_summary),
                         detail: detail.clone(),
                     });
@@ -217,36 +243,31 @@ pub fn submit_market_order(
                         &e,
                     );
                     let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
-                    let (title, detail, ok) = if onchain_fail {
-                        (
-                            format!("{} — {}", s.tx_order_failed, order_summary),
-                            parse_phoenix_tx_error(&e),
-                            false,
-                        )
+                    if onchain_fail {
+                        let detail = parse_phoenix_tx_error(&e);
+                        send_status(TxStatusMsg::SetStatus {
+                            title: format!("{} — {}", s.tx_order_failed, order_summary),
+                            detail: detail.clone(),
+                        });
+                        notify_failed(outcome_tx.take(), detail);
                     } else {
                         // Tx was broadcast but we never saw confirmation.
-                        // Treat as success for TWAP bookkeeping — repeating
+                        // Report Unknown rather than Confirmed — repeating
                         // the slice would risk double-execution if the
-                        // original eventually landed.
-                        (
-                            format!(
+                        // original eventually landed, but the user must be
+                        // able to tell apart "all confirmed" from "some
+                        // unconfirmed" in the bot's tallies.
+                        let detail = sig_str.clone();
+                        send_status(TxStatusMsg::SetStatus {
+                            title: format!(
                                 "{} — {} ({})",
                                 s.tx_order_not_confirmed,
                                 order_summary,
                                 format_not_confirmed_error(&e)
                             ),
-                            sig_str.clone(),
-                            true,
-                        )
-                    };
-                    let _ = tx_status.send(TxStatusMsg::SetStatus {
-                        title,
-                        detail: detail.clone(),
-                    });
-                    if ok {
-                        notify_confirmed(outcome_tx.take());
-                    } else {
-                        notify_failed(outcome_tx.take(), detail);
+                            detail: detail.clone(),
+                        });
+                        notify_unconfirmed(outcome_tx.take(), detail);
                     }
                 }
             }
@@ -264,7 +285,7 @@ pub fn submit_market_order(
                 "{} ({} != active {})",
                 s.twap_waiting_active_market, symbol, ctx.active_symbol
             );
-            let _ = tx_status.send(TxStatusMsg::SetStatus {
+            send_status(TxStatusMsg::SetStatus {
                 title: format!("{} — {}", s.tx_failed_build_params, order_summary),
                 detail: detail.clone(),
             });
@@ -298,7 +319,7 @@ pub fn submit_market_order(
             Ok(p) => p,
             Err(e) => {
                 let detail = format!("{}", e);
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                send_status(TxStatusMsg::SetStatus {
                     title: format!("{} — {}", s.tx_failed_build_params, order_summary),
                     detail: detail.clone(),
                 });
@@ -311,7 +332,7 @@ pub fn submit_market_order(
             Ok(ix) => vec![ix.into()],
             Err(e) => {
                 let detail = format!("{}", e);
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                send_status(TxStatusMsg::SetStatus {
                     title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                     detail: detail.clone(),
                 });
@@ -323,7 +344,7 @@ pub fn submit_market_order(
         let ixs = match wrap_order_ixs(ixs, ctx.authority_v2) {
             Ok(ixs) => ixs,
             Err(e) => {
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                send_status(TxStatusMsg::SetStatus {
                     title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
                     detail: e.clone(),
                 });
@@ -335,7 +356,7 @@ pub fn submit_market_order(
         let mut mapped_ixs = ixs;
         mapped_ixs.extend(build_compute_budget_ixs(1));
 
-        let _ = tx_status.send(TxStatusMsg::SetStatus {
+        send_status(TxStatusMsg::SetStatus {
             title: format!("{} {}…", s.tx_broadcasting, order_summary),
             detail: String::new(),
         });
@@ -343,7 +364,7 @@ pub fn submit_market_order(
         let (tx, sig) = match compile_and_sign(&ctx, &keypair, &mapped_ixs).await {
             Ok(pair) => pair,
             Err(e) => {
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                send_status(TxStatusMsg::SetStatus {
                     title: format!("{} — {}", s.tx_failed_prepare, order_summary),
                     detail: e.clone(),
                 });
@@ -352,17 +373,17 @@ pub fn submit_market_order(
             }
         };
         let sig_str = sig.to_string();
-        let _ = tx_status.send(TxStatusMsg::SetStatus {
+        send_status(TxStatusMsg::SetStatus {
             title: format!("{} — {}…", s.tx_awaiting_confirm, order_summary),
             detail: sig_str.clone(),
         });
 
         match subscribe_send_confirm(&ctx, &tx, &sig).await {
             Ok(()) => {
-                let _ = tx_status.send(TxStatusMsg::TradeMarker {
+                send_status(TxStatusMsg::TradeMarker {
                     is_buy: matches!(side, TradingSide::Long),
                 });
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                send_status(TxStatusMsg::SetStatus {
                     title: format!("{} {}", s.tx_order_confirmed, order_summary),
                     detail: sig_str,
                 });
@@ -375,7 +396,7 @@ pub fn submit_market_order(
                     &e,
                 );
                 let detail = parse_phoenix_tx_error(&e);
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
+                send_status(TxStatusMsg::SetStatus {
                     title: format!("{} — {}", s.tx_tx_rejected, order_summary),
                     detail: detail.clone(),
                 });
@@ -388,34 +409,27 @@ pub fn submit_market_order(
                     &e,
                 );
                 let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
-                let (title, detail, ok) = if onchain_fail {
-                    (
-                        format!("{} — {}", s.tx_order_failed, order_summary),
-                        parse_phoenix_tx_error(&e),
-                        false,
-                    )
+                if onchain_fail {
+                    let detail = parse_phoenix_tx_error(&e);
+                    send_status(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_order_failed, order_summary),
+                        detail: detail.clone(),
+                    });
+                    notify_failed(outcome_tx.take(), detail);
                 } else {
-                    (
-                        format!(
+                    let detail = sig_str.clone();
+                    send_status(TxStatusMsg::SetStatus {
+                        title: format!(
                             "{} — {} ({})",
                             s.tx_order_not_confirmed,
                             order_summary,
                             format_not_confirmed_error(&e)
                         ),
-                        sig_str.clone(),
-                        true,
-                    )
-                };
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
-                    title,
-                    detail: detail.clone(),
-                });
-                if ok {
-                    notify_confirmed(outcome_tx.take());
-                } else {
-                    notify_failed(outcome_tx.take(), detail);
+                        detail: detail.clone(),
+                    });
+                    notify_unconfirmed(outcome_tx.take(), detail);
                 }
             }
         }
-    });
+    })
 }
