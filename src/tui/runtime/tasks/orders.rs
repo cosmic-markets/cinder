@@ -346,12 +346,20 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
                         // existing one.
                         let is_snapshot =
                             matches!(msg.content, TraderStatePayload::Snapshot(_));
-                        if let Ok(mut guard) = shared_trader.write() {
-                            guard.trader = trader.clone();
-                            if is_snapshot {
-                                guard.hydrated = true;
-                            }
+                        // Recover from a poisoned lock instead of silently
+                        // dropping the write — if any reader panicked once,
+                        // the mirror would otherwise never re-hydrate and
+                        // every order builder would defer forever with
+                        // `waiting for trader sync`.
+                        let mut guard = match shared_trader.write() {
+                            Ok(g) => g,
+                            Err(poisoned) => poisoned.into_inner(),
+                        };
+                        guard.trader = trader.clone();
+                        if is_snapshot {
+                            guard.hydrated = true;
                         }
+                        drop(guard);
 
                         match &msg.content {
                             TraderStatePayload::Snapshot(s) => {

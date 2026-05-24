@@ -1,8 +1,6 @@
 //! Input handlers for the "New TWAP" modal (`EditingTwap`) and the bots
 //! modal (`ViewingBots`).
 
-use std::str::FromStr;
-
 use crossterm::event::KeyCode;
 
 use super::super::super::config::{current_user_config, SplineConfig};
@@ -220,11 +218,10 @@ fn build_bot_from_draft(
 
     // Resolve the wallet authority now — bind the bot to this wallet so a
     // later wallet-swap can't redirect its slices.
-    let authority = match state.trading.keypair.as_ref() {
+    let authority: solana_pubkey::Pubkey = match state.trading.keypair.as_ref() {
         Some(kp) => {
             use solana_signer::Signer;
-            solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
-                .map_err(|_| s.twap_err_no_wallet.to_string())?
+            kp.pubkey()
         }
         None => return Err(s.twap_err_no_wallet.to_string()),
     };
@@ -421,10 +418,11 @@ fn handle_bots_confirm_key(
             let s = strings();
             // Cache live authority so Restart can refuse to fire against the
             // wrong wallet without re-reading state inside the match arm.
-            let live_authority = state.trading.keypair.as_ref().and_then(|kp| {
-                use solana_signer::Signer;
-                solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()).ok()
-            });
+            let live_authority: Option<solana_pubkey::Pubkey> =
+                state.trading.keypair.as_ref().map(|kp| {
+                    use solana_signer::Signer;
+                    kp.pubkey()
+                });
             match pending {
                 TwapBotConfirm::Stop(i) => {
                     // Re-check terminal status — the bot may have completed

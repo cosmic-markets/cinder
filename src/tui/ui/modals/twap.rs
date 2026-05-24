@@ -260,33 +260,37 @@ pub(in crate::tui::ui) fn render_twap_modal(
     // bottom of the inner area keeps the form visible behind it.
     if draft.pending_confirm {
         let confirm_h: u16 = 3;
-        let inner_w = inner.width;
-        let confirm_w = inner_w;
-        let confirm_y = inner.y + inner.height.saturating_sub(confirm_h);
-        let confirm_area = ratatui::layout::Rect::new(inner.x, confirm_y, confirm_w, confirm_h);
-        f.render_widget(ratatui::widgets::Clear, confirm_area);
-        let confirm_block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow));
-        let confirm_inner = confirm_block.inner(confirm_area);
-        f.render_widget(confirm_block, confirm_area);
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    " ⚠ ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    s.twap_confirm_start.to_string(),
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ])),
-            confirm_inner,
-        );
+        // Skip the overlay if it can't fit inside the modal — without the
+        // guard, the 3-row Rect would extend past the modal's inner bounds
+        // and overdraw whatever is in the screen buffer underneath.
+        if inner.height >= confirm_h {
+            let confirm_w = inner.width;
+            let confirm_y = inner.y + inner.height.saturating_sub(confirm_h);
+            let confirm_area = ratatui::layout::Rect::new(inner.x, confirm_y, confirm_w, confirm_h);
+            f.render_widget(ratatui::widgets::Clear, confirm_area);
+            let confirm_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow));
+            let confirm_inner = confirm_block.inner(confirm_area);
+            f.render_widget(confirm_block, confirm_area);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(
+                        " ⚠ ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        s.twap_confirm_start.to_string(),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ])),
+                confirm_inner,
+            );
+        }
     }
 }
 
@@ -636,6 +640,25 @@ pub(in crate::tui::ui) fn render_bots_modal(
     }
 }
 
+/// Progress cell for the bots-modal table. Shows resolved/total — where
+/// "resolved" counts confirmed + failed + unconfirmed slices — so a bot that
+/// reached the end with some failures reads as "10/10" (Completed) instead
+/// of "2/10" (confirmed-only, looked stuck). Color hints health: white when
+/// every resolved slice was confirmed, yellow when any failed or could not
+/// be confirmed.
+fn progress_span(b: &TwapBot) -> Span<'static> {
+    let resolved = b.slices_submitted + b.slices_failed + b.slices_unconfirmed;
+    let color = if b.slices_failed > 0 || b.slices_unconfirmed > 0 {
+        Color::LightYellow
+    } else {
+        Color::White
+    };
+    Span::styled(
+        format!("{}/{}", resolved, b.slice_count),
+        Style::default().fg(color),
+    )
+}
+
 fn bot_row<'a>(b: &'a TwapBot, active_symbol: &str, is_selected: bool, now: Instant) -> Row<'a> {
     let s = strings();
     let cursor_str = if is_selected { "▸" } else { " " };
@@ -727,10 +750,7 @@ fn bot_row<'a>(b: &'a TwapBot, active_symbol: &str, is_selected: bool, now: Inst
             side_label,
             Style::default().fg(side_color).add_modifier(Modifier::BOLD),
         )),
-        Cell::from(Span::styled(
-            format!("{}/{}", b.slices_submitted, b.slice_count),
-            Style::default().fg(Color::White),
-        )),
+        Cell::from(progress_span(b)),
         Cell::from(Span::styled(
             fmt_size(b.total_size, 4),
             Style::default().fg(Color::White),

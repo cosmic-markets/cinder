@@ -1,7 +1,6 @@
 //! Wallet connect / disconnect helpers.
 
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use phoenix_rise::PhoenixHttpClient;
@@ -42,12 +41,22 @@ pub(super) fn connect_wallet_with_keypair(
     // version returned no-op task handles and let the caller mistakenly
     // replace its real handles with them.
     let kp_arc = Arc::new(kp);
-    let authority = solana_pubkey::Pubkey::from_str(&kp_arc.pubkey().to_string())
-        .map_err(|e| format!("{}: {}", strings().st_wallet_load_failed, e))?;
+    // Signer::pubkey() already returns the `solana_pubkey::Pubkey` we want —
+    // no base58 round-trip needed.
+    let authority: solana_pubkey::Pubkey = kp_arc.pubkey();
 
-    state.trading.wallet_label = kp_arc.pubkey().to_string();
+    state.trading.wallet_label = authority.to_string();
     state.trading.wallet_loaded = true;
     state.trading.keypair = Some(Arc::clone(&kp_arc));
+    // Drop the previous wallet's TxContext (if any) BEFORE the new
+    // tx_ctx_task delivers. Otherwise the scheduler's next tick (and any
+    // manual order placed during the warm-up window) would build with the
+    // OLD ctx (old authority_v2 / trader_pda_v2 / market_addrs) but sign
+    // with the NEW keypair — guaranteed on-chain rejection at best,
+    // misrouted accounts at worst. The submission paths defer when
+    // tx_context is None, so this gates them until handle_tx_context_update
+    // installs the freshly-built ctx.
+    state.trading.tx_context = None;
     // Reset the "modal already shown" flag on every (re)connect — without
     // this, a user who pressed Esc out of the choice modal during a
     // previous session of the same TUI would never see it again even
@@ -148,9 +157,66 @@ pub(super) fn disconnect_wallet(
     // any in-flight broadcast though — the spawned task still holds the
     // OLD keypair Arc and would happily land an order against the wallet
     // the user just disconnected from.
+    //
+    // Before aborting, drain any outcome that the spawned task already
+    // pushed into the oneshot. The scheduler polls in_flight at 1Hz, so
+    // a slice that confirmed in the last second hasn't been recorded yet
+    // — if we just drop the receiver, the Confirmed signal is lost,
+    // `slices_submitted` stays stale, and on reconnect of the same wallet
+    // the scheduler dispatches the SAME slice number again, executing
+    // the slice twice on-chain.
+    let now = std::time::Instant::now();
+    let slice_count_label = strings().twap_slice_word;
     for bot in state.twaps_view.bots.iter_mut() {
+        if let Some((slice_number, outcome)) = bot.try_take_outcome() {
+            use crate::tui::state::SliceOutcome;
+            let slot_count = bot.slice_count;
+            match outcome {
+                SliceOutcome::Confirmed => {
+                    bot.record_slice_confirmed(
+                        now,
+                        format!(
+                            "{} {}/{} (drained on disconnect)",
+                            slice_count_label, slice_number, slot_count
+                        ),
+                    );
+                }
+                SliceOutcome::Failed(detail) => {
+                    bot.record_slice_failed(
+                        now,
+                        format!(
+                            "{} {}/{}: {}",
+                            slice_count_label, slice_number, slot_count, detail
+                        ),
+                    );
+                }
+                SliceOutcome::Unknown(detail) => {
+                    bot.record_slice_unconfirmed(
+                        now,
+                        format!(
+                            "{} {}/{}: {}",
+                            slice_count_label, slice_number, slot_count, detail
+                        ),
+                    );
+                }
+            }
+        }
         if let Some(in_flight) = bot.in_flight.take() {
+            // If a slice is still genuinely in flight (no outcome queued
+            // yet), record it as Unknown — the tx may still land on-chain
+            // even after `abort()` because abort only cancels at the next
+            // .await point. Marking Unknown advances next_slice_number so
+            // a same-wallet reconnect doesn't double-broadcast.
+            let slice_number = in_flight.slice_number;
+            let slice_count = bot.slice_count;
             in_flight.task.abort();
+            bot.record_slice_unconfirmed(
+                now,
+                format!(
+                    "{} {}/{}: aborted on disconnect (may have landed)",
+                    slice_count_label, slice_number, slice_count
+                ),
+            );
         }
         bot.defer_reason = Some(strings().twap_waiting_wallet.to_string());
     }

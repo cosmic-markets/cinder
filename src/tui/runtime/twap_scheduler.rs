@@ -24,6 +24,9 @@
 //! and lifecycle events.
 
 use std::time::Instant;
+// FromStr import previously needed for `Pubkey::from_str(kp.pubkey().to_string())`
+// — dropped after switching to direct `kp.pubkey()`. Kept commented to flag the
+// pattern if a future contributor reaches for it.
 
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::oneshot;
@@ -46,15 +49,10 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
 
     // Snapshot the live wallet authority once per tick so each bot can
     // verify it owns the connected wallet before dispatching a slice.
-    let live_authority = state
-        .trading
-        .keypair
-        .as_ref()
-        .map(|kp| {
-            use solana_signer::Signer;
-            solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()).ok()
-        })
-        .unwrap_or_default();
+    let live_authority: Option<solana_pubkey::Pubkey> = state.trading.keypair.as_ref().map(|kp| {
+        use solana_signer::Signer;
+        kp.pubkey()
+    });
 
     let bot_count = state.twaps_view.bots.len();
     for i in 0..bot_count {
@@ -268,6 +266,3 @@ fn market_price_for_symbol(state: &TuiState, symbol: &str) -> f64 {
         .or_else(|| state.price_history.back().copied())
         .unwrap_or(0.0)
 }
-
-// `Pubkey::from_str` lives behind FromStr; bring it into the trait namespace.
-use std::str::FromStr;

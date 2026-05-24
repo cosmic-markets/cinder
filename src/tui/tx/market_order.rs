@@ -58,11 +58,29 @@ pub fn submit_market_order(
         // pin (a buy/sell triangle on the price chart) and MUST always go
         // through — without it, TWAP fills wouldn't show on the chart.
         // `SetStatus` is the only variant silenced.
-        let send_status = |msg: TxStatusMsg| match (&msg, silent_status) {
-            (TxStatusMsg::SetStatus { .. }, true) => {}
-            _ => {
-                let _ = tx_status.send(msg);
+        // Classification is exhaustive on the enum (see
+        // `TxStatusMsg::is_per_slice_chatter`) so adding a new variant later
+        // forces the author to decide whether TWAP should silence it.
+        let send_status = |msg: TxStatusMsg| {
+            if silent_status && msg.is_per_slice_chatter() {
+                return;
             }
+            let _ = tx_status.send(msg);
+        };
+        // Helper: record a confirmed slice in the ledger ring even when
+        // `silent_status` is suppressing the SetStatus chatter. Without
+        // this, a TWAP user has no in-app audit trail for the slice
+        // signatures their wallet broadcast.
+        let record_ledger = |title: String, sig: String| {
+            if silent_status {
+                let _ = tx_status.send(TxStatusMsg::LedgerOnly {
+                    title,
+                    signature: sig,
+                });
+            }
+            // Non-silent path: the regular SetStatus with a signature-like
+            // detail already triggers record_ledger in update_handlers, so
+            // duplicating here would just hit the dedup path.
         };
         // Helper: send an outcome and return. `outcome_tx` is `Option` so the
         // non-TWAP call sites (manual orders) can pass `None`.
@@ -217,10 +235,12 @@ pub fn submit_market_order(
                     send_status(TxStatusMsg::TradeMarker {
                         is_buy: matches!(side, TradingSide::Long),
                     });
+                    let confirmed_title = format!("{} {}", s.tx_order_confirmed, order_summary);
                     send_status(TxStatusMsg::SetStatus {
-                        title: format!("{} {}", s.tx_order_confirmed, order_summary),
-                        detail: sig_str,
+                        title: confirmed_title.clone(),
+                        detail: sig_str.clone(),
                     });
+                    record_ledger(confirmed_title, sig_str);
                     notify_confirmed(outcome_tx.take());
                 }
                 Err(ConfirmError::Rejected(e)) => {
@@ -230,10 +250,14 @@ pub fn submit_market_order(
                         &e,
                     );
                     let detail = parse_phoenix_tx_error(&e);
+                    let title = format!("{} — {}", s.tx_tx_rejected, order_summary);
                     send_status(TxStatusMsg::SetStatus {
-                        title: format!("{} — {}", s.tx_tx_rejected, order_summary),
+                        title: title.clone(),
                         detail: detail.clone(),
                     });
+                    // Rejected slices also get a ledger row keyed on the
+                    // sig — useful for tracing what went wrong post-hoc.
+                    record_ledger(title, sig_str.clone());
                     notify_failed(outcome_tx.take(), detail);
                 }
                 Err(ConfirmError::NotConfirmed(e)) => {
@@ -245,10 +269,12 @@ pub fn submit_market_order(
                     let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
                     if onchain_fail {
                         let detail = parse_phoenix_tx_error(&e);
+                        let title = format!("{} — {}", s.tx_order_failed, order_summary);
                         send_status(TxStatusMsg::SetStatus {
-                            title: format!("{} — {}", s.tx_order_failed, order_summary),
+                            title: title.clone(),
                             detail: detail.clone(),
                         });
+                        record_ledger(title, sig_str.clone());
                         notify_failed(outcome_tx.take(), detail);
                     } else {
                         // Tx was broadcast but we never saw confirmation.
@@ -258,15 +284,17 @@ pub fn submit_market_order(
                         // able to tell apart "all confirmed" from "some
                         // unconfirmed" in the bot's tallies.
                         let detail = sig_str.clone();
+                        let title = format!(
+                            "{} — {} ({})",
+                            s.tx_order_not_confirmed,
+                            order_summary,
+                            format_not_confirmed_error(&e)
+                        );
                         send_status(TxStatusMsg::SetStatus {
-                            title: format!(
-                                "{} — {} ({})",
-                                s.tx_order_not_confirmed,
-                                order_summary,
-                                format_not_confirmed_error(&e)
-                            ),
+                            title: title.clone(),
                             detail: detail.clone(),
                         });
+                        record_ledger(title, sig_str.clone());
                         notify_unconfirmed(outcome_tx.take(), detail);
                     }
                 }
@@ -383,10 +411,12 @@ pub fn submit_market_order(
                 send_status(TxStatusMsg::TradeMarker {
                     is_buy: matches!(side, TradingSide::Long),
                 });
+                let title = format!("{} {}", s.tx_order_confirmed, order_summary);
                 send_status(TxStatusMsg::SetStatus {
-                    title: format!("{} {}", s.tx_order_confirmed, order_summary),
-                    detail: sig_str,
+                    title: title.clone(),
+                    detail: sig_str.clone(),
                 });
+                record_ledger(title, sig_str);
                 notify_confirmed(outcome_tx.take());
             }
             Err(ConfirmError::Rejected(e)) => {
@@ -396,10 +426,12 @@ pub fn submit_market_order(
                     &e,
                 );
                 let detail = parse_phoenix_tx_error(&e);
+                let title = format!("{} — {}", s.tx_tx_rejected, order_summary);
                 send_status(TxStatusMsg::SetStatus {
-                    title: format!("{} — {}", s.tx_tx_rejected, order_summary),
+                    title: title.clone(),
                     detail: detail.clone(),
                 });
+                record_ledger(title, sig_str.clone());
                 notify_failed(outcome_tx.take(), detail);
             }
             Err(ConfirmError::NotConfirmed(e)) => {
@@ -411,22 +443,26 @@ pub fn submit_market_order(
                 let onchain_fail = not_confirmed_is_onchain_execution_failure(&e);
                 if onchain_fail {
                     let detail = parse_phoenix_tx_error(&e);
+                    let title = format!("{} — {}", s.tx_order_failed, order_summary);
                     send_status(TxStatusMsg::SetStatus {
-                        title: format!("{} — {}", s.tx_order_failed, order_summary),
+                        title: title.clone(),
                         detail: detail.clone(),
                     });
+                    record_ledger(title, sig_str.clone());
                     notify_failed(outcome_tx.take(), detail);
                 } else {
                     let detail = sig_str.clone();
+                    let title = format!(
+                        "{} — {} ({})",
+                        s.tx_order_not_confirmed,
+                        order_summary,
+                        format_not_confirmed_error(&e)
+                    );
                     send_status(TxStatusMsg::SetStatus {
-                        title: format!(
-                            "{} — {} ({})",
-                            s.tx_order_not_confirmed,
-                            order_summary,
-                            format_not_confirmed_error(&e)
-                        ),
+                        title: title.clone(),
                         detail: detail.clone(),
                     });
+                    record_ledger(title, sig_str.clone());
                     notify_unconfirmed(outcome_tx.take(), detail);
                 }
             }

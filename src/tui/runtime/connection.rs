@@ -1,7 +1,6 @@
 //! Runtime connection, market-switch, and shutdown helpers.
 
 use std::io::Stdout;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -153,13 +152,7 @@ pub(super) fn handle_full_rpc_reconnect(
         let shared_trader = match state.trading.shared_trader.as_ref() {
             Some(arc) => Arc::clone(arc),
             None => {
-                let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
-                    Ok(pk) => pk,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "shared_trader rebuild aborted: bad pubkey");
-                        return true;
-                    }
-                };
+                let authority: solana_pubkey::Pubkey = kp.pubkey();
                 let arc = std::sync::Arc::new(std::sync::RwLock::new(
                     crate::tui::tx::TxContext::empty_trader_mirror(authority),
                 ));
@@ -173,8 +166,13 @@ pub(super) fn handle_full_rpc_reconnect(
         // pre-swap snapshot's `Trader` value is left in place so the
         // bots-modal renderer can still see "last known" subaccounts, but
         // submit-time `snapshot_trader()` returns None until the new WS
-        // pushes its first `Snapshot`.
-        if let Ok(mut guard) = shared_trader.write() {
+        // pushes its first `Snapshot`. Recover from a poisoned lock so a
+        // prior reader panic doesn't permanently wedge the order system.
+        {
+            let mut guard = match shared_trader.write() {
+                Ok(g) => g,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             guard.hydrated = false;
         }
         // Abort the OLD trader-orders task BEFORE spawning the new one —
@@ -247,17 +245,7 @@ pub(super) fn handle_pending_market_switch(
             let shared_trader = match state.trading.shared_trader.as_ref() {
                 Some(arc) => Arc::clone(arc),
                 None => {
-                    let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string())
-                    {
-                        Ok(pk) => pk,
-                        Err(e) => {
-                            tracing::warn!(
-                                error = %e,
-                                "market switch skipped: bad wallet pubkey"
-                            );
-                            return true;
-                        }
-                    };
+                    let authority: solana_pubkey::Pubkey = kp.pubkey();
                     let arc = std::sync::Arc::new(std::sync::RwLock::new(
                         crate::tui::tx::TxContext::empty_trader_mirror(authority),
                     ));

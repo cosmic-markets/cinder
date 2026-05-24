@@ -127,6 +127,13 @@ pub(super) fn handle_tx_status_update(
             state.trading.status_title = title;
             state.trading.status_detail = detail;
         }
+        TxStatusMsg::LedgerOnly { title, signature } => {
+            // Record the tx in the Ledger ring WITHOUT touching the
+            // user-visible status line. Used by TWAP slices so each
+            // slice's signature is auditable post-hoc even though the
+            // scheduler runs in silent_status mode.
+            state.trading.record_ledger(title, signature);
+        }
         TxStatusMsg::PromptReferralChoice => {
             // Don't re-prompt if the user already saw and dismissed the
             // modal during this wallet session. The flag is cleared on
