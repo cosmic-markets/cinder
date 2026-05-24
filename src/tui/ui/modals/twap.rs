@@ -1,13 +1,15 @@
 //! "New TWAP" and "Bots" modals.
 //!
 //! `render_twap_modal` collects side / total size / total time
-//! (hours + minutes) from the user; slice cadence is fixed at one market
-//! slice per minute so total time fully determines the schedule.
+//! (hours + minutes + seconds) from the user. Slice cadence is one slice
+//! per minute by default — but if the Seconds field is non-zero (or the
+//! total is sub-minute), cadence drops to one slice per second so
+//! short-horizon schedules are addressable. See `derive_schedule` for the
+//! rule, which must stay in lockstep with the validator in
+//! `runtime::input::twap::build_bot_from_draft`.
+//!
 //! `render_bots_modal` lists every TWAP bot tracked by [`TwapsView`] with
 //! status and lifecycle hotkeys.
-//!
-//! NOTE: total time is measured in whole minutes — seconds aren't a
-//! supported input unit. The slice interval is always 60 s.
 
 use std::time::Instant;
 
@@ -26,9 +28,10 @@ pub(in crate::tui::ui) fn render_twap_modal(
     let s = strings();
     let draft = &trading.twap_draft;
     let has_error = draft.error.is_some();
-    // Header block (intro + summary) + spacer + 6 form rows, plus an
-    // optional 2-row error tail. +2 for the top/bottom border.
-    let desired_h: u16 = if has_error { 13 } else { 11 };
+    // Header block (intro + summary) + spacer + 7 form rows + spacer +
+    // Start button, plus an optional 2-row error tail. +2 for the top/
+    // bottom border.
+    let desired_h: u16 = if has_error { 16 } else { 14 };
     let popup_h: u16 = desired_h.min(area.height.saturating_sub(2));
     let popup_w: u16 = 72.min(area.width.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
@@ -120,21 +123,26 @@ pub(in crate::tui::ui) fn render_twap_modal(
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
 
-    // Header (intro + schedule preview) at the top, form below.
+    // Header (intro + schedule preview) at the top, form, then a centered
+    // [ Enter to start ] button so the affordance is visible even before
+    // the user reads the footer hint bar.
     let mut constraints = vec![
-        Constraint::Length(1), // intro
-        Constraint::Length(1), // derived summary
-        Constraint::Length(1), // spacer
-        Constraint::Length(1), // market
-        Constraint::Length(1), // side
-        Constraint::Length(1), // total size
-        Constraint::Length(1), // total time header
-        Constraint::Length(1), // hours
-        Constraint::Length(1), // minutes
+        Constraint::Length(1), // intro          (0)
+        Constraint::Length(1), // derived summary (1)
+        Constraint::Length(1), // spacer          (2)
+        Constraint::Length(1), // market          (3)
+        Constraint::Length(1), // side            (4)
+        Constraint::Length(1), // total size      (5)
+        Constraint::Length(1), // total time hdr  (6)
+        Constraint::Length(1), // hours           (7)
+        Constraint::Length(1), // minutes         (8)
+        Constraint::Length(1), // seconds         (9)
+        Constraint::Length(1), // spacer          (10)
+        Constraint::Length(1), // Start button    (11)
     ];
     if has_error {
-        constraints.push(Constraint::Length(1)); // spacer before error
-        constraints.push(Constraint::Length(1)); // error
+        constraints.push(Constraint::Length(1)); // spacer before error (12)
+        constraints.push(Constraint::Length(1)); // error               (13)
     }
     constraints.push(Constraint::Min(0));
     let rows = Layout::default()
@@ -239,6 +247,34 @@ pub(in crate::tui::ui) fn render_twap_modal(
         ),
         draft.selected_field == 4,
     );
+    render_form_row(
+        f,
+        rows[9],
+        s.twap_field_secs,
+        editable_value_span(
+            &draft.duration_sec_buffer,
+            draft.selected_field == 5,
+            s.twap_unit_sec,
+        ),
+        draft.selected_field == 5,
+    );
+
+    // — Start button (centered) —
+    let start_label = format!("[ Enter — {} ]", s.twap_start);
+    let label_w = start_label.chars().count() as u16;
+    let pad = inner.width.saturating_sub(label_w) / 2;
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw(" ".repeat(pad as usize)),
+            Span::styled(
+                start_label,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])),
+        rows[11],
+    );
 
     if has_error {
         let err = draft.error.as_deref().unwrap_or("");
@@ -250,7 +286,7 @@ pub(in crate::tui::ui) fn render_twap_modal(
                 ),
                 Span::styled(err.to_string(), Style::default().fg(Color::LightRed)),
             ])),
-            rows[10],
+            rows[13],
         );
     }
 
@@ -345,31 +381,46 @@ fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
     let size: Option<f64> = draft.size_buffer.parse::<f64>().ok().filter(|v| *v > 0.0);
     let hours: u32 = draft.duration_hour_buffer.parse::<u32>().unwrap_or(0);
     let mins: u32 = draft.duration_min_buffer.parse::<u32>().unwrap_or(0);
-    // Use checked arithmetic — unchecked `hours * 60 + mins` panics in
-    // debug builds on large input (e.g. user typing 99999999 in Hours).
-    // On overflow, fall through to the placeholder; the validator will
-    // reject the input on submit with a proper error message.
-    let total_minutes: Option<u32> = hours.checked_mul(60).and_then(|h| h.checked_add(mins));
-    if let (Some(size), Some(total_minutes)) = (size, total_minutes) {
-        if total_minutes < 1 {
+    let secs: u32 = draft.duration_sec_buffer.parse::<u32>().unwrap_or(0);
+    // Checked arithmetic so extreme user input doesn't panic the renderer.
+    let total_seconds: Option<u64> = (hours as u64)
+        .checked_mul(3600)
+        .and_then(|h| h.checked_add((mins as u64).checked_mul(60)?))
+        .and_then(|hm| hm.checked_add(secs as u64));
+    if let (Some(size), Some(total_seconds)) = (size, total_seconds) {
+        if total_seconds < 1 {
             return s.twap_summary_placeholder.to_string();
         }
-        let slice_count = total_minutes;
+        let (slice_count, interval_unit) = derive_schedule(hours, mins, secs, total_seconds);
         let slice_size = size / slice_count as f64;
+        // Compact form: "60 × 0.0002 SOL  ·  1/min" — fits the 70-char
+        // modal width even on small terminals. The full breakdown is
+        // implicit from the form fields themselves.
         format!(
-            "{} {} {} {} ({:.4} {}/{}, 1 {} {})",
-            s.twap_summary_prefix,
-            slice_count,
-            s.twap_summary_slices_of,
-            size,
-            slice_size,
-            draft.market,
-            s.twap_summary_per_slice_suf,
-            s.twap_unit_min,
-            s.twap_summary_interval_suf,
+            "{} × {:.4} {}  ·  1/{}",
+            slice_count, slice_size, draft.market, interval_unit
         )
     } else {
         s.twap_summary_placeholder.to_string()
+    }
+}
+
+/// Cadence rule — MUST stay in lockstep with `build_bot_from_draft` in
+/// `runtime::input::twap` (the validator that actually builds the bot). When
+/// the user supplies seconds OR the total is sub-minute, the bot fires one
+/// slice per second; otherwise it falls back to one slice per minute. The
+/// returned `interval_unit` is the i18n unit label that the summary line
+/// renders next to the "1" cadence number.
+fn derive_schedule(hours: u32, mins: u32, secs: u32, total_seconds: u64) -> (u32, &'static str) {
+    let s = strings();
+    let total_minutes = hours.saturating_mul(60).saturating_add(mins);
+    if secs > 0 || total_minutes == 0 {
+        // Clamp to u32 — total_seconds didn't overflow u64 but the cast is
+        // safe because the validator above also ran checked arithmetic.
+        let count = (total_seconds.min(u32::MAX as u64) as u32).max(1);
+        (count, s.twap_unit_sec)
+    } else {
+        (total_minutes.max(1), s.twap_unit_min)
     }
 }
 

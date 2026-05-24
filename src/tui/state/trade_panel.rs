@@ -84,12 +84,15 @@ pub struct TradingState {
 
 /// Editable form state backing the "New TWAP" modal. Field layout mirrors
 /// the Binance TWAP modal: market, side, total size, and total time
-/// (hours + minutes). Side is selectable from any field via [Tab]. Slice
-/// cadence is fixed at one market slice per minute.
+/// (hours + minutes + seconds). Side is selectable from any field via [Tab].
+/// Slice cadence is one market slice per minute, EXCEPT when the seconds
+/// field is non-zero — then cadence drops to one slice per second so
+/// sub-minute schedules are addressable (and a 2-minute / 30-second total
+/// fires 150 slices, one each second).
 #[derive(Debug, Clone)]
 pub struct TwapDraft {
     /// Cursor row: 0 = market, 1 = side, 2 = total size, 3 = total time
-    /// hours, 4 = total time minutes.
+    /// hours, 4 = total time minutes, 5 = total time seconds.
     pub selected_field: usize,
     /// Symbol of the market the TWAP will run against. Seeded from the
     /// active market when the modal opens; cycled with ←/→ when the market
@@ -99,6 +102,7 @@ pub struct TwapDraft {
     pub size_buffer: String,
     pub duration_hour_buffer: String,
     pub duration_min_buffer: String,
+    pub duration_sec_buffer: String,
     /// Set when the user presses [Enter] but a field fails validation —
     /// rendered below the form until the next keystroke.
     pub error: Option<String>,
@@ -114,7 +118,7 @@ impl TwapDraft {
     /// — Market and Side both default to sensible values, so the user almost
     /// always wants to type a size first.
     pub const DEFAULT_FIELD: usize = 2;
-    pub const FIELD_COUNT: usize = 5;
+    pub const FIELD_COUNT: usize = 6;
 
     pub fn new(market: String, side: super::super::trading::TradingSide) -> Self {
         Self {
@@ -124,6 +128,7 @@ impl TwapDraft {
             size_buffer: String::new(),
             duration_hour_buffer: String::new(),
             duration_min_buffer: String::new(),
+            duration_sec_buffer: String::new(),
             error: None,
             pending_confirm: false,
         }
