@@ -534,14 +534,10 @@ pub struct Strings {
     pub twap_field_hours: &'static str,
     /// Form field label — minutes row.
     pub twap_field_mins: &'static str,
-    /// Form field label — seconds row.
-    pub twap_field_secs: &'static str,
     /// Unit suffix — "hr".
     pub twap_unit_hr: &'static str,
     /// Unit suffix — "min".
     pub twap_unit_min: &'static str,
-    /// Unit suffix — "sec".
-    pub twap_unit_sec: &'static str,
     /// Unit suffix — "slices".
     pub twap_unit_slices: &'static str,
     /// Footer hint paired with ↑↓ — "field".

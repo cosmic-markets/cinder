@@ -5,6 +5,9 @@
 //! slice per minute so total time fully determines the schedule.
 //! `render_bots_modal` lists every TWAP bot tracked by [`TwapsView`] with
 //! status and lifecycle hotkeys.
+//!
+//! NOTE: total time is measured in whole minutes — seconds aren't a
+//! supported input unit. The slice interval is always 60 s.
 
 use std::time::Instant;
 
@@ -23,9 +26,9 @@ pub(in crate::tui::ui) fn render_twap_modal(
     let s = strings();
     let draft = &trading.twap_draft;
     let has_error = draft.error.is_some();
-    // Header block (intro + summary) + spacer + 7 form rows, plus an
+    // Header block (intro + summary) + spacer + 6 form rows, plus an
     // optional 2-row error tail. +2 for the top/bottom border.
-    let desired_h: u16 = if has_error { 14 } else { 12 };
+    let desired_h: u16 = if has_error { 13 } else { 11 };
     let popup_h: u16 = desired_h.min(area.height.saturating_sub(2));
     let popup_w: u16 = 72.min(area.width.saturating_sub(4));
     let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
@@ -128,7 +131,6 @@ pub(in crate::tui::ui) fn render_twap_modal(
         Constraint::Length(1), // total time header
         Constraint::Length(1), // hours
         Constraint::Length(1), // minutes
-        Constraint::Length(1), // seconds
     ];
     if has_error {
         constraints.push(Constraint::Length(1)); // spacer before error
@@ -237,17 +239,6 @@ pub(in crate::tui::ui) fn render_twap_modal(
         ),
         draft.selected_field == 4,
     );
-    render_form_row(
-        f,
-        rows[9],
-        s.twap_field_secs,
-        editable_value_span(
-            &draft.duration_sec_buffer,
-            draft.selected_field == 5,
-            s.twap_unit_sec,
-        ),
-        draft.selected_field == 5,
-    );
 
     if has_error {
         let err = draft.error.as_deref().unwrap_or("");
@@ -259,7 +250,7 @@ pub(in crate::tui::ui) fn render_twap_modal(
                 ),
                 Span::styled(err.to_string(), Style::default().fg(Color::LightRed)),
             ])),
-            rows[11],
+            rows[10],
         );
     }
 }
@@ -315,13 +306,12 @@ fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
     let size: Option<f64> = draft.size_buffer.parse::<f64>().ok().filter(|v| *v > 0.0);
     let hours: u32 = draft.duration_hour_buffer.parse::<u32>().unwrap_or(0);
     let mins: u32 = draft.duration_min_buffer.parse::<u32>().unwrap_or(0);
-    let secs: u32 = draft.duration_sec_buffer.parse::<u32>().unwrap_or(0);
-    let total_seconds: u32 = hours * 3600 + mins * 60 + secs;
-    if let (Some(size), true) = (size, total_seconds >= 1) {
-        let (slice_count, interval_sec) = derive_schedule(hours, mins, secs);
+    let total_minutes: u32 = hours * 60 + mins;
+    if let (Some(size), true) = (size, total_minutes >= 1) {
+        let slice_count = total_minutes;
         let slice_size = size / slice_count as f64;
         format!(
-            "{} {} {} {} ({:.4} {}/{}, {:.0}{} {})",
+            "{} {} {} {} ({:.4} {}/{}, 1 {} {})",
             s.twap_summary_prefix,
             slice_count,
             s.twap_summary_slices_of,
@@ -329,26 +319,11 @@ fn derive_summary(draft: &super::super::super::state::TwapDraft) -> String {
             slice_size,
             draft.market,
             s.twap_summary_per_slice_suf,
-            interval_sec,
-            s.twap_unit_sec,
+            s.twap_unit_min,
             s.twap_summary_interval_suf,
         )
     } else {
         s.twap_summary_placeholder.to_string()
-    }
-}
-
-/// Cadence rule (must stay in lockstep with the validation in
-/// `runtime::input::twap`): if a seconds component is supplied (or the
-/// total is sub-minute), fire one slice per second; otherwise fall back
-/// to the conventional one-slice-per-minute cadence.
-fn derive_schedule(hours: u32, mins: u32, secs: u32) -> (u32, u32) {
-    let total_seconds = hours * 3600 + mins * 60 + secs;
-    let total_minutes = hours * 60 + mins;
-    if secs > 0 || total_minutes == 0 {
-        (total_seconds, 1)
-    } else {
-        (total_minutes, 60)
     }
 }
 

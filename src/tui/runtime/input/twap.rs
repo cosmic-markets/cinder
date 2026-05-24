@@ -11,11 +11,11 @@ use super::super::super::trading::{InputMode, OrderKind, TradingSide};
 use super::super::KeyAction;
 
 /// Editor for the TWAP form. Field layout: 0 = market, 1 = side,
-/// 2 = total size, 3 = total time hours, 4 = total time minutes,
-/// 5 = total time seconds. ↑↓ moves between fields, Tab toggles side, ←→
-/// cycles the market when row 0 is focused, digits/`.` edit numeric fields,
-/// Enter advances the cursor through the form (validates & spawns on the
-/// final row), Esc discards.
+/// 2 = total size, 3 = total time hours, 4 = total time minutes.
+/// ↑↓ moves between fields, Tab toggles side, ←→ cycles the market when
+/// row 0 is focused, digits/`.` edit numeric fields, Enter advances the
+/// cursor through the form (validates & spawns on the final row), Esc
+/// discards.
 pub(in crate::tui::runtime) fn handle_editing_twap_key(
     code: KeyCode,
     state: &mut TuiState,
@@ -116,10 +116,10 @@ pub(in crate::tui::runtime) fn handle_editing_twap_key(
             KeyAction::Redraw
         }
         KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
-            // Hours / minutes / seconds are integer-only; reject `.` on those
-            // rows. Size accepts decimals.
+            // Hours / minutes are integer-only; reject `.` on those rows.
+            // Size accepts decimals.
             let allow = match state.trading.twap_draft.selected_field {
-                3 | 4 | 5 => c != '.',
+                3 | 4 => c != '.',
                 _ => true,
             };
             if allow {
@@ -140,7 +140,6 @@ fn field_buffer_mut(state: &mut TuiState) -> Option<&mut String> {
         2 => Some(&mut d.size_buffer),
         3 => Some(&mut d.duration_hour_buffer),
         4 => Some(&mut d.duration_min_buffer),
-        5 => Some(&mut d.duration_sec_buffer),
         // Row 0 (market) and row 1 (side) have no text buffer — they're
         // toggled via ←→ and Tab respectively.
         _ => None,
@@ -184,35 +183,20 @@ fn build_bot_from_draft(
             .parse::<u32>()
             .map_err(|_| s.twap_err_duration.to_string())?
     };
-    let secs: u32 = if draft.duration_sec_buffer.is_empty() {
-        0
-    } else {
-        draft
-            .duration_sec_buffer
-            .parse::<u32>()
-            .map_err(|_| s.twap_err_duration.to_string())?
-    };
-    if hours == 0 && mins == 0 && secs == 0 {
+    if hours == 0 && mins == 0 {
         return Err(s.twap_err_duration.to_string());
     }
-    let total_seconds: u64 = (hours as u64)
-        .checked_mul(3600)
-        .and_then(|h| h.checked_add((mins as u64).checked_mul(60)?))
-        .and_then(|hm| hm.checked_add(secs as u64))
+    let total_minutes: u32 = hours
+        .checked_mul(60)
+        .and_then(|h| h.checked_add(mins))
         .ok_or_else(|| s.twap_err_duration.to_string())?;
-    if total_seconds < 1 {
+    if total_minutes < 1 {
         return Err(s.twap_err_too_short.to_string());
     }
+    let total_seconds: u64 = (total_minutes as u64) * 60;
 
-    // Cadence: 1 slice / second when the seconds field is set (or the
-    // whole total is sub-minute), otherwise 1 slice / minute. The summary
-    // preview in the modal must stay in lockstep with this rule.
-    let total_minutes = hours * 60 + mins;
-    let slice_count: u32 = if secs > 0 || total_minutes == 0 {
-        (total_seconds as u32).max(1)
-    } else {
-        total_minutes
-    };
+    // Cadence: 1 slice / minute.
+    let slice_count: u32 = total_minutes;
     let slice_size = size / slice_count as f64;
     // Reject slice sizes that would round to zero base lots on this market —
     // the on-chain order would immediately fail. Surface the friendlier
