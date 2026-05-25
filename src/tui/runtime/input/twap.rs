@@ -112,7 +112,7 @@ pub(in crate::tui::runtime) fn handle_editing_twap_key(
             // Hours / minutes / seconds are integer-only; reject `.` on
             // those rows. Size accepts decimals.
             let allow = match state.trading.twap_draft.selected_field {
-                3 | 4 | 5 => c != '.',
+                3..=5 => c != '.',
                 _ => true,
             };
             if allow {

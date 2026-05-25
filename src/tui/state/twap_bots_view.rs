@@ -525,12 +525,20 @@ mod tests {
         TwapBot::new("SOL".to_string(), TradingSide::Long, 1.0, 4, 40, auth())
     }
 
+    /// Spawn a no-op tokio task and return its handle. We need a real
+    /// `JoinHandle` to satisfy `record_slice_dispatched`'s signature in
+    /// tests, but the task itself just exits immediately. The runtime is
+    /// leaked so the spawned task isn't aborted on rt-drop — these tests
+    /// never await the handle, they only inspect it.
     fn noop_task() -> tokio::task::JoinHandle<()> {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async { tokio::spawn(async {}) })
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let _guard = rt.enter();
+        rt.spawn(async {})
     }
 
     #[test]
@@ -556,7 +564,10 @@ mod tests {
     fn after_confirm_not_due_until_interval_passes() {
         let mut bot = make_bot();
         let t0 = Instant::now();
-        bot.record_slice_confirmed(t0, "slice 1/4");
+        // First slice can't be the completion-triggering call (4-slice bot),
+        // so the must_use return is intentionally discarded in this test.
+        let completed = bot.record_slice_confirmed(t0, "slice 1/4");
+        assert!(!completed);
         assert!(!bot.slice_due(t0));
         assert!(bot.slice_due(t0 + Duration::from_secs(10)));
     }
@@ -565,9 +576,11 @@ mod tests {
     fn completes_after_last_slice_confirmed() {
         let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 2, 2, auth());
         let t0 = Instant::now();
-        bot.record_slice_confirmed(t0, "1/2");
+        let completed_first = bot.record_slice_confirmed(t0, "1/2");
+        assert!(!completed_first);
         assert_eq!(bot.status, TwapStatus::Running);
-        bot.record_slice_confirmed(t0 + Duration::from_secs(1), "2/2");
+        let completed_last = bot.record_slice_confirmed(t0 + Duration::from_secs(1), "2/2");
+        assert!(completed_last);
         assert_eq!(bot.status, TwapStatus::Completed);
         assert_eq!(bot.slices_submitted, bot.slice_count);
     }
@@ -576,9 +589,10 @@ mod tests {
     fn failures_count_toward_completion() {
         let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 3, 3, auth());
         let t0 = Instant::now();
-        bot.record_slice_confirmed(t0, "1/3");
-        bot.record_slice_failed(t0 + Duration::from_secs(1), "2/3 failed");
-        bot.record_slice_failed(t0 + Duration::from_secs(2), "3/3 failed");
+        let c1 = bot.record_slice_confirmed(t0, "1/3");
+        let c2 = bot.record_slice_failed(t0 + Duration::from_secs(1), "2/3 failed");
+        let c3 = bot.record_slice_failed(t0 + Duration::from_secs(2), "3/3 failed");
+        assert!(!c1 && !c2 && c3);
         assert_eq!(bot.status, TwapStatus::Completed);
         assert_eq!(bot.slices_submitted, 1);
         assert_eq!(bot.slices_failed, 2);
@@ -595,10 +609,10 @@ mod tests {
     fn resume_after_long_pause_does_not_burst_slice() {
         let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 4, 40, auth());
         let t0 = Instant::now();
-        bot.record_slice_confirmed(t0, "slice 1/4");
+        let _ = bot.record_slice_confirmed(t0, "slice 1/4");
         bot.pause();
         std::thread::sleep(Duration::from_millis(20));
-        bot.resume();
+        let _ = bot.resume();
         assert!(!bot.slice_due(Instant::now()));
     }
 
@@ -615,8 +629,8 @@ mod tests {
         // Slice resolves while Paused — last_slice_at should anchor at
         // paused_at, not at the late confirm time.
         let confirm_at = t0 + Duration::from_millis(500);
-        bot.record_slice_confirmed(confirm_at, "1/4 confirmed");
-        bot.resume();
+        let _ = bot.record_slice_confirmed(confirm_at, "1/4 confirmed");
+        let _ = bot.resume();
         // The bot must not be stalled — slice_due must eventually return
         // true after enough wall-clock elapses.
         let later = Instant::now() + Duration::from_secs(5);
@@ -627,11 +641,15 @@ mod tests {
     fn record_slice_during_pause_does_not_flip_status_to_completed() {
         // If a bot's last slice confirms while paused, the bot must remain
         // Paused — only the user resuming should advance to Completed.
+        // record_slice_confirmed returns false here because Paused defers
+        // the completion flip; resume() then returns true when it does.
         let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 1, 1, auth());
         bot.pause();
-        bot.record_slice_confirmed(Instant::now(), "done");
+        let completed_during_pause = bot.record_slice_confirmed(Instant::now(), "done");
+        assert!(!completed_during_pause);
         assert_eq!(bot.status, TwapStatus::Paused);
-        bot.resume();
+        let completed_on_resume = bot.resume();
+        assert!(completed_on_resume);
         assert_eq!(bot.status, TwapStatus::Completed);
     }
 
@@ -640,7 +658,7 @@ mod tests {
         let mut bot = make_bot();
         bot.stop();
         assert!(bot.status.is_terminal());
-        bot.resume();
+        let _ = bot.resume();
         assert_eq!(bot.status, TwapStatus::Stopped);
     }
 
@@ -658,8 +676,8 @@ mod tests {
     #[test]
     fn restart_clears_progress_and_failures() {
         let mut bot = make_bot();
-        bot.record_slice_confirmed(Instant::now(), "1/4");
-        bot.record_slice_failed(Instant::now(), "2/4 failed");
+        let _ = bot.record_slice_confirmed(Instant::now(), "1/4");
+        let _ = bot.record_slice_failed(Instant::now(), "2/4 failed");
         bot.stop();
         bot.restart();
         assert_eq!(bot.slices_submitted, 0);
@@ -694,7 +712,7 @@ mod tests {
     fn touch_last_slice_at_advances_when_some() {
         let mut bot = make_bot();
         let t0 = Instant::now();
-        bot.record_slice_confirmed(t0, "1/4");
+        let _ = bot.record_slice_confirmed(t0, "1/4");
         // Should NOT be due yet.
         assert!(!bot.slice_due(t0));
         // Defer paths tick last_slice_at forward; bot stays not-due.
