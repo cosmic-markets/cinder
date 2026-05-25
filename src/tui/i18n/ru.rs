@@ -332,6 +332,7 @@ pub static RU: Strings = Strings {
     twap_err_no_wallet:
         "Кошелёк не загружен \u{2014} нажмите [w] для подключения перед запуском TWAP",
     twap_started: "🐦‍🔥 TWAP запущен",
+    twap_completed: "🐦‍🔥 TWAP завершён",
     twap_slice_sent: "Срез TWAP отправлен",
     twap_slice_word: "срез",
 

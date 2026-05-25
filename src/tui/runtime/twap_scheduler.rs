@@ -61,11 +61,21 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
         // bookkeeping in `record_slice_*` will anchor `last_slice_at` to
         // `paused_at` and `maybe_complete` will refuse to flip status while
         // Paused.
+        let mut just_completed: Option<String> = None;
         if let Some(bot) = state.twaps_view.bots.get_mut(i) {
             if let Some((slice_number, outcome)) = bot.try_take_outcome() {
-                record_resolved_slice_outcome(bot, now, slice_number, outcome);
+                let completed = record_resolved_slice_outcome(bot, now, slice_number, outcome);
                 dispatched_any = true;
+                if completed {
+                    // Capture the formatted line now while we still have the
+                    // bot borrow — then drop the borrow before touching
+                    // `state.trading.set_status_title` below.
+                    just_completed = Some(format_completion_status(bot));
+                }
             }
+        }
+        if let Some(line) = just_completed {
+            state.trading.set_status_title(line);
         }
 
         // Step 2 — decide whether to dispatch a new slice this tick.
@@ -211,37 +221,53 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
     dispatched_any
 }
 
+/// Settle a bot's in-flight slice on an interruption (RPC reconnect,
+/// wallet swap). Drains a queued outcome if one is already on the
+/// receiver; otherwise marks the in-flight slice as `Unknown` so the
+/// counter advances and a same-wallet reconnect doesn't double-broadcast.
+/// Returns `Some(status_line)` if settling this bot crossed the
+/// completion threshold — the caller emits it on the status frame.
 pub(in crate::tui::runtime) fn settle_in_flight_for_interrupt(
     bot: &mut TwapBot,
     now: Instant,
     unknown_detail: impl Into<String>,
-) -> bool {
+) -> Option<String> {
     if let Some((slice_number, outcome)) = bot.try_take_outcome() {
-        record_resolved_slice_outcome(bot, now, slice_number, outcome);
-        return true;
+        let completed = record_resolved_slice_outcome(bot, now, slice_number, outcome);
+        if completed {
+            return Some(format_completion_status(bot));
+        }
+        return None;
     }
 
     if let Some(in_flight) = bot.in_flight.take() {
         let slice_number = in_flight.slice_number;
         in_flight.task.abort();
-        record_resolved_slice_outcome(
+        let completed = record_resolved_slice_outcome(
             bot,
             now,
             slice_number,
             SliceOutcome::Unknown(unknown_detail.into()),
         );
-        return true;
+        if completed {
+            return Some(format_completion_status(bot));
+        }
     }
 
-    false
+    None
 }
 
+/// Record a resolved slice outcome on the bot. Returns `true` if this
+/// resolution completed the bot — the caller emits a one-shot status-line
+/// "TWAP done" message so the user sees the finish even when the bots modal
+/// is closed.
+#[must_use]
 fn record_resolved_slice_outcome(
     bot: &mut TwapBot,
     now: Instant,
     slice_number: u32,
     outcome: SliceOutcome,
-) {
+) -> bool {
     let s = strings();
     match outcome {
         SliceOutcome::Confirmed => {
@@ -249,7 +275,7 @@ fn record_resolved_slice_outcome(
                 "{} {}/{}",
                 s.twap_slice_confirmed, slice_number, bot.slice_count
             );
-            bot.record_slice_confirmed(now, line);
+            bot.record_slice_confirmed(now, line)
         }
         SliceOutcome::Failed(detail) => {
             // Cap detail length so a runaway error string can't blow the
@@ -259,7 +285,7 @@ fn record_resolved_slice_outcome(
                 "{} {}/{}: {}",
                 s.twap_slice_failed, slice_number, bot.slice_count, short
             );
-            bot.record_slice_failed(now, line);
+            bot.record_slice_failed(now, line)
         }
         SliceOutcome::Unknown(detail) => {
             let short = truncate_status(&detail, 120);
@@ -267,8 +293,44 @@ fn record_resolved_slice_outcome(
                 "{} {}/{}: {}",
                 s.twap_slice_unconfirmed, slice_number, bot.slice_count, short
             );
-            bot.record_slice_unconfirmed(now, line);
+            bot.record_slice_unconfirmed(now, line)
         }
+    }
+}
+
+/// Format the "TWAP done" status-line emitted on completion. Includes the
+/// breakdown when any slice failed or went unconfirmed so the user can
+/// immediately tell whether the bot finished cleanly.
+pub(crate) fn format_completion_status(bot: &TwapBot) -> String {
+    let s = strings();
+    let side_lbl = match bot.side {
+        TradingSide::Long => s.long_label,
+        TradingSide::Short => s.short_label,
+    };
+    let imperfect = bot.slices_failed > 0 || bot.slices_unconfirmed > 0;
+    if imperfect {
+        format!(
+            "{}: {} {} {} \u{2014} {}\u{2713}/{}\u{2717}/{}? of {}",
+            s.twap_completed,
+            side_lbl,
+            bot.total_size,
+            bot.symbol,
+            bot.slices_submitted,
+            bot.slices_failed,
+            bot.slices_unconfirmed,
+            bot.slice_count,
+        )
+    } else {
+        format!(
+            "{}: {} {} {} \u{2014} {}/{} {}",
+            s.twap_completed,
+            side_lbl,
+            bot.total_size,
+            bot.symbol,
+            bot.slices_submitted,
+            bot.slice_count,
+            s.twap_slice_confirmed,
+        )
     }
 }
 

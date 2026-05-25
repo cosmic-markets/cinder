@@ -566,6 +566,11 @@ pub struct Strings {
     pub twap_err_no_wallet: &'static str,
     /// Status line emitted when a TWAP bot is queued.
     pub twap_started: &'static str,
+    /// Status line emitted when a TWAP bot completes — every slice has
+    /// resolved (confirmed / failed / unconfirmed) and the bot flipped to
+    /// `Completed`. Scheduler / resume / disconnect-drain / RPC-reconnect
+    /// all emit this when the transition happens under their handling.
+    pub twap_completed: &'static str,
     /// Status line emitted when a TWAP slice is dispatched ("slice N/M sent").
     pub twap_slice_sent: &'static str,
     /// Status line — "slice"

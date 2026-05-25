@@ -167,38 +167,40 @@ pub(super) fn disconnect_wallet(
     // the slice twice on-chain.
     let now = std::time::Instant::now();
     let slice_count_label = strings().twap_slice_word;
+    // Collect "TWAP done" lines to emit after the borrow ends. Disconnect
+    // can simultaneously settle multiple bots' final slices; the last line
+    // wins in `set_status_title`, which is acceptable — the bots-modal
+    // detail rows hold each bot's individual completion line.
+    let mut completion_lines: Vec<String> = Vec::new();
     for bot in state.twaps_view.bots.iter_mut() {
         if let Some((slice_number, outcome)) = bot.try_take_outcome() {
             use crate::tui::state::SliceOutcome;
             let slot_count = bot.slice_count;
-            match outcome {
-                SliceOutcome::Confirmed => {
-                    bot.record_slice_confirmed(
-                        now,
-                        format!(
-                            "{} {}/{} (drained on disconnect)",
-                            slice_count_label, slice_number, slot_count
-                        ),
-                    );
-                }
-                SliceOutcome::Failed(detail) => {
-                    bot.record_slice_failed(
-                        now,
-                        format!(
-                            "{} {}/{}: {}",
-                            slice_count_label, slice_number, slot_count, detail
-                        ),
-                    );
-                }
-                SliceOutcome::Unknown(detail) => {
-                    bot.record_slice_unconfirmed(
-                        now,
-                        format!(
-                            "{} {}/{}: {}",
-                            slice_count_label, slice_number, slot_count, detail
-                        ),
-                    );
-                }
+            let completed = match outcome {
+                SliceOutcome::Confirmed => bot.record_slice_confirmed(
+                    now,
+                    format!(
+                        "{} {}/{} (drained on disconnect)",
+                        slice_count_label, slice_number, slot_count
+                    ),
+                ),
+                SliceOutcome::Failed(detail) => bot.record_slice_failed(
+                    now,
+                    format!(
+                        "{} {}/{}: {}",
+                        slice_count_label, slice_number, slot_count, detail
+                    ),
+                ),
+                SliceOutcome::Unknown(detail) => bot.record_slice_unconfirmed(
+                    now,
+                    format!(
+                        "{} {}/{}: {}",
+                        slice_count_label, slice_number, slot_count, detail
+                    ),
+                ),
+            };
+            if completed {
+                completion_lines.push(super::twap_scheduler::format_completion_status(bot));
             }
         }
         if let Some(in_flight) = bot.in_flight.take() {
@@ -210,16 +212,27 @@ pub(super) fn disconnect_wallet(
             let slice_number = in_flight.slice_number;
             let slice_count = bot.slice_count;
             in_flight.task.abort();
-            bot.record_slice_unconfirmed(
+            let completed = bot.record_slice_unconfirmed(
                 now,
                 format!(
                     "{} {}/{}: aborted on disconnect (may have landed)",
                     slice_count_label, slice_number, slice_count
                 ),
             );
+            if completed {
+                completion_lines.push(super::twap_scheduler::format_completion_status(bot));
+            }
         }
         bot.defer_reason = Some(strings().twap_waiting_wallet.to_string());
     }
+    // Hold completion line(s) until after the disconnect status fires, so
+    // the "TWAP done" message wins the status frame — the user already
+    // knows they pressed disconnect, but the completion is fresh news.
+    // If more than one bot completed during the drain (rare — would need
+    // multiple bots with all-but-one slice already resolved at the moment
+    // of disconnect), the LAST completion's line is shown; per-bot rows
+    // in the bots modal keep the full per-bot completion text.
+    let final_completion_line = completion_lines.into_iter().last();
     state.trading.wallet_loaded = false;
     state.trading.wallet_label.clear();
     state.trading.keypair = None;
@@ -245,4 +258,7 @@ pub(super) fn disconnect_wallet(
     state
         .trading
         .set_status_title(strings().st_wallet_disconnected);
+    if let Some(line) = final_completion_line {
+        state.trading.set_status_title(line);
+    }
 }

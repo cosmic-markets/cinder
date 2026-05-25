@@ -336,6 +336,7 @@ pub static ES: Strings = Strings {
     twap_err_no_wallet:
         "Wallet no cargada \u{2014} presiona [w] para conectar antes de iniciar un TWAP",
     twap_started: "🐦‍🔥 TWAP iniciado",
+    twap_completed: "🐦‍🔥 TWAP terminado",
     twap_slice_sent: "Porción TWAP enviada",
     twap_slice_word: "porción",
 

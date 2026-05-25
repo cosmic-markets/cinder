@@ -139,8 +139,19 @@ pub(super) fn handle_full_rpc_reconnect(
 
     if let Some(kp) = state.trading.keypair.clone() {
         let now = Instant::now();
+        let mut completion_lines: Vec<String> = Vec::new();
         for bot in state.twaps_view.bots.iter_mut() {
-            twap_scheduler::settle_in_flight_for_interrupt(bot, now, strings().st_reconnecting);
+            if let Some(line) =
+                twap_scheduler::settle_in_flight_for_interrupt(bot, now, strings().st_reconnecting)
+            {
+                completion_lines.push(line);
+            }
+        }
+        // Emit the most recent completion (if any) — the reconnect flow
+        // doesn't otherwise touch status_title here, so this won't be
+        // overwritten until the next tx/status arrives.
+        if let Some(line) = completion_lines.into_iter().last() {
+            state.trading.set_status_title(line);
         }
 
         state.trading.tx_context = None;

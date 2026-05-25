@@ -332,6 +332,7 @@ pub static EN: Strings = Strings {
         "Each slice rounds to zero base lots \u{2014} shorten Total Time or increase size",
     twap_err_no_wallet: "Wallet not loaded \u{2014} press [w] to connect before starting a TWAP",
     twap_started: "🐦‍🔥 TWAP started",
+    twap_completed: "🐦‍🔥 TWAP done",
     twap_slice_sent: "TWAP slice sent",
     twap_slice_word: "slice",
 

@@ -324,6 +324,7 @@ pub static CN: Strings = Strings {
     twap_err_size_too_small: "单片向下取整为零基础手数 \u{2014} 请缩短总时长或增加总量",
     twap_err_no_wallet: "钱包未加载 \u{2014} 启动 TWAP 前请按 [w] 连接钱包",
     twap_started: "🐦‍🔥 TWAP 已启动",
+    twap_completed: "🐦‍🔥 TWAP 已完成",
     twap_slice_sent: "TWAP 分片已发送",
     twap_slice_word: "分片",
 

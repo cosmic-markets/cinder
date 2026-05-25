@@ -364,23 +364,37 @@ pub(in crate::tui::runtime) fn handle_bots_view_key(
             KeyAction::Redraw
         }
         KeyCode::Char('p') => {
-            let msg = state.twaps_view.selected_mut().map(|bot| {
-                use super::super::super::state::TwapStatus;
-                let s = strings();
-                match bot.status {
-                    TwapStatus::Running => {
-                        bot.pause();
-                        s.bots_paused_status
+            // Returns either (status_line, just_completed_line) — the
+            // second item is set when resume() found the bot already had
+            // every slice resolved (a mid-pause confirm crossed the
+            // threshold) so we emit "TWAP done" instead of "resumed".
+            let result: Option<(&'static str, Option<String>)> =
+                state.twaps_view.selected_mut().map(|bot| {
+                    use super::super::super::state::TwapStatus;
+                    let s = strings();
+                    match bot.status {
+                        TwapStatus::Running => {
+                            bot.pause();
+                            (s.bots_paused_status, None)
+                        }
+                        TwapStatus::Paused => {
+                            let completed = bot.resume();
+                            let done_line = if completed {
+                                Some(super::super::twap_scheduler::format_completion_status(bot))
+                            } else {
+                                None
+                            };
+                            (s.bots_resumed_status, done_line)
+                        }
+                        _ => ("", None),
                     }
-                    TwapStatus::Paused => {
-                        bot.resume();
-                        s.bots_resumed_status
-                    }
-                    _ => "",
+                });
+            if let Some((label, done)) = result {
+                if let Some(done_line) = done {
+                    state.trading.set_status_title(done_line);
+                } else if !label.is_empty() {
+                    state.trading.set_status_title(label);
                 }
-            });
-            if let Some(line) = msg.filter(|m| !m.is_empty()) {
-                state.trading.set_status_title(line);
             }
             KeyAction::Redraw
         }

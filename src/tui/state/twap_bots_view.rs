@@ -236,42 +236,58 @@ impl TwapBot {
         self.defer_reason = None;
     }
 
-    /// Recompute the completion status based on counters. Only flips to
-    /// `Completed` if the bot is currently Running — a Paused bot whose
-    /// in-flight slice resolves should stay Paused until the user resumes.
-    fn maybe_complete(&mut self) {
+    /// Recompute the completion status based on counters. Returns `true` if
+    /// this call flipped the bot from a non-terminal state to `Completed` —
+    /// the scheduler uses the return value to emit a one-shot "TWAP done"
+    /// status line. Only flips to `Completed` if the bot is currently
+    /// Running; a Paused bot whose in-flight slice resolves should stay
+    /// Paused until the user resumes (`resume()` re-checks).
+    fn maybe_complete(&mut self) -> bool {
         if matches!(self.status, TwapStatus::Running) && self.slices_resolved() >= self.slice_count
         {
             self.status = TwapStatus::Completed;
+            true
+        } else {
+            false
         }
     }
 
-    /// Record a slice that confirmed on-chain.
-    pub fn record_slice_confirmed(&mut self, now: Instant, status_line: impl Into<String>) {
+    /// Record a slice that confirmed on-chain. Returns `true` if recording
+    /// this slice was the last needed to complete the bot.
+    #[must_use = "completion transition is the scheduler's signal to emit a status line"]
+    pub fn record_slice_confirmed(&mut self, now: Instant, status_line: impl Into<String>) -> bool {
         self.slices_submitted += 1;
         self.advance_last_slice_at(now);
         self.last_status = status_line.into();
         self.defer_reason = None;
-        self.maybe_complete();
+        self.maybe_complete()
     }
 
     /// Record a slice that failed (build/sign/broadcast/confirm error).
-    pub fn record_slice_failed(&mut self, now: Instant, status_line: impl Into<String>) {
+    /// Returns `true` if recording this failure completed the bot.
+    #[must_use = "completion transition is the scheduler's signal to emit a status line"]
+    pub fn record_slice_failed(&mut self, now: Instant, status_line: impl Into<String>) -> bool {
         self.slices_failed += 1;
         self.advance_last_slice_at(now);
         self.last_status = status_line.into();
         self.defer_reason = None;
-        self.maybe_complete();
+        self.maybe_complete()
     }
 
     /// Record a slice whose confirmation was never observed. Counted toward
-    /// completion but tallied separately so the user can see it.
-    pub fn record_slice_unconfirmed(&mut self, now: Instant, status_line: impl Into<String>) {
+    /// completion but tallied separately so the user can see it. Returns
+    /// `true` if this resolution completed the bot.
+    #[must_use = "completion transition is the scheduler's signal to emit a status line"]
+    pub fn record_slice_unconfirmed(
+        &mut self,
+        now: Instant,
+        status_line: impl Into<String>,
+    ) -> bool {
         self.slices_unconfirmed += 1;
         self.advance_last_slice_at(now);
         self.last_status = status_line.into();
         self.defer_reason = None;
-        self.maybe_complete();
+        self.maybe_complete()
     }
 
     /// Advance `last_slice_at` to `now`, but only if we are currently
@@ -346,7 +362,12 @@ impl TwapBot {
         }
     }
 
-    pub fn resume(&mut self) {
+    /// Resume a paused bot. Returns `true` if the resume immediately
+    /// completed the bot (a slice that resolved mid-pause had crossed the
+    /// threshold but `maybe_complete` deferred the flip) — caller emits the
+    /// "TWAP done" status line in that case.
+    #[must_use = "completion transition on resume is the caller's signal to emit a status line"]
+    pub fn resume(&mut self) -> bool {
         if matches!(self.status, TwapStatus::Paused) {
             // Advance `last_slice_at` by however long we were paused so the
             // next slice fires after `slice_interval` from now, not from the
@@ -367,18 +388,21 @@ impl TwapBot {
             // A slice that resolved during pause may have crossed the
             // completion threshold but `maybe_complete` skipped the flip
             // because we were Paused. Re-check now.
-            self.maybe_complete();
+            return self.maybe_complete();
         }
+        false
     }
 
     pub fn stop(&mut self) {
         // If a slice has already been signed/broadcast, aborting the task
         // cannot guarantee the tx will not land. Count it as unknown so a
         // later restart/reconnect does not repeat the same slice silently.
+        // Stop overrides whatever maybe_complete decided — the user asked
+        // to stop, so the bot's terminal state is Stopped, not Completed.
         if let Some(in_flight) = self.in_flight.take() {
             let slice_number = in_flight.slice_number;
             in_flight.abort();
-            self.record_slice_unconfirmed(
+            let _ = self.record_slice_unconfirmed(
                 Instant::now(),
                 format!(
                     "slice {}/{}: interrupted (may have landed)",
@@ -386,7 +410,7 @@ impl TwapBot {
                 ),
             );
         }
-        if !self.status.is_terminal() {
+        if !self.status.is_terminal() || matches!(self.status, TwapStatus::Completed) {
             self.status = TwapStatus::Stopped;
         }
         self.paused_at = None;
