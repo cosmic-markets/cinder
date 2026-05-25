@@ -36,6 +36,7 @@ pub fn submit_limit_order(
     tokio::spawn(async move {
         use phoenix_rise::ix::{create_place_limit_order_ix, LimitOrderParams, OrderFlags, Side};
         use phoenix_rise::math::WrapperNum;
+        use phoenix_rise::PhoenixTxBuilder;
 
         let s = strings();
         let side_lbl = match side {
@@ -69,19 +70,34 @@ pub fn submit_limit_order(
                         return;
                     }
                 };
-            let (mut ixs, _) = match ctx
-                .http_client
-                .build_isolated_limit_order_tx_enhanced(
-                    &ctx.authority_v2,
-                    &symbol,
-                    phx_side,
-                    limit_price_usd,
-                    num_base_lots,
-                    Some(collateral),
-                    false,
-                )
-                .await
-            {
+            // Same rationale as the isolated market path: build locally via
+            // `PhoenixTxBuilder` to avoid the API endpoint's mid-price
+            // dependency. The on-chain limit-order builder needs only trader
+            // state + market metadata, both of which we already mirror.
+            //
+            // Refuse to build if the trader-state WS hasn't hydrated yet —
+            // an empty Trader makes the builder spin up a fresh isolated
+            // subaccount on top of any existing one.
+            let trader_snapshot = match ctx.snapshot_trader() {
+                Some(t) => t,
+                None => {
+                    let _ = tx_status.send(TxStatusMsg::SetStatus {
+                        title: format!("{} — {}", s.tx_failed_build_params, order_summary),
+                        detail: s.twap_waiting_trader_sync.to_string(),
+                    });
+                    return;
+                }
+            };
+            let builder = PhoenixTxBuilder::new(&ctx.metadata);
+            let mut ixs = match builder.build_isolated_limit_order(
+                &trader_snapshot,
+                &symbol,
+                phx_side,
+                limit_price_usd,
+                num_base_lots,
+                Some(collateral),
+                false,
+            ) {
                 Ok(ixs) => ixs,
                 Err(e) => {
                     let detail = parse_phoenix_tx_error(&format!("{}", e));
@@ -170,6 +186,19 @@ pub fn submit_limit_order(
                     let _ = tx_status.send(TxStatusMsg::SetStatus { title, detail });
                 }
             }
+            return;
+        }
+
+        // Non-isolated limit orders pin `ctx.market_addrs.*` to the active
+        // symbol, so the caller must not pass a different `symbol` here.
+        if symbol != ctx.active_symbol {
+            let _ = tx_status.send(TxStatusMsg::SetStatus {
+                title: format!("{} — {}", s.tx_failed_build_params, order_summary),
+                detail: format!(
+                    "{} ({} != active {})",
+                    s.twap_waiting_active_market, symbol, ctx.active_symbol
+                ),
+            });
             return;
         }
 

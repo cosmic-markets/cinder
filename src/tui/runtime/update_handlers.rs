@@ -116,8 +116,10 @@ pub(super) fn handle_tx_status_update(
     last_feed_paint: &mut Instant,
 ) {
     match msg {
-        TxStatusMsg::TradeMarker { is_buy } => {
-            state.add_trade_marker(is_buy);
+        TxStatusMsg::TradeMarker { symbol, is_buy } => {
+            if symbol == cfg.symbol {
+                state.add_trade_marker(is_buy);
+            }
         }
         TxStatusMsg::SetStatus { title, detail } => {
             state.trading.status_timestamp = super::super::state::make_status_timestamp();
@@ -126,6 +128,13 @@ pub(super) fn handle_tx_status_update(
             }
             state.trading.status_title = title;
             state.trading.status_detail = detail;
+        }
+        TxStatusMsg::LedgerOnly { title, signature } => {
+            // Record the tx in the Ledger ring WITHOUT touching the
+            // user-visible status line. Used by TWAP slices so each
+            // slice's signature is auditable post-hoc even though the
+            // scheduler runs in silent_status mode.
+            state.trading.record_ledger(title, signature);
         }
         TxStatusMsg::PromptReferralChoice => {
             // Don't re-prompt if the user already saw and dismissed the

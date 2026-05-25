@@ -15,13 +15,19 @@ pub enum OrderKind {
     StopMarket {
         trigger: f64,
     },
+    /// Time-Weighted Average Price: splits the order into `slice_count`
+    /// equal-sized market orders spaced evenly across `duration_secs`. The
+    /// order entry row is intentionally not used to collect TWAP parameters;
+    /// selecting this kind and pressing Enter opens the TWAP modal which
+    /// owns the inputs (side, total size, duration, slice count).
+    Twap,
 }
 
 impl OrderKind {
-    /// USD price attached to the kind, if any. `None` for `Market`.
+    /// USD price attached to the kind, if any. `None` for `Market` and `Twap`.
     pub fn price(&self) -> Option<f64> {
         match self {
-            OrderKind::Market => None,
+            OrderKind::Market | OrderKind::Twap => None,
             OrderKind::Limit { price } => Some(*price),
             OrderKind::StopMarket { trigger } => Some(*trigger),
         }
@@ -45,5 +51,10 @@ mod tests {
     #[test]
     fn stop_market_returns_trigger() {
         assert_eq!(OrderKind::StopMarket { trigger: 99.5 }.price(), Some(99.5));
+    }
+
+    #[test]
+    fn twap_has_no_price() {
+        assert_eq!(OrderKind::Twap.price(), None);
     }
 }

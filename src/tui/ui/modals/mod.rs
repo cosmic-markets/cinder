@@ -28,6 +28,7 @@ mod positions;
 mod quit;
 mod referral_choice;
 mod referral_code;
+mod twap;
 mod wallet_path;
 
 pub(in crate::tui::ui) use chrome::*;
@@ -41,4 +42,5 @@ pub(in crate::tui::ui) use positions::*;
 pub(in crate::tui::ui) use quit::*;
 pub(in crate::tui::ui) use referral_choice::*;
 pub(in crate::tui::ui) use referral_code::*;
+pub(in crate::tui::ui) use twap::*;
 pub(in crate::tui::ui) use wallet_path::*;

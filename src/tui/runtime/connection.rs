@@ -19,7 +19,7 @@ use super::super::state::{L2BookStreamMsg, TuiState};
 use super::super::terminal::restore_terminal;
 use super::super::ui;
 use super::redraw::{redraw_tui, redraw_tui_force};
-use super::{tasks, Channels, FEED_REDRAW_MIN_INTERVAL};
+use super::{tasks, twap_scheduler, Channels, FEED_REDRAW_MIN_INTERVAL};
 
 pub(super) fn initial_config(
     market_list: &[super::super::state::MarketInfo],
@@ -94,6 +94,7 @@ pub(super) fn handle_full_rpc_reconnect(
     gti_refresh: &Arc<tokio::sync::Notify>,
     wallet_wss_handle: &mut Option<tokio::task::JoinHandle<()>>,
     blockhash_refresh_handle: &mut Option<tokio::task::JoinHandle<()>>,
+    trader_orders_handle: &mut Option<tokio::task::JoinHandle<()>>,
     tx_ctx_task: &mut Option<tokio::task::JoinHandle<()>>,
     liquidation_task: &mut tokio::task::JoinHandle<()>,
     state: &mut TuiState,
@@ -137,6 +138,22 @@ pub(super) fn handle_full_rpc_reconnect(
     );
 
     if let Some(kp) = state.trading.keypair.clone() {
+        let now = Instant::now();
+        let mut completion_lines: Vec<String> = Vec::new();
+        for bot in state.twaps_view.bots.iter_mut() {
+            if let Some(line) =
+                twap_scheduler::settle_in_flight_for_interrupt(bot, now, strings().st_reconnecting)
+            {
+                completion_lines.push(line);
+            }
+        }
+        // Emit the most recent completion (if any) — the reconnect flow
+        // doesn't otherwise touch status_title here, so this won't be
+        // overwritten until the next tx/status arrives.
+        if let Some(line) = completion_lines.into_iter().last() {
+            state.trading.set_status_title(line);
+        }
+
         state.trading.tx_context = None;
         *wallet_wss_handle = Some(tasks::spawn_wallet_wss(
             kp.pubkey().to_bytes(),
@@ -144,10 +161,38 @@ pub(super) fn handle_full_rpc_reconnect(
             channels.wallet_usdc_tx.clone(),
             channels.wallet_sol_tx.clone(),
         ));
+        // Full RPC reconnect can cross networks/endpoints. Use a fresh trader
+        // mirror so any post-abort write from the old WS task lands on an
+        // orphaned Arc instead of clobbering the new TxContext's snapshot.
+        let authority: solana_pubkey::Pubkey = kp.pubkey();
+        let shared_trader = std::sync::Arc::new(std::sync::RwLock::new(
+            crate::tui::tx::TxContext::empty_trader_mirror(authority),
+        ));
+        state.trading.shared_trader = Some(Arc::clone(&shared_trader));
+        // Abort the OLD trader-orders task before spawning the new one. If
+        // an old in-flight write still completes after abort, it now writes
+        // only to the orphaned pre-reconnect Arc above.
+        if let Some(h) = trader_orders_handle.take() {
+            h.abort();
+        }
+        let conditional_asset_symbols = configs
+            .values()
+            .map(|c| (c.asset_id, c.symbol.clone()))
+            .collect();
+        *trader_orders_handle = Some(tasks::spawn_trader_orders_ws(
+            Arc::clone(&kp),
+            channels.orders_tx.clone(),
+            conditional_asset_symbols,
+            Arc::clone(&shared_trader),
+        ));
+        // Old tx_ctx_task is fine to abort after spawning the new one (no
+        // shared writable state — it just delivers a freshly-built
+        // TxContext once and returns).
         let new_tx_ctx = tasks::spawn_tx_context_task(
-            kp,
+            Arc::clone(&kp),
             cfg.symbol.clone(),
             Arc::clone(balance_http),
+            Arc::clone(&shared_trader),
             channels.tx_ctx_tx.clone(),
             channels.tx_status.clone(),
         );
@@ -190,10 +235,22 @@ pub(super) fn handle_pending_market_switch(
 
         if let Some(kp) = &state.trading.keypair {
             state.trading.tx_context = None;
+            let shared_trader = match state.trading.shared_trader.as_ref() {
+                Some(arc) => Arc::clone(arc),
+                None => {
+                    let authority: solana_pubkey::Pubkey = kp.pubkey();
+                    let arc = std::sync::Arc::new(std::sync::RwLock::new(
+                        crate::tui::tx::TxContext::empty_trader_mirror(authority),
+                    ));
+                    state.trading.shared_trader = Some(Arc::clone(&arc));
+                    arc
+                }
+            };
             let new_tx_ctx = tasks::spawn_tx_context_task(
                 Arc::clone(kp),
                 cfg.symbol.clone(),
                 Arc::clone(balance_http),
+                shared_trader,
                 channels.tx_ctx_tx.clone(),
                 channels.tx_status.clone(),
             );

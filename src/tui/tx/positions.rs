@@ -156,13 +156,13 @@ pub fn submit_close_all_positions(
                     .collect()
             };
             let batch_label = summary_dedup.join(", ");
-            let active_markers: Vec<bool> = {
+            let active_markers: Vec<(String, bool)> = {
                 let mut seen = std::collections::HashSet::new();
                 batch
                     .iter()
                     .filter_map(|(_, _, sym, side)| {
                         if sym == &active_symbol && seen.insert(sym.clone()) {
-                            Some(matches!(side, TradingSide::Long))
+                            Some((sym.clone(), matches!(side, TradingSide::Long)))
                         } else {
                             None
                         }
@@ -218,8 +218,11 @@ pub fn submit_close_all_positions(
 
             match subscribe_send_confirm(&ctx, &tx, &sig).await {
                 Ok(()) => {
-                    for is_buy in &active_markers {
-                        let _ = tx_status.send(TxStatusMsg::TradeMarker { is_buy: *is_buy });
+                    for (symbol, is_buy) in &active_markers {
+                        let _ = tx_status.send(TxStatusMsg::TradeMarker {
+                            symbol: symbol.clone(),
+                            is_buy: *is_buy,
+                        });
                     }
                     let _ = tx_status.send(TxStatusMsg::SetStatus {
                         title: format!(

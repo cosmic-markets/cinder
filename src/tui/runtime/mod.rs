@@ -10,6 +10,7 @@ mod keyboard;
 mod redraw;
 mod submit;
 mod tasks;
+mod twap_scheduler;
 mod update_handlers;
 mod wallet;
 

@@ -16,6 +16,7 @@ use super::orders_view::OrdersView;
 use super::position_leaderboard_view::TopPositionsView;
 use super::positions_view::PositionsView;
 use super::trade_panel::TradingState;
+use super::twap_bots_view::TwapsView;
 
 pub struct TuiState {
     pub price_history: VecDeque<f64>,
@@ -49,6 +50,10 @@ pub struct TuiState {
     /// Live liquidation feed: most-recent `LiquidationEvent`s decoded from
     /// inner instructions on Phoenix Eternal txs.
     pub liquidation_feed_view: LiquidationFeedView,
+    /// Active TWAP bots (running, paused, stopped, completed) — surfaced by
+    /// the bots modal (toggled with [b]) and advanced from the 1-second
+    /// scheduler tick in the event loop.
+    pub twaps_view: TwapsView,
     /// One chart marker per active-market open order, keyed by `(symbol,
     /// subaccount_index, order_sequence_number)`. Kept separate from `orders_view` because it
     /// tracks chart-geometry state (x-coordinate that scrolls with
@@ -87,6 +92,7 @@ impl TuiState {
             orders_view: OrdersView::new(),
             top_positions_view: TopPositionsView::new(),
             liquidation_feed_view: LiquidationFeedView::new(),
+            twaps_view: TwapsView::new(),
             order_chart_markers: HashMap::new(),
             switching_to: None,
             chart_data_cache: Vec::with_capacity(MAX_PRICE_HISTORY),

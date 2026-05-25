@@ -27,6 +27,7 @@ mod market;
 mod normal;
 mod referral;
 mod settings;
+mod twap;
 mod views;
 
 pub(in crate::tui::runtime) use amounts::*;
@@ -36,4 +37,5 @@ pub(in crate::tui::runtime) use market::*;
 pub(in crate::tui::runtime) use normal::*;
 pub(in crate::tui::runtime) use referral::*;
 pub(in crate::tui::runtime) use settings::*;
+pub(in crate::tui::runtime) use twap::*;
 pub(in crate::tui::runtime) use views::*;

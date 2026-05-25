@@ -511,6 +511,138 @@ pub struct Strings {
     /// Disclosure note rendered at the bottom: attribution is permanent on
     /// Phoenix's side and cannot be changed later.
     pub referral_choice_sticky_note: &'static str,
+
+    // ── TWAP modal & bots modal ─────────────────────────────────────────────
+    /// 3-letter abbreviation for TWAP shown in the order-entry kind cycle.
+    pub twap: &'static str,
+    /// Bottom-bar / order-entry label — "TWAP (modal)" hint when the active
+    /// kind is TWAP, prompting the user to press Enter to open the modal.
+    pub twap_order: &'static str,
+    /// Modal title — "New TWAP".
+    pub twap_modal_title: &'static str,
+    /// One-line intro under the title.
+    pub twap_modal_intro: &'static str,
+    /// Form field label — "Market".
+    pub twap_field_market: &'static str,
+    /// Form field label — "Side".
+    pub twap_field_side: &'static str,
+    /// Form field label — "Size".
+    pub twap_field_size: &'static str,
+    /// Form field label — "Total Time".
+    pub twap_field_total_time: &'static str,
+    /// Form field label — hours row.
+    pub twap_field_hours: &'static str,
+    /// Form field label — minutes row.
+    pub twap_field_mins: &'static str,
+    /// Form field label — seconds row.
+    pub twap_field_secs: &'static str,
+    /// Unit suffix — "hr".
+    pub twap_unit_hr: &'static str,
+    /// Unit suffix — "min".
+    pub twap_unit_min: &'static str,
+    /// Unit suffix — "sec".
+    pub twap_unit_sec: &'static str,
+    /// Unit suffix — "slices".
+    pub twap_unit_slices: &'static str,
+    /// Footer hint paired with ↑↓ — "field".
+    pub twap_nav_field: &'static str,
+    /// Footer hint paired with Tab — "toggle side".
+    pub twap_toggle_side: &'static str,
+    /// Footer hint paired with ←→ — "cycle market".
+    pub twap_cycle_market: &'static str,
+    /// Footer hint paired with Enter — "start".
+    pub twap_start: &'static str,
+    /// Summary placeholder when the form isn't yet fully populated.
+    pub twap_summary_placeholder: &'static str,
+    /// Validation error — total size must be a positive number.
+    pub twap_err_size: &'static str,
+    /// Validation error — duration must be a positive number of minutes.
+    pub twap_err_duration: &'static str,
+    /// Validation error — total time below the minimum (1 slice / minute).
+    pub twap_err_too_short: &'static str,
+    /// Validation error — slice count cannot exceed total size in base units.
+    pub twap_err_size_too_small: &'static str,
+    /// Validation error — must have a wallet loaded to start a TWAP.
+    pub twap_err_no_wallet: &'static str,
+    /// Status line emitted when a TWAP bot is queued.
+    pub twap_started: &'static str,
+    /// Status line emitted when a TWAP bot completes — every slice has
+    /// resolved (confirmed / failed / unconfirmed) and the bot flipped to
+    /// `Completed`. Scheduler / resume / disconnect-drain / RPC-reconnect
+    /// all emit this when the transition happens under their handling.
+    pub twap_completed: &'static str,
+    /// Status line emitted when a TWAP slice is dispatched ("slice N/M sent").
+    pub twap_slice_sent: &'static str,
+    /// Status line — "slice"
+    pub twap_slice_word: &'static str,
+    /// Bots modal title.
+    pub bots_title: &'static str,
+    /// Bots modal empty placeholder.
+    pub bots_empty: &'static str,
+    /// Bots modal column header — "Kind".
+    pub bots_kind: &'static str,
+    /// Bots modal column header — "Progress".
+    pub bots_progress: &'static str,
+    /// Bots modal column header — "Interval".
+    pub bots_interval: &'static str,
+    /// Bots modal column header — "Next" (countdown to the next slice).
+    pub bots_next: &'static str,
+    /// Bots modal column header — "State".
+    pub bots_state: &'static str,
+    /// Footer hint — pause/resume.
+    pub bots_pause_resume: &'static str,
+    /// Footer hint — stop.
+    pub bots_stop: &'static str,
+    /// Footer hint — restart.
+    pub bots_restart: &'static str,
+    /// Footer hint — remove from list.
+    pub bots_remove: &'static str,
+    /// Status pill labels.
+    pub bots_status_running: &'static str,
+    pub bots_status_paused: &'static str,
+    pub bots_status_stopped: &'static str,
+    pub bots_status_completed: &'static str,
+    /// Status line — paused.
+    pub bots_paused_status: &'static str,
+    /// Status line — resumed.
+    pub bots_resumed_status: &'static str,
+    /// Status line — stopped.
+    pub bots_stopped_status: &'static str,
+    /// Status line — restarted.
+    pub bots_restarted_status: &'static str,
+    /// Status line — removed.
+    pub bots_removed_status: &'static str,
+    /// Bot `last_status` while waiting for the bot's symbol to appear in the
+    /// market-config map (e.g. during RPC swap).
+    pub twap_waiting_market_cfg: &'static str,
+    /// Bot `last_status` while waiting for the wallet's trader-state WS
+    /// snapshot to hydrate.
+    pub twap_waiting_trader_sync: &'static str,
+    /// Bot `last_status` when a slice can't fire because the bot's symbol
+    /// isn't the active market and isn't isolated-only.
+    pub twap_waiting_active_market: &'static str,
+    /// Bot `last_status` while no wallet is connected.
+    pub twap_waiting_wallet: &'static str,
+    /// Bot `last_status` line: slice confirmed on-chain.
+    pub twap_slice_confirmed: &'static str,
+    /// Bot `last_status` line: slice failed.
+    pub twap_slice_failed: &'static str,
+    /// Bot `last_status` line: slice tx broadcast but never confirmed.
+    pub twap_slice_unconfirmed: &'static str,
+    /// Bot defer reason — connected wallet authority differs from the wallet
+    /// that created the bot.
+    pub twap_waiting_authority: &'static str,
+    /// Status line — restart refused because the connected wallet differs
+    /// from the wallet the bot was created with.
+    pub twap_restart_wallet_mismatch: &'static str,
+    /// Confirmation prompt — start TWAP from form.
+    pub twap_confirm_start: &'static str,
+    /// Confirmation prompt — restart finished/stopped bot.
+    pub twap_confirm_restart: &'static str,
+    /// Confirmation prompt — stop a running bot.
+    pub twap_confirm_stop: &'static str,
+    /// Confirmation prompt — remove a bot from the list.
+    pub twap_confirm_remove: &'static str,
 }
 
 mod en;

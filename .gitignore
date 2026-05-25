@@ -10,3 +10,9 @@ id.json
 *.p12
 *.pfx
 *.log
+
+# Diff snapshots produced by code-review workflows — these are scratch
+# artifacts, not source. The branch `twap` had one of these accidentally
+# committed; this rule keeps it from happening again.
+*.patch
+/tmp/

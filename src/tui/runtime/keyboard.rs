@@ -134,6 +134,10 @@ pub(super) fn handle_key_press(
         }
         InputMode::ViewingOrders => input::handle_orders_view_key(key.code, state),
         InputMode::ViewingLedger => input::handle_ledger_view_key(key.code, &mut state.trading),
+        InputMode::EditingTwap => input::handle_editing_twap_key(key.code, state, configs),
+        InputMode::ViewingBots => {
+            input::handle_bots_view_key(key.code, state, cfg, pending_market_switch)
+        }
         InputMode::ConfirmQuit => match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => KeyAction::BreakOuter,
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {

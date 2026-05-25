@@ -121,19 +121,38 @@ pub(in crate::tui::runtime) fn handle_editing_wallet_path(
                             }
                         }
                     }
-                    let handles = connect_wallet_with_keypair(
+                    match connect_wallet_with_keypair(
                         state, kp, cfg, configs, channels, ws_url, http,
-                    );
-                    *wallet_wss_handle = Some(handles.wallet_wss);
-                    *balance_fetch_handle = Some(handles.initial_balance);
-                    *trader_orders_handle = Some(handles.trader_orders);
-                    if let Some(h) = tx_ctx_task.replace(handles.tx_ctx) {
-                        h.abort();
+                    ) {
+                        Ok(handles) => {
+                            // Only replace existing handles AFTER the connect
+                            // succeeded — a failed connect must not tear down
+                            // a previously-loaded wallet's tasks.
+                            if let Some(h) = wallet_wss_handle.replace(handles.wallet_wss) {
+                                h.abort();
+                            }
+                            if let Some(h) = balance_fetch_handle.replace(handles.initial_balance) {
+                                h.abort();
+                            }
+                            if let Some(h) = trader_orders_handle.replace(handles.trader_orders) {
+                                h.abort();
+                            }
+                            if let Some(h) = tx_ctx_task.replace(handles.tx_ctx) {
+                                h.abort();
+                            }
+                            *awaiting_first_tx_ctx = true;
+                            state.trading.input_mode = InputMode::Normal;
+                            state.trading.wallet_path_buffer.clear();
+                            state.trading.wallet_path_error = None;
+                        }
+                        Err(msg) => {
+                            // Surface the failure inside the modal and keep
+                            // it open so the user can retry. Do NOT mutate
+                            // existing wallet handles or the previously-
+                            // loaded wallet's state.
+                            state.trading.wallet_path_error = Some(msg);
+                        }
                     }
-                    *awaiting_first_tx_ctx = true;
-                    state.trading.input_mode = InputMode::Normal;
-                    state.trading.wallet_path_buffer.clear();
-                    state.trading.wallet_path_error = None;
                 }
                 Err(e) => {
                     state.trading.wallet_path_error = Some(e);

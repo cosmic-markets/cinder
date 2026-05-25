@@ -127,6 +127,7 @@ pub(super) fn render_panel_frame(
     let is_limit = matches!(trading.order_kind, OrderKind::Limit { .. });
     let is_stop = matches!(trading.order_kind, OrderKind::StopMarket { .. });
     let is_market = matches!(trading.order_kind, OrderKind::Market);
+    let is_twap = matches!(trading.order_kind, OrderKind::Twap);
 
     let active_style = Style::default()
         .fg(Color::Black)
@@ -136,6 +137,7 @@ pub(super) fn render_panel_frame(
     let market_style = if is_market { active_style } else { idle_style };
     let limit_style = if is_limit { active_style } else { idle_style };
     let stop_style = if is_stop { active_style } else { idle_style };
+    let twap_style = if is_twap { active_style } else { idle_style };
 
     // Two-column split: left column = side/qty, right column = type/price.
     // Fixed left width keeps BUY aligned with Qty, and MARKET/LIMIT aligned with
@@ -160,13 +162,17 @@ pub(super) fn render_panel_frame(
     ]);
     f.render_widget(Paragraph::new(side_toggle), row0_cols[0]);
 
-    // Row 0 right: MKT / LMT / STP toggle (same pattern as BUY / SELL + hotkey).
+    // Row 0 right: MKT/LMT/STP/TWAP toggle (same pattern as BUY/SELL + hotkey).
+    // Tighter separator than the BUY/SELL row because four items don't fit
+    // with " / " padding on a narrow trade panel.
     let type_toggle = Line::from(vec![
         Span::styled(format!(" {} ", tp_s.mkt), market_style),
-        Span::styled(" / ", Style::default().fg(Color::DarkGray)),
+        Span::styled("/", Style::default().fg(Color::DarkGray)),
         Span::styled(format!(" {} ", tp_s.lmt), limit_style),
-        Span::styled(" / ", Style::default().fg(Color::DarkGray)),
+        Span::styled("/", Style::default().fg(Color::DarkGray)),
         Span::styled(format!(" {} ", tp_s.stp), stop_style),
+        Span::styled("/", Style::default().fg(Color::DarkGray)),
+        Span::styled(format!(" {} ", tp_s.twap), twap_style),
         Span::styled(
             " [t]",
             Style::default()

@@ -46,5 +46,13 @@ pub enum InputMode {
     /// `ChoosingReferral` modal's "Use custom code" option. Empty + Enter or
     /// Esc skips and points the user at phoenix.trade.
     EditingReferralCode,
+    /// "New TWAP" modal opened from Normal mode by pressing [Enter] while the
+    /// active `OrderKind` is `Twap`. Collects side, total size, duration, and
+    /// slice count via a four-row field editor; [Enter] starts the bot and
+    /// returns to Normal mode, [Esc] discards.
+    EditingTwap,
+    /// "Bots" modal opened by [b] — lists running TWAP bots with
+    /// pause/unpause/stop/restart/remove hotkeys.
+    ViewingBots,
     ConfirmQuit,
 }

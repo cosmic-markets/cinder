@@ -11,6 +11,7 @@ pub mod position_leaderboard_view;
 pub mod positions_view;
 pub mod trade_panel;
 pub mod tui;
+pub mod twap_bots_view;
 pub mod updates;
 
 pub use book::*;
@@ -22,6 +23,7 @@ pub use position_leaderboard_view::*;
 pub use positions_view::*;
 pub use trade_panel::*;
 pub use tui::*;
+pub use twap_bots_view::*;
 pub use updates::*;
 
 /// Returns a timestamp string formatted as `[HH:MM:SS UTC]`.
