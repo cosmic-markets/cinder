@@ -109,6 +109,12 @@ pub struct TwapBot {
     pub slices_unconfirmed: u32,
     pub status: TwapStatus,
     pub started_at: Instant,
+    /// Wall-clock time the last slice was *dispatched* (NOT confirmed).
+    /// Anchoring on dispatch keeps cadence near `slice_interval` even when
+    /// confirmation latency is high — anchoring on confirm pushes every
+    /// subsequent slice late by the round-trip, so a 1s interval becomes
+    /// 2-3s in practice. The `in_flight.is_some()` gate in `slice_due`
+    /// independently prevents overlapping slices.
     pub last_slice_at: Option<Instant>,
     pub last_status: String,
     /// Transient defer reason (e.g. "waiting for trader state to sync"). Kept
@@ -252,23 +258,29 @@ impl TwapBot {
         }
     }
 
-    /// Record a slice that confirmed on-chain. Returns `true` if recording
-    /// this slice was the last needed to complete the bot.
+    /// Record a slice that confirmed on-chain. Updates only counters and
+    /// completion status — `last_slice_at` is intentionally NOT touched here
+    /// because the next slice's interval is anchored to *dispatch* time
+    /// (set in `record_slice_dispatched`). Returns `true` if recording this
+    /// slice was the last needed to complete the bot.
     #[must_use = "completion transition is the scheduler's signal to emit a status line"]
-    pub fn record_slice_confirmed(&mut self, now: Instant, status_line: impl Into<String>) -> bool {
+    pub fn record_slice_confirmed(
+        &mut self,
+        _now: Instant,
+        status_line: impl Into<String>,
+    ) -> bool {
         self.slices_submitted += 1;
-        self.advance_last_slice_at(now);
         self.last_status = status_line.into();
         self.defer_reason = None;
         self.maybe_complete()
     }
 
     /// Record a slice that failed (build/sign/broadcast/confirm error).
-    /// Returns `true` if recording this failure completed the bot.
+    /// Returns `true` if recording this failure completed the bot. See
+    /// `record_slice_confirmed` for why `last_slice_at` is not updated here.
     #[must_use = "completion transition is the scheduler's signal to emit a status line"]
-    pub fn record_slice_failed(&mut self, now: Instant, status_line: impl Into<String>) -> bool {
+    pub fn record_slice_failed(&mut self, _now: Instant, status_line: impl Into<String>) -> bool {
         self.slices_failed += 1;
-        self.advance_last_slice_at(now);
         self.last_status = status_line.into();
         self.defer_reason = None;
         self.maybe_complete()
@@ -276,47 +288,26 @@ impl TwapBot {
 
     /// Record a slice whose confirmation was never observed. Counted toward
     /// completion but tallied separately so the user can see it. Returns
-    /// `true` if this resolution completed the bot.
+    /// `true` if this resolution completed the bot. See
+    /// `record_slice_confirmed` for why `last_slice_at` is not updated here.
     #[must_use = "completion transition is the scheduler's signal to emit a status line"]
     pub fn record_slice_unconfirmed(
         &mut self,
-        now: Instant,
+        _now: Instant,
         status_line: impl Into<String>,
     ) -> bool {
         self.slices_unconfirmed += 1;
-        self.advance_last_slice_at(now);
         self.last_status = status_line.into();
         self.defer_reason = None;
         self.maybe_complete()
     }
 
-    /// Advance `last_slice_at` to `now`, but only if we are currently
-    /// Running. When the bot is Paused, anchor on `paused_at` instead so
-    /// `resume()`'s pause-shift math doesn't end up pushing
-    /// `last_slice_at` past `now`.
-    fn advance_last_slice_at(&mut self, now: Instant) {
-        match self.status {
-            TwapStatus::Paused => {
-                // The slice resolved while the user has the bot paused.
-                // Record the slice but keep `last_slice_at` anchored at the
-                // pause boundary — resume() will shift it forward by the
-                // pause duration so the next slice's interval starts when
-                // the user resumes, not when this slice happened to land.
-                if let Some(paused_at) = self.paused_at {
-                    self.last_slice_at = Some(paused_at);
-                } else {
-                    self.last_slice_at = Some(now);
-                }
-            }
-            _ => {
-                self.last_slice_at = Some(now);
-            }
-        }
-    }
-
     /// Record that a slice was dispatched and is waiting for its outcome.
     /// Stores the oneshot receiver AND the spawned task handle so the bot
     /// can later abort the broadcast if the user stops/restarts/removes.
+    /// Also anchors `last_slice_at` to dispatch time so the next slice's
+    /// interval starts ticking immediately — without this, the interval
+    /// would only start at confirmation, stretching a 1s cadence to 2-3s.
     pub fn record_slice_dispatched(
         &mut self,
         now: Instant,
@@ -330,6 +321,7 @@ impl TwapBot {
             task,
             started_at: now,
         });
+        self.last_slice_at = Some(now);
         // Clear any stale defer reason now that a slice is in flight.
         self.defer_reason = None;
     }
@@ -561,14 +553,28 @@ mod tests {
     }
 
     #[test]
-    fn after_confirm_not_due_until_interval_passes() {
+    fn after_dispatch_not_due_until_interval_passes() {
+        // Cadence is anchored to dispatch, not confirmation — the test
+        // dispatches a slice, then resolves it quickly, and verifies the
+        // bot waits a full slice_interval from the dispatch instant before
+        // the next slice becomes due. Anchoring on confirm (the old
+        // behavior) would have stretched a 10s interval into 10s + the
+        // confirm-roundtrip — observable as ~3s cadence for 1s intervals.
         let mut bot = make_bot();
         let t0 = Instant::now();
-        // First slice can't be the completion-triggering call (4-slice bot),
-        // so the must_use return is intentionally discarded in this test.
-        let completed = bot.record_slice_confirmed(t0, "slice 1/4");
+        let (tx, rx) = oneshot::channel();
+        bot.record_slice_dispatched(t0, 1, rx, noop_task());
+        // While in flight, slice_due is gated regardless of elapsed.
+        assert!(!bot.slice_due(t0 + Duration::from_secs(20)));
+        // Resolve via the oneshot so try_take_outcome drains in_flight.
+        tx.send(SliceOutcome::Confirmed).unwrap();
+        let outcome = bot.try_take_outcome();
+        assert!(outcome.is_some());
+        let completed = bot.record_slice_confirmed(t0 + Duration::from_millis(100), "slice 1/4");
         assert!(!completed);
-        assert!(!bot.slice_due(t0));
+        // Confirm landed fast but cadence is anchored to dispatch (t0),
+        // so the next slice isn't due until t0 + slice_interval.
+        assert!(!bot.slice_due(t0 + Duration::from_secs(9)));
         assert!(bot.slice_due(t0 + Duration::from_secs(10)));
     }
 
@@ -609,6 +615,10 @@ mod tests {
     fn resume_after_long_pause_does_not_burst_slice() {
         let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 4, 40, auth());
         let t0 = Instant::now();
+        let (tx, rx) = oneshot::channel();
+        bot.record_slice_dispatched(t0, 1, rx, noop_task());
+        tx.send(SliceOutcome::Confirmed).unwrap();
+        let _ = bot.try_take_outcome();
         let _ = bot.record_slice_confirmed(t0, "slice 1/4");
         bot.pause();
         std::thread::sleep(Duration::from_millis(20));
@@ -618,16 +628,20 @@ mod tests {
 
     #[test]
     fn slice_resolving_during_pause_does_not_stall_resume() {
-        // Before the fix: a slice that confirmed while Paused wrote
-        // last_slice_at=now (past paused_at). resume() then added pause
-        // duration on top, pushing last_slice_at into the future and
-        // saturating `duration_since` to zero — bot would never fire again.
+        // Regression: a slice that resolves during pause must not push
+        // last_slice_at past the resume point. Cadence is now anchored on
+        // dispatch (not confirm), so the confirm itself doesn't move
+        // last_slice_at — but resume() still shifts by pause_duration, and
+        // that shift must not stall the bot.
         let mut bot = TwapBot::new("SOL".into(), TradingSide::Long, 1.0, 4, 4, auth());
         let t0 = Instant::now();
-        // Slice 1 dispatched + paused while still in flight.
+        let (tx, rx) = oneshot::channel();
+        bot.record_slice_dispatched(t0, 1, rx, noop_task());
+        // Slice 1 dispatched, then paused while still in flight.
         bot.pause();
-        // Slice resolves while Paused — last_slice_at should anchor at
-        // paused_at, not at the late confirm time.
+        // Slice resolves while Paused.
+        tx.send(SliceOutcome::Confirmed).unwrap();
+        let _ = bot.try_take_outcome();
         let confirm_at = t0 + Duration::from_millis(500);
         let _ = bot.record_slice_confirmed(confirm_at, "1/4 confirmed");
         let _ = bot.resume();
@@ -712,6 +726,10 @@ mod tests {
     fn touch_last_slice_at_advances_when_some() {
         let mut bot = make_bot();
         let t0 = Instant::now();
+        let (tx, rx) = oneshot::channel();
+        bot.record_slice_dispatched(t0, 1, rx, noop_task());
+        tx.send(SliceOutcome::Confirmed).unwrap();
+        let _ = bot.try_take_outcome();
         let _ = bot.record_slice_confirmed(t0, "1/4");
         // Should NOT be due yet.
         assert!(!bot.slice_due(t0));
