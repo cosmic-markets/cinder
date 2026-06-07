@@ -1,11 +1,13 @@
 //! Stop-market order submission — builds, signs, and dispatches a Phoenix
-//! stop-loss as a **position conditional** order (bracket leg) on a background
-//! tokio task.
+//! **legacy stop-loss** (`PlaceStopLoss`) order on a background tokio task.
 //!
-//! Uses `phoenix_rise::PhoenixTxBuilder::build_bracket_leg_orders`: for a long
-//! position the stop triggers on `LessThan`; for a short, on `GreaterThan`.
-//! If the trader has no conditional-orders account yet, a create-account
-//! instruction is prepended (same flow as the Rise SDK bracket helpers).
+//! Uses `phoenix_rise::PhoenixTxBuilder::build_stop_loss_orders`, the dedicated
+//! stop-loss path that the Rise SDK exposes via `/v1/ix/place-stop-loss-order`:
+//! for a long position the stop triggers on `LessThan`; for a short, on
+//! `GreaterThan`. The trigger is reduce-only and closes the **full** position
+//! at fire-time (the on-chain `PlaceStopLoss` instruction ignores trade size),
+//! so no per-order size is encoded. The instruction creates its own stop-loss
+//! PDA on demand, so no conditional-orders account needs to be created first.
 
 use std::sync::Arc;
 
@@ -30,7 +32,10 @@ pub fn submit_stop_market_order(
     ctx: Arc<TxContext>,
     symbol: String,
     side: TradingSide,
-    num_base_lots: u64,
+    // Retained for call-site compatibility. The legacy `PlaceStopLoss`
+    // instruction always closes the full position at trigger, so a per-order
+    // base-lot size is not encoded.
+    _num_base_lots: u64,
     trigger_price_usd: f64,
     display_size: f64,
     subaccount_index: u8,
@@ -38,10 +43,7 @@ pub fn submit_stop_market_order(
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
-        use phoenix_rise::{
-            get_conditional_orders_address, BracketLeg, BracketLegOrders, BracketLegSize,
-            PhoenixTxBuilder, Side,
-        };
+        use phoenix_rise::{BracketLeg, BracketLegOrders, PhoenixTxBuilder, Side};
 
         let s = strings();
         let side_lbl = match side {
@@ -59,10 +61,7 @@ pub fn submit_stop_market_order(
         };
 
         let bracket = BracketLegOrders {
-            stop_loss: Some(
-                BracketLeg::new(trigger_price_usd)
-                    .with_size(BracketLegSize::BaseLots(num_base_lots)),
-            ),
+            stop_loss: Some(BracketLeg::new(trigger_price_usd)),
             take_profit: None,
         };
 
@@ -77,35 +76,10 @@ pub fn submit_stop_market_order(
         }
         let trader_account = ctx.trader_pda_for_subaccount(subaccount_index);
 
-        let mut prepended_conditional_create = false;
-        let mut ixs: Vec<solana_instruction::Instruction> = Vec::new();
-
-        let cond_pda = get_conditional_orders_address(&trader_account);
-        match ctx.rpc_client.get_account(&cond_pda).await {
-            Ok(acc) if !acc.data.is_empty() => {}
-            _ => {
-                match builder.build_create_conditional_orders_account(
-                    ctx.authority_v2,
-                    ctx.authority_v2,
-                    trader_account,
-                    8,
-                ) {
-                    Ok(mut create_ixs) => {
-                        ixs.append(&mut create_ixs);
-                        prepended_conditional_create = true;
-                    }
-                    Err(e) => {
-                        let _ = tx_status.send(TxStatusMsg::SetStatus {
-                            title: format!("{} — {}", s.tx_failed_build_ix, order_summary),
-                            detail: format!("{}", e),
-                        });
-                        return;
-                    }
-                }
-            }
-        }
-
-        let mut bracket_ixs = match builder.build_bracket_leg_orders(
+        // The legacy `PlaceStopLoss` instruction creates its own stop-loss PDA
+        // on demand (the system program is wired into the ix), so there is no
+        // conditional-orders account to provision beforehand.
+        let ixs = match builder.build_stop_loss_orders(
             ctx.authority_v2,
             trader_account,
             &symbol,
@@ -121,7 +95,6 @@ pub fn submit_stop_market_order(
                 return;
             }
         };
-        ixs.append(&mut bracket_ixs);
 
         let ixs = match wrap_order_ixs(ixs, ctx.authority_v2) {
             Ok(ixs) => ixs,
@@ -134,10 +107,7 @@ pub fn submit_stop_market_order(
             }
         };
 
-        let mut cu_mul = 1u32;
-        if prepended_conditional_create {
-            cu_mul += 1;
-        }
+        let cu_mul = 1u32;
         let mut mapped_ixs = ixs;
         mapped_ixs.extend(build_compute_budget_ixs(cu_mul));
 
