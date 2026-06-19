@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Number of `get_trader` attempts before we give up. A transient HTTP
+/// Number of `get_trader_subaccount` attempts before we give up. A transient HTTP
 /// failure on the first call would otherwise let the user trade through
 /// without ever seeing the referral choice (and Cinder's funding
 /// disclosure). Retries with a short backoff close that gap.
@@ -34,13 +34,17 @@ pub(in crate::tui::runtime) fn spawn_initial_connect_flow(
 
         let mut final_err: Option<String> = None;
         for attempt in 0..GET_TRADER_RETRIES {
-            match http.traders().get_trader(&authority_v2).await {
-                Ok(traders) if traders.is_empty() => {
+            match http
+                .traders()
+                .get_trader_subaccount(&authority_v2, 0, 0)
+                .await
+            {
+                Ok(None) => {
                     let _ = tx_status.send(TxStatusMsg::PromptReferralChoice);
                     final_err = None;
                     break;
                 }
-                Ok(_) => {
+                Ok(Some(_)) => {
                     // Existing Phoenix account — no referral choice
                     // possible (attribution is permanent on Phoenix's
                     // side). Nothing to prompt.
@@ -56,7 +60,7 @@ pub(in crate::tui::runtime) fn spawn_initial_connect_flow(
             }
         }
         if let Some(err) = final_err {
-            warn!(error = %err, "get_trader failed after retries; skipping referral check");
+            warn!(error = %err, "get_trader_subaccount failed after retries; skipping referral check");
         }
 
         let Ok((phoenix_bal, position, all_positions)) = tokio::time::timeout(
