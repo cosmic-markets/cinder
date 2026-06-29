@@ -1,6 +1,37 @@
 //! Market selector modal.
 
+use std::time::Instant;
+
+use crate::tui::state::PriceFlash;
 use super::*;
+
+fn market_price_line(
+    price_str: &str,
+    flash: Option<PriceFlash>,
+    base_style: Style,
+) -> Line<'static> {
+    let now = Instant::now();
+    if let Some(flash) = flash.filter(|f| now < f.until && f.from < price_str.len()) {
+        let (prefix, suffix) = price_str.split_at(flash.from);
+        let flash_color = if flash.up {
+            Color::LightGreen
+        } else {
+            Color::LightRed
+        };
+        Line::from(vec![
+            Span::styled(prefix.to_string(), base_style),
+            Span::styled(
+                suffix.to_string(),
+                Style::default()
+                    .fg(flash_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+        .alignment(Alignment::Right)
+    } else {
+        Line::from(Span::styled(price_str.to_string(), base_style)).alignment(Alignment::Right)
+    }
+}
 
 pub(in crate::tui::ui) fn render_market_selector(
     f: &mut Frame,
@@ -199,8 +230,11 @@ pub(in crate::tui::ui) fn render_market_selector(
             Row::new(vec![
                 Cell::from(cursor_str),
                 Cell::from(sym_str).style(Style::default().fg(FIRE_ORANGE)),
-                Cell::from(Line::from(price_str).alignment(Alignment::Right))
-                    .style(price_cell_style),
+                Cell::from(market_price_line(
+                    &price_str,
+                    m.price_flash,
+                    price_cell_style,
+                )),
                 Cell::from(Line::from(chg_str).alignment(Alignment::Right))
                     .style(Style::default().fg(chg_color)),
                 Cell::from(

@@ -155,6 +155,7 @@ fn build_market_infos(
                     change_24h: 0.0,
                     price_decimals,
                     isolated_only: m.isolated_only,
+                    price_flash: None,
                 },
                 |snap| MarketInfo {
                     symbol: m.symbol.clone(),
@@ -165,6 +166,7 @@ fn build_market_infos(
                     change_24h: snap.change_24h,
                     price_decimals,
                     isolated_only: m.isolated_only,
+                    price_flash: None,
                 },
             )
         })
@@ -333,6 +335,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     change_24h: 0.0,
                     price_decimals: compute_price_decimals(m.tick_size, m.base_lots_decimals),
                     isolated_only: m.isolated_only,
+                    price_flash: None,
                 });
 
                 if let Ok(cfg) = build_spline_config(m) {

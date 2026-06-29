@@ -1,8 +1,22 @@
 //! Market info and market selector state.
 
+use std::time::{Duration, Instant};
+
 use phoenix_rise::types::market::MarketStatsUpdate;
 
+use super::super::format::fmt_price;
 use super::super::math::pct_change_24h;
+
+/// Brief highlight on the trailing digits that changed after a mark-price tick.
+#[derive(Clone, Copy, Debug)]
+pub struct PriceFlash {
+    pub until: Instant,
+    pub up: bool,
+    /// Byte index in the `$…` display string where the highlight begins.
+    pub from: usize,
+}
+
+const PRICE_FLASH_DURATION: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
 pub struct MarketInfo {
@@ -14,6 +28,19 @@ pub struct MarketInfo {
     pub change_24h: f64,
     pub price_decimals: usize,
     pub isolated_only: bool,
+    pub price_flash: Option<PriceFlash>,
+}
+
+/// Longest shared prefix between two formatted price strings (byte length).
+pub fn price_display_prefix_len(old: &str, new: &str) -> usize {
+    let mut len = 0;
+    for (a, b) in old.chars().zip(new.chars()) {
+        if a != b {
+            break;
+        }
+        len += a.len_utf8();
+    }
+    len
 }
 
 pub struct MarketSelector {
@@ -117,10 +144,28 @@ impl MarketSelector {
         let prev_vol = self.markets[idx].volume_24h;
         {
             let m = &mut self.markets[idx];
+            let prev_price = m.price;
+            let decimals = m.price_decimals;
             m.price = update.mark_price;
             m.volume_24h = new_vol;
             m.open_interest_usd = update.open_interest * update.mark_price;
             m.change_24h = pct_change_24h(update.mark_price, update.prev_day_mark_price);
+
+            if prev_price > 0.0
+                && update.mark_price > 0.0
+                && (update.mark_price - prev_price).abs() > f64::EPSILON
+            {
+                let old_str = format!("${}", fmt_price(prev_price, decimals));
+                let new_str = format!("${}", fmt_price(update.mark_price, decimals));
+                let from = price_display_prefix_len(&old_str, &new_str);
+                if from < new_str.len() {
+                    m.price_flash = Some(PriceFlash {
+                        until: Instant::now() + PRICE_FLASH_DURATION,
+                        up: update.mark_price > prev_price,
+                        from,
+                    });
+                }
+            }
         }
 
         if new_vol == prev_vol {
@@ -149,6 +194,7 @@ mod tests {
             change_24h: 0.0,
             price_decimals,
             isolated_only: false,
+            price_flash: None,
         }
     }
 
@@ -246,5 +292,25 @@ mod tests {
         let mut s = MarketSelector::new(vec![make_market("SOL", 1.0, 2)]);
         s.update_stat(&make_stat("BTC", 99.0, 100.0, 50.0, 1.0));
         assert_eq!(s.markets[0].price, 100.0);
+    }
+
+    #[test]
+    fn price_display_prefix_len_highlights_trailing_change() {
+        let old = format!("${}", fmt_price(1000.0, 2));
+        let new = format!("${}", fmt_price(1000.10, 2));
+        let from = price_display_prefix_len(&old, &new);
+        assert_eq!(&old[from..], "00");
+        assert_eq!(&new[from..], "10");
+    }
+
+    #[test]
+    fn update_stat_sets_price_flash_on_tick() {
+        let mut s = MarketSelector::new(vec![make_market("SOL", 1.0, 2)]);
+        s.markets[0].price = 1000.0;
+        s.update_stat(&make_stat("SOL", 1000.10, 1000.0, 1.0, 1.0));
+        let flash = s.markets[0].price_flash.expect("flash");
+        assert!(flash.up);
+        let shown = format!("${}", fmt_price(1000.10, 2));
+        assert_eq!(&shown[flash.from..], "10");
     }
 }
