@@ -11,7 +11,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use phoenix_rise::PhoenixHttpClient;
+use phoenix_rise::api::PhoenixHttpClient;
 use solana_keypair::Keypair;
 use solana_signer::Signer;
 use tokio::sync::mpsc::UnboundedSender;

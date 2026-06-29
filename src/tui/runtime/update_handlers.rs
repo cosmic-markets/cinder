@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
-use phoenix_rise::MarketStatsUpdate;
+use phoenix_rise::types::market::MarketStatsUpdate;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use solana_signer::Signer;

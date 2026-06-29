@@ -4,7 +4,7 @@ use std::io::Stdout;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use phoenix_rise::PhoenixHttpClient;
+use phoenix_rise::api::PhoenixHttpClient;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use solana_signer::Signer;

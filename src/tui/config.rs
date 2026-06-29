@@ -6,8 +6,8 @@ use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
-use phoenix_rise::types::MarketStatus;
-use phoenix_rise::ExchangeMarketConfig;
+use phoenix_rise::types::exchange::ExchangeMarketConfig;
+use phoenix_rise::types::market::MarketStatus;
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey as PhoenixPubkey;

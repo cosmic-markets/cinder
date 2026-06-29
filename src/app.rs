@@ -4,10 +4,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use phoenix_rise::{
+use phoenix_rise::api::{
     PhoenixClient, PhoenixClientEvent, PhoenixClientSubscriptionHandle, PhoenixHttpClient,
     PhoenixSubscription, SubscriptionKey,
 };
+use phoenix_rise::types::exchange::ExchangeMarketConfig;
+use phoenix_rise::types::market::{MarketStatsUpdate, MarketStatus};
 use tracing::warn;
 
 use crate::tui::math::pct_change_24h;
@@ -27,7 +29,7 @@ struct MarketSnapshot {
     change_24h: f64,
 }
 
-fn compute_change(update: &phoenix_rise::MarketStatsUpdate) -> f64 {
+fn compute_change(update: &MarketStatsUpdate) -> f64 {
     pct_change_24h(update.mark_price, update.prev_day_mark_price)
 }
 
@@ -123,15 +125,15 @@ async fn subscribe_market_stats(
     (snapshots, handles)
 }
 
-fn tradable(m: &phoenix_rise::ExchangeMarketConfig) -> bool {
+fn tradable(m: &ExchangeMarketConfig) -> bool {
     matches!(
         m.market_status,
-        phoenix_rise::types::MarketStatus::Active | phoenix_rise::types::MarketStatus::PostOnly
+        MarketStatus::Active | MarketStatus::PostOnly
     )
 }
 
 fn build_market_infos(
-    tradable_markets: &[&phoenix_rise::ExchangeMarketConfig],
+    tradable_markets: &[&ExchangeMarketConfig],
     snapshots: &HashMap<String, MarketSnapshot>,
 ) -> Vec<MarketInfo> {
     let mut infos: Vec<MarketInfo> = tradable_markets
@@ -178,7 +180,7 @@ fn build_market_infos(
 }
 
 fn build_spline_configs(
-    tradable_markets: &[&phoenix_rise::ExchangeMarketConfig],
+    tradable_markets: &[&ExchangeMarketConfig],
 ) -> HashMap<String, SplineConfig> {
     let mut out = HashMap::new();
     for m in tradable_markets {
@@ -212,7 +214,7 @@ async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
     let http = Arc::new(PhoenixHttpClient::new_from_env()?);
     let ws = Arc::new(PhoenixClient::new_from_env().await?);
 
-    let markets = http.get_markets().await?;
+    let markets = http.markets().get_markets().await?;
     let tradable_markets: Vec<_> = markets.iter().filter(|m| tradable(m)).collect();
     let symbols: Vec<String> = tradable_markets.iter().map(|m| m.symbol.clone()).collect();
 
@@ -298,10 +300,10 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         interval.tick().await;
         loop {
             interval.tick().await;
-            let list = match http.get_markets().await {
+            let list = match http.markets().get_markets().await {
                 Ok(v) => v,
                 Err(e) => {
-                    warn!(error = %e, "poll get_markets failed");
+                    warn!(error = %e, "poll markets().get_markets failed");
                     continue;
                 }
             };

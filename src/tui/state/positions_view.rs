@@ -1,7 +1,7 @@
 //! Positions modal state — list of open positions across all markets plus
 //! the cursor used for keyboard navigation.
 
-use phoenix_rise::MarketStatsUpdate;
+use phoenix_rise::types::market::MarketStatsUpdate;
 
 use super::super::trading::{FullPositionInfo, TradingSide};
 

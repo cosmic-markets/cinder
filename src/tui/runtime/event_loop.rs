@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use crossterm::event::{Event, EventStream, KeyEventKind};
 use futures_util::StreamExt;
-use phoenix_rise::PhoenixHttpClient;
+use phoenix_rise::api::PhoenixHttpClient;
 use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey;
@@ -35,7 +35,7 @@ use super::{
 
 pub async fn spawn_spline_poller(
     terminal: TuiTerminal,
-    _ws: &Arc<phoenix_rise::PhoenixClient>,
+    _ws: &Arc<phoenix_rise::api::PhoenixClient>,
     market_list: Vec<MarketInfo>,
     configs: std::collections::HashMap<String, SplineConfig>,
     mut market_rx: tokio::sync::mpsc::Receiver<MarketListUpdate>,

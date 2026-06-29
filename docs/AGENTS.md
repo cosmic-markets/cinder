@@ -13,12 +13,12 @@ This file is the technical map. Use it before reading code so you know which cra
 | Binary entry | `src/main.rs` → `cinder::run()` (`src/lib.rs`, `src/app.rs`) |
 | Library crate name | `cinder` (single binary `cinder`, `publish = false`) |
 | Workspace members | `.` and `crates/phoenix-eternal-types` |
-| Rust edition / MSRV | `2021`, `rust-version = "1.94"` |
+| Rust edition / MSRV | `2021`, `rust-version = "1.96"` |
 | Async runtime | `tokio` (multi-thread, `macros`, `time`, `sync`, `signal`) |
 | TUI stack | `ratatui` 0.30 + `crossterm` 0.29 (event-stream feature) |
 | TLS / WSS | `rustls` 0.23 with the `ring` provider — required by `solana-pubsub-client` ≥ 2.3 (no aws-lc-rs) |
 | Solana wire stack | Pinned `=2.3.13` for `solana-rpc-client`, `solana-pubsub-client`, `solana-rpc-client-types`, `solana-account-decoder-client-types`, `solana-transaction-status-client-types` so HTTP RPC and WSS resolve to one `solana-commitment-config` graph |
-| Phoenix SDK | `phoenix-rise = 0.1.2` (HTTP client, WS client, account types, IX builders, metadata) |
+| Phoenix SDK | `phoenix-rise = 0.2.0` with features `["api", "ws", "sdk", "tx-builder"]` — facade over split crates (`phoenix_rise::{accounts, api, core, ix, math, types}`) |
 | Vendored on-chain types | `phoenix-eternal-types` (Trader / Spline / GTI / inner-instruction event decoder) |
 | Persisted user config | `~/.config/phoenix-cinder/config.json` — `rpc_url`, `language` (`en`/`cn`), `show_clob` |
 | Config defaults RPC fallback | `https://api.mainnet-beta.solana.com` (with a warn log) |
@@ -187,10 +187,28 @@ The `[profile.release]` settings (`codegen-units=1`, `lto=thin`, `opt-level="s"`
 | `RPC_URL` / `SOLANA_RPC_URL` | Runtime | Solana JSON-RPC HTTP endpoint. User config `rpc_url` overrides both. |
 | `RPC_WS_URL` / `SOLANA_WS_URL` | Optional | Derived from the HTTP URL when unset (`http_rpc_url_to_ws`); localhost `:8899` → `:8900`. |
 | `PHX_WALLET_PATH` / `KEYPAIR_PATH` | Optional | Used as wallet candidate after `phoenix.json` and before `~/.config/solana/id.json`. |
-| `RUST_LOG` | Optional | `tracing-subscriber` filter, e.g. `phoenix_sdk=warn,info`. |
+| `RUST_LOG` | Optional | `tracing-subscriber` filter, e.g. `phoenix_rise=warn,info`. |
 | `USERPROFILE` / `HOME` | Optional | Used to expand `~` for config and wallet paths (Windows uses `USERPROFILE`). |
 
 `tui::config::current_user_config()` is cached behind a `OnceLock<RwLock<UserConfig>>`; first access reads `~/.config/phoenix-cinder/config.json`, later writes through `save_user_config` go to disk **and** update the cache. Existing RPC clients keep their URL — only newly-built ones see the change.
+
+---
+
+## Phoenix Rise 0.2.0 import map
+
+`phoenix-rise` 0.2.0 is a facade over split crates. Cinder imports from these modules (not the crate root):
+
+| Use case | Module | Examples used in Cinder |
+| --- | --- | --- |
+| HTTP / WSS / auth / Flight | `phoenix_rise::api` | `PhoenixHttpClient`, `PhoenixWSClient`, `PhoenixClient`, `PhoenixFlightClient`, `PhoenixMetadata`, `TraderKey`, `Trader` |
+| Transaction builders | `phoenix_rise::core` | `PhoenixTxBuilder`, `BracketLeg`, `BracketLegOrders` |
+| Owned account decoders | `phoenix_rise::accounts::owned` | `SplineCollection`, `Orderbook`, `ConditionalOrderCollection`, `StopLossDirection` |
+| Raw instruction builders | `phoenix_rise::ix::prelude` | `create_place_*_ix`, `create_cancel_*_ix`, `LimitOrderParams`, `Side`, `OrderFlags` |
+| Instruction param types | `phoenix_rise::ix::types` | `Direction`, `CancelId`, `IsolatedCollateralFlow` |
+| IX constants / PDA helpers | `phoenix_rise::ix::constants` | `get_conditional_orders_address` (returns `Result`) |
+| HTTP / WS DTOs | `phoenix_rise::types::{market, exchange, trader, trader_http, core}` | `MarketStatsUpdate`, `ExchangeMarketConfig`, `TraderStatePayload`, `TraderView` |
+
+Prefer HTTP route clients (`http.markets()`, `http.exchange()`, `http.invite()`, …) over legacy flat methods where available. Liquidation event parsing still uses vendored `phoenix-eternal-types`, not `phoenix_rise::events`. LiteSVM test fixtures (`phoenix_rise::test_fixture`) and `phoenix_rise::ix::permission` were removed in 0.2.0 — Cinder does not use either.
 
 ---
 
@@ -201,9 +219,9 @@ The `[profile.release]` settings (`codegen-units=1`, `lto=thin`, `opt-level="s"`
                               │                  app::run                    │
                               │ ───────────────────────────────────────────  │
                               │  1. setup_terminal + spawn_splash            │
-                              │  2. PhoenixHttpClient::new_from_env()        │
-                              │     PhoenixClient::new_from_env() (WSS)      │
-                              │  3. http.get_markets()  → tradable filter    │
+                              │  2. phoenix_rise::api::PhoenixHttpClient::new_from_env() │
+                              │     phoenix_rise::api::PhoenixClient::new_from_env()   │
+                              │  3. http.markets().get_markets() → tradable filter     │
                               │  4. subscribe_market_stats(per symbol)       │
                               │       → forwarder tasks → stat_rx (mpsc 128) │
                               │  5. build MarketInfo + SplineConfig per sym  │
@@ -290,7 +308,7 @@ The `[profile.release]` settings (`codegen-units=1`, `lto=thin`, `opt-level="s"`
 
 The crate sees Phoenix Eternal in three flavours, each with a distinct decoder:
 
-1. **Spline collection account** (per market) — the per-market spline-bid/ask account. Decoded by `phoenix_rise::types::accounts::SplineCollection::try_from_account_bytes` in [src/tui/data/spline_book.rs](../src/tui/data/spline_book.rs). The decoder iterates `active_splines()` and emits `(trader_pda, price_start, price_end, density, filled, total_size)` rows. We wrap the call in `catch_unwind` to isolate panicky bytemuck mismatches.
+1. **Spline collection account** (per market) — the per-market spline-bid/ask account. Decoded by `phoenix_rise::accounts::owned::SplineCollection::try_from_account_bytes` in [src/tui/data/spline_book.rs](../src/tui/data/spline_book.rs). The decoder iterates `active_splines()` and emits `(trader_pda, price_start, price_end, density, filled, total_size)` rows. We wrap the call in `catch_unwind` to isolate panicky bytemuck mismatches.
 2. **Phoenix CLOB market account** (the `Orderbook`) — decoded in `data::spline_book::parse_l2_book_from_market_account`. Yields `L2Level { trader_id: u32, price: f64, qty: f64 }`. `trader_id` is a sokoban pointer into the `GlobalTraderIndex`, **not** a wallet pubkey.
 3. **GlobalTraderIndex (GTI) + Trader accounts** — `tui::data::trader_index` builds two maps in one refresh pass:
    - `node_addr (u32) → wallet authority pubkey` — for CLOB rows.
@@ -351,7 +369,7 @@ TradingState (state/trade_panel.rs)
 | Close one / all positions | `submit_close_all_positions` | `tx/positions.rs` |
 | Deposit / withdraw USDC | `submit_funds_transfer` | `tx/funds.rs` |
 
-Stop-market direction mapping (matches Phoenix on-chain semantics):
+Stop-market direction mapping (matches Phoenix on-chain semantics; `phoenix_rise::ix::types::Direction`):
 
 ```
 TradingSide::Long  → Direction::LessThan     (long stops below)
@@ -380,8 +398,8 @@ Status messages are localized through `tui::i18n::strings()`. New status strings
 
 - Primary `RpcClient` at the configured URL with `CommitmentConfig::processed()`.
 - `secondary_send_rpc`: an extra `Arc<RpcClient>` pointed at `https://api.mainnet-beta.solana.com` purely for `send_transaction` fan-out, **only** when the primary isn't already that URL (so we don't double-send to the same host). Confirmation always listens on the primary.
-- `phoenix_rise::PhoenixMetadata` (cached `getExchange` result) and `MarketAddrs` (orderbook, spline, perp_asset_map, GTI vec, ATB vec) for the active market.
-- `authority_v2` and `trader_pda_v2` (derived via `TraderKey::derive_pda`); `trader_registered: AtomicBool` is set true once an account exists at the PDA.
+- `phoenix_rise::api::PhoenixMetadata` (cached `exchange().get_exchange()` result) and `MarketAddrs` (orderbook, spline, perp_asset_map, GTI vec, ATB vec) for the active market.
+- `authority_v2` and `trader_pda_v2` (derived via `phoenix_rise::api::TraderKey::derive_pda`); `trader_registered: AtomicBool` is set true once an account exists at the PDA.
 - `blockhash_pool: Mutex<VecDeque<[u8; 32]>>` — capped at 30 entries, refreshed by a background task. `pop_blockhash` consumes from the back (newest = most validity); when empty, falls back to a 5 s-bounded HTTP fetch (`BLOCKHASH_FETCH_TIMEOUT`). Each blockhash is consumed exactly once.
 - `sig_pubsub: Mutex<Option<Arc<PubsubClient>>>` — a single shared pubsub client used by every order's `signatureSubscribe`, so we don't open one WSS per tx.
 

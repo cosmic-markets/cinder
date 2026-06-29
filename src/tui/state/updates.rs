@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use phoenix_rise::MarketStatsUpdate;
+use phoenix_rise::types::market::MarketStatsUpdate;
 
 use super::super::config::SplineConfig;
 use super::super::trading::{FullPositionInfo, PositionInfo};

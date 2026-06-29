@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
-use phoenix_rise::{Trader, TraderKey};
+use phoenix_rise::api::{PhoenixMetadata, Trader, TraderKey};
 
 /// Shared wallet `Trader` mirror with a hydration flag. Written by the
 /// trader-state WS task once it applies its first update; read by isolated-
@@ -91,11 +91,11 @@ pub struct TxContext {
     pub secondary_send_rpc: Option<Arc<solana_rpc_client::nonblocking::rpc_client::RpcClient>>,
     /// Phoenix HTTP SDK client. Kept on the context as a connection-pool
     /// holder even though signed-order construction now builds instructions
-    /// locally via `PhoenixTxBuilder`; future flows (e.g. metadata refresh,
+    /// locally via `phoenix_rise::core::PhoenixTxBuilder`; future flows (e.g. metadata refresh,
     /// account-info helpers) reuse this handle instead of opening a second.
     #[allow(dead_code)]
-    pub http_client: Arc<phoenix_rise::PhoenixHttpClient>,
-    pub metadata: phoenix_rise::PhoenixMetadata,
+    pub http_client: Arc<phoenix_rise::api::PhoenixHttpClient>,
+    pub metadata: PhoenixMetadata,
     pub authority_v2: solana_pubkey::Pubkey,
     pub trader_pda_v2: solana_pubkey::Pubkey,
     pub market_addrs: MarketAddrs,
@@ -126,7 +126,7 @@ impl TxContext {
     pub async fn new(
         keypair: &Keypair,
         symbol: &str,
-        http: Arc<phoenix_rise::PhoenixHttpClient>,
+        http: Arc<phoenix_rise::api::PhoenixHttpClient>,
         shared_trader: Arc<RwLock<TraderMirror>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -143,8 +143,8 @@ impl TxContext {
         };
         let rpc_client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::processed());
 
-        let exchange = http.get_exchange().await?;
-        let metadata = phoenix_rise::PhoenixMetadata::new(exchange.into());
+        let exchange = http.exchange().get_exchange().await?;
+        let metadata = PhoenixMetadata::new(exchange.into());
 
         let keys = metadata.keys();
         let market = metadata
@@ -171,7 +171,7 @@ impl TxContext {
         };
 
         let authority_v2 = solana_pubkey::Pubkey::from_str(&keypair.pubkey().to_string())?;
-        let trader_pda_v2 = phoenix_rise::TraderKey::derive_pda(&authority_v2, 0, 0);
+        let trader_pda_v2 = TraderKey::derive_pda(&authority_v2, 0, 0);
 
         Ok(Self {
             rpc_client,
@@ -257,7 +257,7 @@ impl TxContext {
     }
 
     pub fn trader_pda_for_subaccount(&self, subaccount_index: u8) -> solana_pubkey::Pubkey {
-        phoenix_rise::TraderKey::derive_pda(&self.authority_v2, 0, subaccount_index)
+        TraderKey::derive_pda(&self.authority_v2, 0, subaccount_index)
     }
 
     pub fn market_isolated_only(&self, symbol: &str) -> bool {

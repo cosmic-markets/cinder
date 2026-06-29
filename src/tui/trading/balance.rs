@@ -1,14 +1,15 @@
 //! Phoenix HTTP snapshot of collateral balance and open positions for a
 //! trader authority.
 
-use phoenix_rise::{PhoenixHttpClient, TraderStateResponse};
+use phoenix_rise::api::{PhoenixHttpClient, PhoenixHttpError};
+use phoenix_rise::types::trader_http::{TraderStateResponse, TraderView};
 
 use super::{FullPositionInfo, PositionInfo, TradingSide};
 
 async fn fetch_trader_views(
     http: &PhoenixHttpClient,
     authority_v2: &solana_pubkey::Pubkey,
-) -> Result<Vec<phoenix_rise::TraderView>, phoenix_rise::PhoenixHttpError> {
+) -> Result<Vec<TraderView>, PhoenixHttpError> {
     http.get_json(&format!("/trader/{authority_v2}/state?pdaIndex=0"))
         .await
         .map(|resp: TraderStateResponse| resp.traders)
@@ -67,7 +68,7 @@ pub async fn fetch_phoenix_balance_and_position(
 }
 
 fn parse_position(
-    p: &phoenix_rise::types::TraderPositionView,
+    p: &phoenix_rise::types::trader_http::TraderPositionView,
     collateral: f64,
     subaccount_index: u8,
 ) -> Option<FullPositionInfo> {

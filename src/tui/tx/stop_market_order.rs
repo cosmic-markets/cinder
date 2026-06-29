@@ -1,7 +1,7 @@
 //! Stop-market order submission — builds, signs, and dispatches a Phoenix
 //! **legacy stop-loss** (`PlaceStopLoss`) order on a background tokio task.
 //!
-//! Uses `phoenix_rise::PhoenixTxBuilder::build_stop_loss_orders`, the dedicated
+//! Uses `phoenix_rise::core::PhoenixTxBuilder::build_stop_loss_orders`, the dedicated
 //! stop-loss path that the Rise SDK exposes via `/v1/ix/place-stop-loss-order`:
 //! for a long position the stop triggers on `LessThan`; for a short, on
 //! `GreaterThan`. The trigger is reduce-only and closes the **full** position
@@ -43,7 +43,8 @@ pub fn submit_stop_market_order(
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
-        use phoenix_rise::{BracketLeg, BracketLegOrders, PhoenixTxBuilder, Side};
+        use phoenix_rise::core::{BracketLeg, BracketLegOrders, PhoenixTxBuilder};
+        use phoenix_rise::ix::types::Side;
 
         let s = strings();
         let side_lbl = match side {

@@ -1,6 +1,6 @@
 //! Market info and market selector state.
 
-use phoenix_rise::MarketStatsUpdate;
+use phoenix_rise::types::market::MarketStatsUpdate;
 
 use super::super::math::pct_change_24h;
 
