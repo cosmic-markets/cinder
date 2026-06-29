@@ -18,7 +18,7 @@ use tracing::warn;
 /// is unreachable and as the env/default fallback.
 pub const DEFAULT_PUBLIC_SOLANA_RPC_URL: &str = "https://api.mainnet-beta.solana.com";
 
-const RPC_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+const RPC_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 
 static RPC_SESSION_FALLBACK: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 
