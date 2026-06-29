@@ -4,7 +4,7 @@
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use phoenix_rise::PhoenixFlightClient;
+use phoenix_rise::api::PhoenixFlightClient;
 use solana_instruction::Instruction;
 use solana_pubkey::Pubkey;
 

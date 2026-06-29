@@ -1,4 +1,4 @@
-//! USDC ↔ Phoenix token deposit and withdraw using `PhoenixTxBuilder` fund
+//! USDC ↔ Phoenix token deposit and withdraw using `phoenix_rise::core::PhoenixTxBuilder` fund
 //! builders (`build_deposit_funds` / `build_withdraw_funds`).
 
 use std::sync::Arc;
@@ -26,7 +26,7 @@ pub fn submit_funds_transfer(
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
-        use phoenix_rise::PhoenixTxBuilder;
+        use phoenix_rise::core::PhoenixTxBuilder;
 
         let s = strings();
         let amount = truncate_balance(amount);

@@ -102,8 +102,8 @@ pub fn submit_market_order(
         // Take ownership of the sender so we can move it into the helpers
         // exactly once at the path that finally resolves.
         let mut outcome_tx = outcome_tx;
-        use phoenix_rise::ix::{create_place_market_order_ix, MarketOrderParams, OrderFlags, Side};
-        use phoenix_rise::PhoenixTxBuilder;
+        use phoenix_rise::core::PhoenixTxBuilder;
+        use phoenix_rise::ix::prelude::{create_place_market_order_ix, MarketOrderParams, OrderFlags, Side};
 
         let s = strings();
         let side_lbl = match side {

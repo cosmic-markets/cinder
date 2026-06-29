@@ -1,7 +1,7 @@
 //! Decode on-chain spline collection bytes into row-oriented book state.
 
-use phoenix_rise::types::accounts::{
-    FifoOrderId, Orderbook, OrderbookRestingOrder, SplineCollection,
+use phoenix_rise::accounts::owned::{
+    FifoOrderId, Orderbook, OrderbookRestingOrder, SplineCollection, TickRegion,
 };
 use solana_pubkey::Pubkey as PhoenixPubkey;
 
@@ -54,7 +54,7 @@ fn load_collection(data: &[u8]) -> Option<SplineCollection> {
 
 #[inline]
 fn region_is_active(
-    region: &phoenix_rise::types::accounts::TickRegion,
+    region: &TickRegion,
     current_slot: u64,
     last_updated_slot: u64,
 ) -> bool {
@@ -97,7 +97,7 @@ pub fn parse_spline_sequence(data: &[u8]) -> Option<(u64, u64)> {
 /// `price_at_offset` builds the displayed price for a tick offset (mid minus
 /// for bids, mid plus for asks).
 fn expand_region<F>(
-    region: &phoenix_rise::types::accounts::TickRegion,
+    region: &TickRegion,
     trader: solana_pubkey::Pubkey,
     bld: i8,
     price_at_offset: F,
@@ -497,7 +497,7 @@ pub fn parse_l2_book_from_market_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use phoenix_rise::types::accounts::TraderPositionId;
+    use phoenix_rise::accounts::owned::TraderPositionId;
     use solana_pubkey::Pubkey as PhoenixPubkey;
 
     fn resting(trader_id: u32, lots: u64) -> OrderbookRestingOrder {

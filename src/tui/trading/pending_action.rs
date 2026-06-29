@@ -32,7 +32,7 @@ pub enum PendingAction {
         /// direction), not the regular `cancel_orders_by_id` path.
         is_stop_loss: bool,
         conditional_order_index: Option<u8>,
-        conditional_trigger_direction: Option<phoenix_rise::Direction>,
+        conditional_trigger_direction: Option<phoenix_rise::ix::types::Direction>,
     },
     /// Cancel every open order across every market the trader has working.
     CancelAllOrders,

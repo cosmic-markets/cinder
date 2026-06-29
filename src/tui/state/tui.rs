@@ -20,12 +20,12 @@ use super::twap_bots_view::TwapsView;
 
 pub struct TuiState {
     pub price_history: VecDeque<f64>,
-    pub market_stats: Option<phoenix_rise::MarketStatsUpdate>,
+    pub market_stats: Option<phoenix_rise::types::market::MarketStatsUpdate>,
     /// Most-recent `MarketStatsUpdate` per symbol. Populated for every market
     /// the stats stream emits, not just the active one, so a market switch can
     /// seed the header instantly instead of flashing "Waiting for market
     /// data…" until the next push for the new market arrives.
-    pub market_stats_cache: HashMap<String, phoenix_rise::MarketStatsUpdate>,
+    pub market_stats_cache: HashMap<String, phoenix_rise::types::market::MarketStatsUpdate>,
     /// Last Phoenix CLOB L2 snapshot (bids best-first, asks best-first) for the
     /// active market. Poller filters by symbol before writing these, so
     /// stale rows don't appear during market switches.

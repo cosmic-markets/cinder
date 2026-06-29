@@ -30,9 +30,9 @@ pub struct CancelOrderEntry {
     pub price_ticks: u64,
     pub order_sequence_number: u64,
     pub is_stop_loss: bool,
-    pub stop_direction: Option<phoenix_rise::Direction>,
+    pub stop_direction: Option<phoenix_rise::ix::types::Direction>,
     pub conditional_order_index: Option<u8>,
-    pub conditional_trigger_direction: Option<phoenix_rise::Direction>,
+    pub conditional_trigger_direction: Option<phoenix_rise::ix::types::Direction>,
 }
 
 /// One IX per symbol fits at most this many orders; mirrors
@@ -59,12 +59,11 @@ pub fn submit_cancel_orders(
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
-        use phoenix_rise::ix::{
+        use phoenix_rise::ix::prelude::{
             create_cancel_conditional_order_ix, create_cancel_orders_by_id_ix,
             create_cancel_stop_loss_ix, CancelConditionalOrderParams, CancelOrdersByIdParams,
-            CancelStopLossParams,
+            CancelStopLossParams, CancelId, Direction,
         };
-        use phoenix_rise::CancelId;
 
         let s = strings();
 
@@ -137,8 +136,8 @@ pub fn submit_cancel_orders(
                 .position_authority(ctx.authority_v2)
                 .orderbook(orderbook)
                 .conditional_order_index(order_index)
-                .disable_first(matches!(direction, phoenix_rise::Direction::GreaterThan))
-                .disable_second(matches!(direction, phoenix_rise::Direction::LessThan))
+                .disable_first(matches!(direction, Direction::GreaterThan))
+                .disable_second(matches!(direction, Direction::LessThan))
                 .build()
             {
                 Ok(p) => p,

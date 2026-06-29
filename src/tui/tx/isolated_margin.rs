@@ -1,6 +1,6 @@
 //! Helpers for automatic isolated-margin collateral transfers.
 
-use phoenix_rise::IsolatedCollateralFlow;
+use phoenix_rise::ix::types::IsolatedCollateralFlow;
 
 const QUOTE_LOTS_PER_USDC: f64 = 1_000_000.0;
 const COLLATERAL_BUFFER: f64 = 1.10;

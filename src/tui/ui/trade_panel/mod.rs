@@ -1,6 +1,6 @@
 //! Trading panel widget (order side/type/size, position summary).
 
-use phoenix_rise::MarketStatsUpdate;
+use phoenix_rise::types::market::MarketStatsUpdate;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

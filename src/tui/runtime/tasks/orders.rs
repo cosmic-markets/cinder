@@ -19,12 +19,12 @@ fn trigger_side_to_trading_side(side: StopLossTradeSide) -> TradingSide {
     }
 }
 
-fn legacy_stop_trigger_direction(side: phoenix_rise::types::Side) -> Direction {
+fn legacy_stop_trigger_direction(side: phoenix_rise::types::core::Side) -> Direction {
     // WS trigger.side is execution side when the stop fires (Bid closes short, Ask closes long).
     // cancel_stop_loss is keyed by trigger direction (LessThan for long SL, GreaterThan for short).
     match side {
-        phoenix_rise::types::Side::Bid => Direction::GreaterThan,
-        phoenix_rise::types::Side::Ask => Direction::LessThan,
+        phoenix_rise::types::core::Side::Bid => Direction::GreaterThan,
+        phoenix_rise::types::core::Side::Ask => Direction::LessThan,
     }
 }
 
@@ -146,7 +146,13 @@ async fn fetch_conditional_order_rows_for_subaccounts(
     let mut rows = Vec::new();
     for subaccount_index in subaccount_indexes {
         let key = TraderKey::new_with_idx(authority, 0, subaccount_index);
-        let address = get_conditional_orders_address(&key.pda());
+        let address = match get_conditional_orders_address(&key.pda()) {
+            Ok(address) => address,
+            Err(err) => {
+                warn!(error = %err, subaccount_index, "failed to derive conditional-orders address");
+                continue;
+            }
+        };
         rows.extend(
             fetch_conditional_order_rows(rpc, &address, asset_symbols, subaccount_index).await,
         );
@@ -197,8 +203,8 @@ fn build_order_rows(
             .parse()
             .unwrap_or(0);
         let side = match sl.trigger.side {
-            phoenix_rise::types::Side::Bid => TradingSide::Long,
-            phoenix_rise::types::Side::Ask => TradingSide::Short,
+            phoenix_rise::types::core::Side::Bid => TradingSide::Long,
+            phoenix_rise::types::core::Side::Ask => TradingSide::Short,
         };
         orders.push(OrderInfo {
             symbol: symbol.clone(),

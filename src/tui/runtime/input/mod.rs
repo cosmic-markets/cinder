@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use phoenix_rise::PhoenixHttpClient;
+use phoenix_rise::api::PhoenixHttpClient;
 
 use super::super::config::{
     default_wallet_path, resolve_wallet_modal_input, save_user_config, SplineConfig,

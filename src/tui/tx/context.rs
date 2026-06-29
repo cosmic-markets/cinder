@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
-use phoenix_rise::{Trader, TraderKey};
+use phoenix_rise::api::{PhoenixMetadata, Trader, TraderKey};
 
 /// Shared wallet `Trader` mirror with a hydration flag. Written by the
 /// trader-state WS task once it applies its first update; read by isolated-
@@ -39,7 +39,10 @@ use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_signer::Signer;
 use tracing::warn;
 
-use super::super::config::{current_user_config, rpc_http_url_from_env, ws_url_from_env};
+use super::super::config::{
+    current_user_config, is_public_mainnet_rpc, rpc_http_url_from_env, ws_url_from_env,
+    DEFAULT_PUBLIC_SOLANA_RPC_URL,
+};
 
 /// Derive the canonical spline-collection PDA from the market account.
 ///
@@ -68,21 +71,9 @@ fn derive_spline_collection(
     Ok(derived)
 }
 
-/// Public Solana mainnet-beta RPC. When the user opts in (config setting
-/// `fanout_public_rpc`, default on), every signed send is fanned out here in
-/// addition to the configured primary RPC — unless the primary already is
-/// this URL, or fan-out is disabled.
-const PUBLIC_SOLANA_RPC_URL: &str = "https://api.mainnet-beta.solana.com";
-
 /// Bound transaction preparation on slow/stalled RPCs. Without this, an empty
 /// warm blockhash pool can leave the UI stuck at "Broadcasting ..." forever.
 pub(super) const BLOCKHASH_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Returns true when `url` points at the public mainnet-beta endpoint, so we
-/// avoid double-sending to the same host.
-pub(super) fn is_public_mainnet_rpc(url: &str) -> bool {
-    url.contains("api.mainnet-beta.solana.com")
-}
 
 pub struct MarketAddrs {
     pub perp_asset_map: solana_pubkey::Pubkey,
@@ -100,11 +91,11 @@ pub struct TxContext {
     pub secondary_send_rpc: Option<Arc<solana_rpc_client::nonblocking::rpc_client::RpcClient>>,
     /// Phoenix HTTP SDK client. Kept on the context as a connection-pool
     /// holder even though signed-order construction now builds instructions
-    /// locally via `PhoenixTxBuilder`; future flows (e.g. metadata refresh,
+    /// locally via `phoenix_rise::core::PhoenixTxBuilder`; future flows (e.g. metadata refresh,
     /// account-info helpers) reuse this handle instead of opening a second.
     #[allow(dead_code)]
-    pub http_client: Arc<phoenix_rise::PhoenixHttpClient>,
-    pub metadata: phoenix_rise::PhoenixMetadata,
+    pub http_client: Arc<phoenix_rise::api::PhoenixHttpClient>,
+    pub metadata: PhoenixMetadata,
     pub authority_v2: solana_pubkey::Pubkey,
     pub trader_pda_v2: solana_pubkey::Pubkey,
     pub market_addrs: MarketAddrs,
@@ -135,7 +126,7 @@ impl TxContext {
     pub async fn new(
         keypair: &Keypair,
         symbol: &str,
-        http: Arc<phoenix_rise::PhoenixHttpClient>,
+        http: Arc<phoenix_rise::api::PhoenixHttpClient>,
         shared_trader: Arc<RwLock<TraderMirror>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -146,14 +137,14 @@ impl TxContext {
             None
         } else {
             Some(Arc::new(RpcClient::new_with_commitment(
-                PUBLIC_SOLANA_RPC_URL.to_string(),
+                DEFAULT_PUBLIC_SOLANA_RPC_URL.to_string(),
                 CommitmentConfig::processed(),
             )))
         };
         let rpc_client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::processed());
 
-        let exchange = http.get_exchange().await?;
-        let metadata = phoenix_rise::PhoenixMetadata::new(exchange.into());
+        let exchange = http.exchange().get_exchange().await?;
+        let metadata = PhoenixMetadata::new(exchange.into());
 
         let keys = metadata.keys();
         let market = metadata
@@ -180,7 +171,7 @@ impl TxContext {
         };
 
         let authority_v2 = solana_pubkey::Pubkey::from_str(&keypair.pubkey().to_string())?;
-        let trader_pda_v2 = phoenix_rise::TraderKey::derive_pda(&authority_v2, 0, 0);
+        let trader_pda_v2 = TraderKey::derive_pda(&authority_v2, 0, 0);
 
         Ok(Self {
             rpc_client,
@@ -266,7 +257,7 @@ impl TxContext {
     }
 
     pub fn trader_pda_for_subaccount(&self, subaccount_index: u8) -> solana_pubkey::Pubkey {
-        phoenix_rise::TraderKey::derive_pda(&self.authority_v2, 0, subaccount_index)
+        TraderKey::derive_pda(&self.authority_v2, 0, subaccount_index)
     }
 
     pub fn market_isolated_only(&self, symbol: &str) -> bool {

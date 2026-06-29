@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
-use phoenix_rise::PhoenixHttpClient;
+use phoenix_rise::api::PhoenixHttpClient;
 
 use super::super::config::{current_user_config, SplineConfig};
 use super::super::state::TuiState;

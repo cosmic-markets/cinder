@@ -9,16 +9,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use phoenix_rise::accounts::{
+use phoenix_rise::accounts::owned::{
     ConditionalOrderCollection, ConditionalOrderTrigger, StopLossDirection, StopLossOrderKind,
     StopLossTradeSide,
 };
-use phoenix_rise::types::{
+use phoenix_rise::api::{PhoenixHttpClient, PhoenixWSClient, Trader, TraderKey};
+use phoenix_rise::ix::constants::get_conditional_orders_address;
+use phoenix_rise::ix::types::Direction;
+use phoenix_rise::types::trader::{
     TraderStatePayload, TraderStateRowChangeKind, TraderStateStopLossTrigger,
-};
-use phoenix_rise::{
-    get_conditional_orders_address, Direction, PhoenixHttpClient, PhoenixWSClient, Trader,
-    TraderKey,
 };
 use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_commitment_config::CommitmentConfig;

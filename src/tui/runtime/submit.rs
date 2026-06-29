@@ -14,17 +14,17 @@ use super::super::tx::{
 use super::input::num_base_lots_for_close;
 
 /// Map position side to on-chain stop trigger direction (long SL → LessThan).
-fn stop_direction_for(side: TradingSide) -> phoenix_rise::Direction {
+fn stop_direction_for(side: TradingSide) -> phoenix_rise::ix::types::Direction {
     match side {
-        TradingSide::Long => phoenix_rise::Direction::LessThan,
-        TradingSide::Short => phoenix_rise::Direction::GreaterThan,
+        TradingSide::Long => phoenix_rise::ix::types::Direction::LessThan,
+        TradingSide::Short => phoenix_rise::ix::types::Direction::GreaterThan,
     }
 }
 
 fn stop_cancel_direction(
     side: TradingSide,
-    conditional_trigger_direction: Option<phoenix_rise::Direction>,
-) -> Option<phoenix_rise::Direction> {
+    conditional_trigger_direction: Option<phoenix_rise::ix::types::Direction>,
+) -> Option<phoenix_rise::ix::types::Direction> {
     conditional_trigger_direction.or_else(|| Some(stop_direction_for(side)))
 }
 
@@ -538,7 +538,7 @@ pub(super) fn cancel_message(
 mod tests {
     use super::*;
     use crate::tui::trading::TradingSide;
-    use phoenix_rise::Direction;
+    use phoenix_rise::ix::types::Direction;
 
     #[test]
     fn stop_cancel_direction_prefers_stored_trigger() {
