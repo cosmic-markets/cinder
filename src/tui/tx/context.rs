@@ -39,7 +39,10 @@ use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_signer::Signer;
 use tracing::warn;
 
-use super::super::config::{current_user_config, rpc_http_url_from_env, ws_url_from_env};
+use super::super::config::{
+    current_user_config, is_public_mainnet_rpc, rpc_http_url_from_env, ws_url_from_env,
+    DEFAULT_PUBLIC_SOLANA_RPC_URL,
+};
 
 /// Derive the canonical spline-collection PDA from the market account.
 ///
@@ -68,21 +71,9 @@ fn derive_spline_collection(
     Ok(derived)
 }
 
-/// Public Solana mainnet-beta RPC. When the user opts in (config setting
-/// `fanout_public_rpc`, default on), every signed send is fanned out here in
-/// addition to the configured primary RPC — unless the primary already is
-/// this URL, or fan-out is disabled.
-const PUBLIC_SOLANA_RPC_URL: &str = "https://api.mainnet-beta.solana.com";
-
 /// Bound transaction preparation on slow/stalled RPCs. Without this, an empty
 /// warm blockhash pool can leave the UI stuck at "Broadcasting ..." forever.
 pub(super) const BLOCKHASH_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Returns true when `url` points at the public mainnet-beta endpoint, so we
-/// avoid double-sending to the same host.
-pub(super) fn is_public_mainnet_rpc(url: &str) -> bool {
-    url.contains("api.mainnet-beta.solana.com")
-}
 
 pub struct MarketAddrs {
     pub perp_asset_map: solana_pubkey::Pubkey,
@@ -146,7 +137,7 @@ impl TxContext {
             None
         } else {
             Some(Arc::new(RpcClient::new_with_commitment(
-                PUBLIC_SOLANA_RPC_URL.to_string(),
+                DEFAULT_PUBLIC_SOLANA_RPC_URL.to_string(),
                 CommitmentConfig::processed(),
             )))
         };

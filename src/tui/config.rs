@@ -3,13 +3,95 @@
 use std::env;
 use std::str::FromStr;
 use std::sync::{OnceLock, RwLock};
+use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
 use phoenix_rise::types::MarketStatus;
 use phoenix_rise::ExchangeMarketConfig;
+use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey as PhoenixPubkey;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tracing::warn;
+
+/// Public Solana mainnet-beta RPC used when a configured private/paid endpoint
+/// is unreachable and as the env/default fallback.
+pub const DEFAULT_PUBLIC_SOLANA_RPC_URL: &str = "https://api.mainnet-beta.solana.com";
+
+const RPC_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
+static RPC_SESSION_FALLBACK: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+
+fn rpc_session_fallback_lock() -> &'static RwLock<Option<String>> {
+    RPC_SESSION_FALLBACK.get_or_init(|| RwLock::new(None))
+}
+
+/// Clears any in-memory RPC fallback activated for this process. Called when
+/// the user saves a new RPC URL so the fresh setting is tried first.
+pub fn clear_rpc_session_fallback() {
+    if let Ok(mut w) = rpc_session_fallback_lock().write() {
+        *w = None;
+    }
+}
+
+fn active_rpc_session_fallback() -> Option<String> {
+    rpc_session_fallback_lock()
+        .read()
+        .ok()
+        .and_then(|g| g.clone())
+}
+
+fn set_rpc_session_fallback(url: String) {
+    if let Ok(mut w) = rpc_session_fallback_lock().write() {
+        *w = Some(url);
+    }
+}
+
+/// Returns true when `url` points at the public mainnet-beta endpoint.
+pub fn is_public_mainnet_rpc(url: &str) -> bool {
+    url.contains("api.mainnet-beta.solana.com")
+}
+
+async fn probe_rpc_reachable(url: &str, timeout: Duration) -> bool {
+    let url = url.trim();
+    if url.is_empty() {
+        return false;
+    }
+    let client = RpcClient::new_with_commitment(url.to_string(), CommitmentConfig::processed());
+    matches!(
+        tokio::time::timeout(timeout, client.get_version()).await,
+        Ok(Ok(_))
+    )
+}
+
+/// Probes the configured RPC and, when it is unreachable and not already the
+/// public mainnet endpoint, switches this process to the public fallback for
+/// all subsequent `rpc_http_url_from_env()` reads. Returns `true` when the
+/// fallback was activated.
+pub async fn establish_rpc_with_fallback() -> bool {
+    let primary = resolve_rpc_http_url();
+    if is_public_mainnet_rpc(&primary) {
+        clear_rpc_session_fallback();
+        return false;
+    }
+    if probe_rpc_reachable(&primary, RPC_PROBE_TIMEOUT).await {
+        clear_rpc_session_fallback();
+        return false;
+    }
+    warn!(
+        primary = %primary,
+        fallback = %DEFAULT_PUBLIC_SOLANA_RPC_URL,
+        "configured RPC unreachable; falling back to public mainnet-beta"
+    );
+    if probe_rpc_reachable(DEFAULT_PUBLIC_SOLANA_RPC_URL, RPC_PROBE_TIMEOUT).await {
+        set_rpc_session_fallback(DEFAULT_PUBLIC_SOLANA_RPC_URL.to_string());
+        true
+    } else {
+        warn!("public mainnet-beta RPC also unreachable; staying on configured URL");
+        clear_rpc_session_fallback();
+        false
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Language {
@@ -411,6 +493,7 @@ pub fn current_user_config() -> UserConfig {
 /// Note: clients/streams established with a prior RPC URL keep that URL —
 /// changes fully take effect after a restart.
 pub fn save_user_config(cfg: &UserConfig) -> std::io::Result<()> {
+    let prev_rpc = current_user_config().rpc_url.clone();
     std::fs::create_dir_all(config_dir_path())?;
     let value = serde_json::json!({
         "rpc_url": cfg.rpc_url,
@@ -427,6 +510,9 @@ pub fn save_user_config(cfg: &UserConfig) -> std::io::Result<()> {
     std::fs::write(user_config_path(), content)?;
     if let Ok(mut w) = user_config_cache().write() {
         *w = cfg.clone();
+    }
+    if cfg.rpc_url != prev_rpc {
+        clear_rpc_session_fallback();
     }
     Ok(())
 }
@@ -453,9 +539,7 @@ pub struct SplineConfig {
     pub size_decimals: usize,
 }
 
-/// Reads the main HTTP RPC URL, preferring the user config file, then `RPC_URL`
-/// / `SOLANA_RPC_URL` env vars, falling back to Mainnet Beta.
-pub fn rpc_http_url_from_env() -> String {
+fn resolve_rpc_http_url() -> String {
     let cfg = current_user_config();
     if !cfg.rpc_url.trim().is_empty() {
         return cfg.rpc_url;
@@ -464,11 +548,23 @@ pub fn rpc_http_url_from_env() -> String {
         .or_else(|_| env::var("SOLANA_RPC_URL"))
         .unwrap_or_else(|_| {
             warn!(
-                "Using default mainnet-beta RPC_URL (https://api.mainnet-beta.solana.com) because \
+                "Using default mainnet-beta RPC_URL ({DEFAULT_PUBLIC_SOLANA_RPC_URL}) because \
                  neither RPC_URL nor SOLANA_RPC_URL is set."
             );
-            "https://api.mainnet-beta.solana.com".to_string()
+            DEFAULT_PUBLIC_SOLANA_RPC_URL.to_string()
         })
+}
+
+/// Reads the main HTTP RPC URL, preferring the user config file, then `RPC_URL`
+/// / `SOLANA_RPC_URL` env vars, falling back to Mainnet Beta. When startup
+/// probing finds the configured endpoint unreachable, a session-only override
+/// to the public mainnet endpoint is returned instead (the saved config is
+/// left unchanged).
+pub fn rpc_http_url_from_env() -> String {
+    if let Some(fallback) = active_rpc_session_fallback() {
+        return fallback;
+    }
+    resolve_rpc_http_url()
 }
 
 /// Reads the main WebSocket JSON-RPC URL from the environment, or derives it
@@ -650,6 +746,15 @@ mod tests {
             Language::English.toggle().toggle().toggle().toggle(),
             Language::English
         );
+    }
+
+    #[test]
+    fn is_public_mainnet_rpc_detects_default_endpoint() {
+        assert!(is_public_mainnet_rpc(DEFAULT_PUBLIC_SOLANA_RPC_URL));
+        assert!(is_public_mainnet_rpc(
+            "https://api.mainnet-beta.solana.com/?key=abc"
+        ));
+        assert!(!is_public_mainnet_rpc("https://rpc.helius.xyz/?api-key=dead"));
     }
 
     #[test]

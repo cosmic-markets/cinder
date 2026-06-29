@@ -19,7 +19,8 @@ use tokio::sync::watch;
 use tracing::warn;
 
 use super::super::config::{
-    current_user_config, rpc_http_url_from_env, ws_url_from_env, SplineConfig,
+    current_user_config, establish_rpc_with_fallback, rpc_http_url_from_env, ws_url_from_env,
+    SplineConfig,
 };
 use super::super::data::{spawn_gti_loader, GtiHandle};
 use super::super::state::{
@@ -73,6 +74,7 @@ pub async fn spawn_spline_poller(
         } else {
             tokio::spawn(async {})
         };
+        establish_rpc_with_fallback().await;
         let mut ws_url = ws_url_from_env();
         let mut rpc_host = ui::rpc_host_from_urlish(&rpc_http_url_from_env());
         let mut events = EventStream::new();
@@ -120,11 +122,33 @@ pub async fn spawn_spline_poller(
         let mut pending_full_reconnect = false;
         let mut awaiting_first_tx_ctx = false;
 
+        redraw_tui_force(&mut terminal, &state, &cfg, &rpc_host);
+
+        const PUBSUB_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
         'outer: loop {
-            let pubsub = match PubsubClient::new(&ws_url).await {
-                Ok(c) => c,
-                Err(e) => {
+            let pubsub = match tokio::time::timeout(
+                PUBSUB_CONNECT_TIMEOUT,
+                PubsubClient::new(&ws_url),
+            )
+            .await
+            {
+                Ok(Ok(c)) => c,
+                Ok(Err(e)) => {
                     warn!(url = %ws_url, error = %e, "spline WSS connect failed; retry in 5s");
+                    if establish_rpc_with_fallback().await {
+                        ws_url = ws_url_from_env();
+                        rpc_host = ui::rpc_host_from_urlish(&rpc_http_url_from_env());
+                    }
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+                Err(_) => {
+                    warn!(url = %ws_url, "spline WSS connect timed out; retry in 5s");
+                    if establish_rpc_with_fallback().await {
+                        ws_url = ws_url_from_env();
+                        rpc_host = ui::rpc_host_from_urlish(&rpc_http_url_from_env());
+                    }
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
@@ -491,6 +515,9 @@ pub async fn spawn_spline_poller(
                 // User-saved a new RPC URL: tear down wallet + spline WSS and rebuild
                 // using the freshly-read `ws_url_from_env()`. Breaks out of 'sub so
                 // the outer loop rebuilds the pubsub client on the new URL.
+                if pending_full_reconnect {
+                    establish_rpc_with_fallback().await;
+                }
                 if connection::handle_full_rpc_reconnect(
                     &mut pending_full_reconnect,
                     &mut ws_url,

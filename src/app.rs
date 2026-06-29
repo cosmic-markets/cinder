@@ -13,8 +13,9 @@ use tracing::warn;
 use crate::tui::math::pct_change_24h;
 pub use crate::tui::MarketInfo;
 use crate::tui::{
-    build_spline_config, compute_price_decimals, restore_terminal, setup_terminal, spawn_splash,
-    spawn_spline_poller, MarketListUpdate, MarketStatUpdate, SplineConfig,
+    build_spline_config, compute_price_decimals, establish_rpc_with_fallback, restore_terminal,
+    setup_terminal, spawn_splash, spawn_spline_poller, MarketListUpdate, MarketStatUpdate,
+    SplineConfig,
 };
 
 const MARKETS_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -206,6 +207,8 @@ struct LoadedSetup {
 }
 
 async fn load_setup() -> Result<LoadedSetup, Box<dyn std::error::Error>> {
+    establish_rpc_with_fallback().await;
+
     let http = Arc::new(PhoenixHttpClient::new_from_env()?);
     let ws = Arc::new(PhoenixClient::new_from_env().await?);
 
