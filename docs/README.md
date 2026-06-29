@@ -7,9 +7,13 @@
 [![X](https://img.shields.io/badge/X-cosmic__markets-000000?style=flat&logo=x&logoColor=white)](https://x.com/cosmic_markets)
 
 <p align="center">
-  <img
-    src="https://cosmic.markets/images/cinder_demo.gif"
-    alt="Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet"
+  <video
+    src="demo.mp4"
+    autoplay
+    loop
+    muted
+    playsinline
+    aria-label="Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet"
   />
 </p>
 
