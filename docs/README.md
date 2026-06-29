@@ -6,16 +6,7 @@
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.com/invite/XhQrN8FA2C)
 [![X](https://img.shields.io/badge/X-cosmic__markets-000000?style=flat&logo=x&logoColor=white)](https://x.com/cosmic_markets)
 
-<p align="center">
-  <video
-    src="demo.mp4"
-    autoplay
-    loop
-    muted
-    playsinline
-    aria-label="Cinder TUI — Phoenix SOL perpetuals: order book, chart, trade panel, and wallet"
-  />
-</p>
+https://github.com/user-attachments/assets/36ce60fa-91f8-4619-9707-2c9cc15b1166
 
 > 🔥 **No Phoenix invite yet?** Sign up through Cinder's referral and qualify for the current **Phoenix fee discount** (10% off fees) — see [Referral Funding](#referral-funding) below, or visit [cosmic.markets/phoenix/trade](https://cosmic.markets/phoenix/trade) to register with the `COSMIC` code.
 
