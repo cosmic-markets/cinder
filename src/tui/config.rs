@@ -754,7 +754,9 @@ mod tests {
         assert!(is_public_mainnet_rpc(
             "https://api.mainnet-beta.solana.com/?key=abc"
         ));
-        assert!(!is_public_mainnet_rpc("https://rpc.helius.xyz/?api-key=dead"));
+        assert!(!is_public_mainnet_rpc(
+            "https://rpc.helius.xyz/?api-key=dead"
+        ));
     }
 
     #[test]

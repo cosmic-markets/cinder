@@ -41,7 +41,9 @@ pub fn submit_close_all_positions(
     tx_status: tokio::sync::mpsc::UnboundedSender<TxStatusMsg>,
 ) {
     tokio::spawn(async move {
-        use phoenix_rise::ix::prelude::{create_place_market_order_ix, MarketOrderParams, OrderFlags, Side};
+        use phoenix_rise::ix::prelude::{
+            create_place_market_order_ix, MarketOrderParams, OrderFlags, Side,
+        };
 
         let s = strings();
         let total = entries.len();

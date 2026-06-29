@@ -53,11 +53,7 @@ fn load_collection(data: &[u8]) -> Option<SplineCollection> {
 }
 
 #[inline]
-fn region_is_active(
-    region: &TickRegion,
-    current_slot: u64,
-    last_updated_slot: u64,
-) -> bool {
+fn region_is_active(region: &TickRegion, current_slot: u64, last_updated_slot: u64) -> bool {
     // Mirror the on-chain `TickRegion::is_active` predicate: a region is live
     // only if it still has unfilled visible capacity AND its lifespan window
     // (relative to the spline's last user update) hasn't elapsed. Skipping the

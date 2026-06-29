@@ -2,8 +2,8 @@
 
 use std::time::Instant;
 
-use crate::tui::state::PriceFlash;
 use super::*;
+use crate::tui::state::PriceFlash;
 
 fn market_price_line(
     price_str: &str,

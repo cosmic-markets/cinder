@@ -23,7 +23,9 @@ mod trading;
 mod tx;
 mod ui;
 
-pub use config::{build_spline_config, compute_price_decimals, establish_rpc_with_fallback, SplineConfig};
+pub use config::{
+    build_spline_config, compute_price_decimals, establish_rpc_with_fallback, SplineConfig,
+};
 pub use runtime::spawn_spline_poller;
 pub use splash::spawn as spawn_splash;
 pub use state::{MarketInfo, MarketListUpdate, MarketStatUpdate};

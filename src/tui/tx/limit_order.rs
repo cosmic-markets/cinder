@@ -35,7 +35,9 @@ pub fn submit_limit_order(
 ) {
     tokio::spawn(async move {
         use phoenix_rise::core::PhoenixTxBuilder;
-        use phoenix_rise::ix::prelude::{create_place_limit_order_ix, LimitOrderParams, OrderFlags, Side};
+        use phoenix_rise::ix::prelude::{
+            create_place_limit_order_ix, LimitOrderParams, OrderFlags, Side,
+        };
 
         let s = strings();
         let side_lbl = match side {

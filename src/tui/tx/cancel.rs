@@ -61,8 +61,8 @@ pub fn submit_cancel_orders(
     tokio::spawn(async move {
         use phoenix_rise::ix::prelude::{
             create_cancel_conditional_order_ix, create_cancel_orders_by_id_ix,
-            create_cancel_stop_loss_ix, CancelConditionalOrderParams, CancelOrdersByIdParams,
-            CancelStopLossParams, CancelId, Direction,
+            create_cancel_stop_loss_ix, CancelConditionalOrderParams, CancelId,
+            CancelOrdersByIdParams, CancelStopLossParams, Direction,
         };
 
         let s = strings();
