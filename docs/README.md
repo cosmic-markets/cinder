@@ -2,7 +2,7 @@
 
 **Cinder** is a Rust-based trading terminal for [Phoenix](https://phoenix.trade/?code=COSMIC) perpetuals on Solana: live charts, a merged on-chain **spline** + optional **CLOB** order book, market and wallet flows, trading, and signed transactions from the shell.
 
-![Rust](https://img.shields.io/badge/rust-2021-orange?logo=rust&logoColor=white)
+![Rust](https://img.shields.io/badge/rust-2024-orange?logo=rust&logoColor=white)
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.com/invite/XhQrN8FA2C)
 [![X](https://img.shields.io/badge/X-cosmic__markets-000000?style=flat&logo=x&logoColor=white)](https://x.com/cosmic_markets)
 
