@@ -196,7 +196,9 @@ async fn fetch_authorities(
         let accounts = resp.value;
         for ((addr, pda), acc) in pairs_aligned.iter().zip(accounts) {
             let Some(acc) = acc else { continue };
-            let Some(data) = acc.data.decode() else { continue };
+            let Some(data) = acc.data.decode() else {
+                continue;
+            };
             if data.len() < TRADER_AUTHORITY_END {
                 continue;
             }
