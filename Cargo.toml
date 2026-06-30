@@ -2,7 +2,7 @@
 authors      = ["Cosmic Markets"]
 categories   = ["command-line-utilities", "finance", "cryptography::cryptocurrencies"]
 description  = "Rust terminal UI for Phoenix perpetuals on Solana"
-edition      = "2021"
+edition      = "2024"
 homepage     = "https://cinder.trading"
 keywords     = ["defi", "phoenix", "trading", "tui", "perpetuals"]
 license      = "MIT"

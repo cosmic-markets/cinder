@@ -13,7 +13,7 @@ This file is the technical map. Use it before reading code so you know which cra
 | Binary entry | `src/main.rs` → `cinder::run()` (`src/lib.rs`, `src/app.rs`) |
 | Library crate name | `cinder` (single binary `cinder`, `publish = false`) |
 | Workspace members | `.` and `crates/phoenix-eternal-types` |
-| Rust edition / MSRV | `2021`, `rust-version = "1.96"` |
+| Rust edition / MSRV | `2024`, `rust-version = "1.96"` |
 | Async runtime | `tokio` (multi-thread, `macros`, `time`, `sync`, `signal`) |
 | TUI stack | `ratatui` 0.30 + `crossterm` 0.29 (event-stream feature) |
 | TLS / WSS | `rustls` 0.23 with the `ring` provider — required by `solana-pubsub-client` ≥ 2.3 (no aws-lc-rs) |
@@ -38,7 +38,7 @@ This file is the technical map. Use it before reading code so you know which cra
 ├── docker-compose.yml          # service `cinder`
 ├── lefthook.yml                # fmt + clippy pre-commit
 ├── mise.toml                   # tool versions and aliased tasks
-├── rustfmt.toml                # max_width=100, edition=2021, field-init/try shorthand
+├── rustfmt.toml                # max_width=100, edition=2024, field-init/try shorthand
 ├── crates/
 │   └── phoenix-eternal-types/  # vendored zero-copy account / event types
 │       └── Cargo.toml          # no_std-friendly; optional cli/geyser/serde features
@@ -466,7 +466,7 @@ Modals (mutually exclusive via `InputMode`): MarketSelector, Positions, TopPosit
 
 The crate mirrors the [phx](https://github.com/skynetcap/phx) SDK. Stick to these:
 
-- **rustfmt**: stable settings only (`max_width = 100`, `edition = "2021"`, `use_field_init_shorthand = true`, `use_try_shorthand = true`). Local `cargo fmt --all --check` must match CI.
+- **rustfmt**: stable settings only (`max_width = 100`, `edition = "2024"`, `use_field_init_shorthand = true`, `use_try_shorthand = true`). Local `cargo fmt --all --check` must match CI.
 - **Module headers**: every file opens with a `//!` doc header describing its role. Keep these one or two short lines.
 - **One concept per file**: enums, structs, free functions live next to their tests in focused modules under `tui/trading/`, `tui/state/`, `tui/tx/`, etc. Don't pile types into a shared `types.rs`.
 - **Cargo manifest**: table-aligned `key = value` formatting in `[package]` and similar blocks.

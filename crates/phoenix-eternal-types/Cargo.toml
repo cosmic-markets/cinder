@@ -2,7 +2,7 @@
 authors      = ["Cosmic Markets"]
 categories   = ["cryptography::cryptocurrencies", "api-bindings"]
 description  = "Vendored read-only account types for Phoenix Eternal perpetuals"
-edition      = "2021"
+edition      = "2024"
 homepage     = "https://phoenix.trade"
 keywords     = ["solana", "phoenix", "perpetuals", "borsh", "accounts"]
 license      = "Apache-2.0"
@@ -11,7 +11,7 @@ publish      = true
 readme       = "README.md"
 repository   = "https://github.com/cosmic-markets/cinder"
 rust-version = "1.96"
-version      = "0.1.3"
+version      = "0.1.4"
 
 
 [features]
