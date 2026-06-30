@@ -28,8 +28,9 @@ cli = [
     "solana-sdk",
     "solana-transaction-status",
     "tokio",
-    "tracing-subscriber",
+    "dep:tracing-subscriber",
 ]
+phoenix-eternal-bin = ["cli", "tracing-subscriber/fmt"]
 geyser = [
     "cli",
     "yellowstone-grpc-client",
@@ -40,7 +41,7 @@ default = []
 [[bin]]
 name = "phoenix-eternal"
 path = "src/bin/main.rs"
-required-features = ["cli"]
+required-features = ["phoenix-eternal-bin"]
 
 [[bin]]
 name = "spline-fill-subscriber"
@@ -87,7 +88,6 @@ tokio = { version = "1.44", features = [
 ], optional = true }
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
-    "fmt",
 ], optional = true }
 
 [target.'cfg(unix)'.dependencies]
