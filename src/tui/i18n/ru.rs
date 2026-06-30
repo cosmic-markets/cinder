@@ -234,8 +234,7 @@ pub static RU: Strings = Strings {
                                 перед отправкой.",
     tx_err_post_only_no_cross: "Рынок в режиме только постинга",
     tx_err_isolated_only_cross_margin: "Кросс-маржа недоступна, используйте изолированную",
-    tx_err_capability_denied:
-        "Нет прав у аккаунта. Зарегистрируйтесь на phoenix.trade с кодом приглашения.",
+    tx_err_capability_denied: "Нет прав у аккаунта. Зарегистрируйтесь на phoenix.trade с кодом приглашения.",
     tx_err_trader_frozen: "Аккаунт заморожен. Активация на phoenix.trade с кодом приглашения.",
     tx_err_withdraw_insufficient_margin: "Вывод отклонён: недостаточно маржи",
     tx_err_insufficient_balance: "Недостаточно средств на балансе.",
@@ -285,24 +284,20 @@ pub static RU: Strings = Strings {
     referral_modal_label: "Код-приглашение Phoenix:",
     referral_modal_action: "регистрация",
     referral_modal_skip: "пропустить",
-    referral_modal_help:
-        "Оставьте пустым и нажмите Esc, чтобы пропустить и зарегистрироваться на phoenix.trade.",
+    referral_modal_help: "Оставьте пустым и нажмите Esc, чтобы пропустить и зарегистрироваться на phoenix.trade.",
     tx_registering_custom_prefix: "🐦‍🔥 Регистрация по реферальному коду",
     tx_registered_custom_prefix: "🐦‍🔥 Зарегистрировано по реферальному коду",
 
     referral_choice_title_prefix: "Регистрация в ",
     referral_choice_title_suffix: "",
-    referral_choice_intro:
-        "У этого кошелька ещё нет аккаунта Phoenix. Выберите реферала для регистрации:",
+    referral_choice_intro: "У этого кошелька ещё нет аккаунта Phoenix. Выберите реферала для регистрации:",
     referral_choice_cosmic: "Использовать COSMIC — скидка 10% на комиссии 🔥",
-    referral_choice_cosmic_note:
-        "Cinder получает часть комиссий с кошельков, зарегистрированных по COSMIC.",
+    referral_choice_cosmic_note: "Cinder получает часть комиссий с кошельков, зарегистрированных по COSMIC.",
     referral_choice_custom: "Ввести свой реферальный / пригласительный код",
     referral_choice_skip: "Пропустить — продолжить без реферала",
     referral_choice_nav: "выбор",
     referral_choice_action: "подтвердить",
-    referral_choice_sticky_note:
-        "Привязка реферала на стороне Phoenix постоянна и не может быть изменена позже.",
+    referral_choice_sticky_note: "Привязка реферала на стороне Phoenix постоянна и не может быть изменена позже.",
 
     twap: "TWAP",
     twap_order: "настроить TWAP",
@@ -327,10 +322,8 @@ pub static RU: Strings = Strings {
     twap_err_size: "Объём должен быть положительным числом",
     twap_err_duration: "Общее время должно быть положительным",
     twap_err_too_short: "Общее время должно быть не менее 1 минуты",
-    twap_err_size_too_small:
-        "Каждый срез округляется до нуля \u{2014} уменьшите время или увеличьте объём",
-    twap_err_no_wallet:
-        "Кошелёк не загружен \u{2014} нажмите [w] для подключения перед запуском TWAP",
+    twap_err_size_too_small: "Каждый срез округляется до нуля \u{2014} уменьшите время или увеличьте объём",
+    twap_err_no_wallet: "Кошелёк не загружен \u{2014} нажмите [w] для подключения перед запуском TWAP",
     twap_started: "🐦‍🔥 TWAP запущен",
     twap_completed: "🐦‍🔥 TWAP завершён",
     twap_slice_sent: "Срез TWAP отправлен",

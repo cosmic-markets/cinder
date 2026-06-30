@@ -19,18 +19,18 @@ use tokio::sync::watch;
 use tracing::warn;
 
 use super::super::config::{
-    current_user_config, establish_rpc_with_fallback, rpc_http_url_from_env, ws_url_from_env,
-    SplineConfig,
+    SplineConfig, current_user_config, establish_rpc_with_fallback, rpc_http_url_from_env,
+    ws_url_from_env,
 };
-use super::super::data::{spawn_gti_loader, GtiHandle};
+use super::super::data::{GtiHandle, spawn_gti_loader};
 use super::super::state::{
     L2BookStreamMsg, MarketInfo, MarketListUpdate, MarketStatUpdate, TuiState,
 };
 use super::super::terminal::TuiTerminal;
 use super::super::ui;
 use super::{
-    connection, keyboard::handle_key_press, new_channels, redraw::redraw_tui_force, tasks,
-    twap_scheduler, update_handlers, KeyAction, FEED_REDRAW_MIN_INTERVAL,
+    FEED_REDRAW_MIN_INTERVAL, KeyAction, connection, keyboard::handle_key_press, new_channels,
+    redraw::redraw_tui_force, tasks, twap_scheduler, update_handlers,
 };
 
 pub async fn spawn_spline_poller(

@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use super::super::i18n::{strings, Strings};
+use super::super::i18n::{Strings, strings};
 
 fn tx_log_path() -> PathBuf {
     if let Ok(dir) = std::env::var("CINDER_LOG_DIR") {

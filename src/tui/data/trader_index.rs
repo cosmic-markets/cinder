@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use phoenix_eternal_types::discriminant::accounts::TRADER as TRADER_DISCRIMINANT;
-use phoenix_eternal_types::{program_ids, GlobalTraderIndexTree};
+use phoenix_eternal_types::{GlobalTraderIndexTree, program_ids};
 use solana_account_decoder_client_types::{UiAccountEncoding, UiDataSliceConfig};
 use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey as PhoenixPubkey;

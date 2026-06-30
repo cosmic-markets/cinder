@@ -31,19 +31,19 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 use tracing::warn;
 
-use super::super::config::{rpc_http_url_from_env, SplineConfig};
-use super::super::data::fetch_top_positions;
+use super::super::config::{SplineConfig, rpc_http_url_from_env};
 use super::super::data::GtiHandle;
-use super::super::data::{parse_l2_book_from_market_account, L2Level};
+use super::super::data::fetch_top_positions;
+use super::super::data::{L2Level, parse_l2_book_from_market_account};
 use super::super::format::pubkey_trader_prefix;
 use super::super::state::{
     BalanceUpdate, ClobLevel, L2BookStreamMsg, SplineBootstrapMsg, TxStatusMsg,
 };
 use super::super::trading::{
-    fetch_phoenix_balance_and_position, OrderInfo, TopPositionEntry, TradingSide,
+    OrderInfo, TopPositionEntry, TradingSide, fetch_phoenix_balance_and_position,
 };
 use super::super::tx::TxContext;
-use super::{TxCtxMsg, L2_SNAPSHOT_DEPTH, WSS_RETRY_CAP, WSS_RETRY_INIT};
+use super::{L2_SNAPSHOT_DEPTH, TxCtxMsg, WSS_RETRY_CAP, WSS_RETRY_INIT};
 
 mod balances;
 mod connect_flow;

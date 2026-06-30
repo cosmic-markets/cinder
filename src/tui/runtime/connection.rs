@@ -5,13 +5,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use phoenix_rise::api::PhoenixHttpClient;
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use solana_signer::Signer;
 use tokio::sync::{mpsc::UnboundedReceiver, watch};
 
 use super::super::config::{
-    current_user_config, rpc_http_url_from_env, ws_url_from_env, SplineConfig,
+    SplineConfig, current_user_config, rpc_http_url_from_env, ws_url_from_env,
 };
 use super::super::data::GtiHandle;
 use super::super::i18n::strings;
@@ -19,7 +19,7 @@ use super::super::state::{L2BookStreamMsg, TuiState};
 use super::super::terminal::restore_terminal;
 use super::super::ui;
 use super::redraw::{redraw_tui, redraw_tui_force};
-use super::{tasks, twap_scheduler, Channels, FEED_REDRAW_MIN_INTERVAL};
+use super::{Channels, FEED_REDRAW_MIN_INTERVAL, tasks, twap_scheduler};
 
 pub(super) fn initial_config(
     market_list: &[super::super::state::MarketInfo],

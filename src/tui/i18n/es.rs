@@ -246,8 +246,7 @@ pub static ES: Strings = Strings {
     tx_err_insufficient_funds: "Fondos insuficientes.",
     tx_err_insufficient_compute_units: "Unidades de cómputo insuficientes.",
     tx_err_computational_budget_exceeded: "Presupuesto computacional superado",
-    tx_err_program_failed_to_complete:
-        "ProgramFailedToComplete — revise el límite de compute units",
+    tx_err_program_failed_to_complete: "ProgramFailedToComplete — revise el límite de compute units",
     tx_err_failed_prefix: "Tx fallida: ",
     tx_flow_deposit: "depósito",
     tx_flow_withdraw: "retiro",
@@ -296,17 +295,14 @@ pub static ES: Strings = Strings {
 
     referral_choice_title_prefix: "Registro ",
     referral_choice_title_suffix: "",
-    referral_choice_intro:
-        "Esta cartera aún no tiene cuenta en Phoenix. Elija un referido para registrarse:",
+    referral_choice_intro: "Esta cartera aún no tiene cuenta en Phoenix. Elija un referido para registrarse:",
     referral_choice_cosmic: "Usar referido COSMIC — 10% de descuento en comisiones 🔥",
-    referral_choice_cosmic_note:
-        "Cinder recibe parte de las comisiones de las carteras registradas con COSMIC.",
+    referral_choice_cosmic_note: "Cinder recibe parte de las comisiones de las carteras registradas con COSMIC.",
     referral_choice_custom: "Introducir un código de referido / invitación personalizado",
     referral_choice_skip: "Omitir — continuar sin referido",
     referral_choice_nav: "seleccionar",
     referral_choice_action: "elegir",
-    referral_choice_sticky_note:
-        "La atribución es permanente en Phoenix y no puede cambiarse después.",
+    referral_choice_sticky_note: "La atribución es permanente en Phoenix y no puede cambiarse después.",
 
     twap: "TWAP",
     twap_order: "configurar TWAP",
@@ -331,10 +327,8 @@ pub static ES: Strings = Strings {
     twap_err_size: "El tamaño debe ser un número positivo",
     twap_err_duration: "El tiempo total debe ser una duración positiva",
     twap_err_too_short: "El tiempo total debe ser al menos 1 minuto",
-    twap_err_size_too_small:
-        "Cada porción se redondea a cero \u{2014} acorta el tiempo o aumenta tamaño",
-    twap_err_no_wallet:
-        "Wallet no cargada \u{2014} presiona [w] para conectar antes de iniciar un TWAP",
+    twap_err_size_too_small: "Cada porción se redondea a cero \u{2014} acorta el tiempo o aumenta tamaño",
+    twap_err_no_wallet: "Wallet no cargada \u{2014} presiona [w] para conectar antes de iniciar un TWAP",
     twap_started: "🐦‍🔥 TWAP iniciado",
     twap_completed: "🐦‍🔥 TWAP terminado",
     twap_slice_sent: "Porción TWAP enviada",

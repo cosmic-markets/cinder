@@ -5,7 +5,7 @@
 //! `UserConfig::language`. The result is a `&'static Strings` — zero
 //! allocation and safe to call on every render frame.
 
-use super::config::{current_user_config, Language};
+use super::config::{Language, current_user_config};
 
 /// All user-visible, translatable UI labels.
 pub struct Strings {

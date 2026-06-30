@@ -5,10 +5,10 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent};
 use phoenix_rise::api::PhoenixHttpClient;
 
-use super::super::config::{current_user_config, SplineConfig};
+use super::super::config::{SplineConfig, current_user_config};
 use super::super::state::TuiState;
 use super::super::trading::{InputMode, PendingAction};
-use super::{input, submit, Channels, KeyAction};
+use super::{Channels, KeyAction, input, submit};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn handle_key_press(

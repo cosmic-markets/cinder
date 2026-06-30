@@ -7,13 +7,13 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use phoenix_rise::types::market::MarketStatsUpdate;
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use solana_signer::Signer;
 
-use super::super::config::{current_user_config, SplineConfig};
-use super::super::data::position_leaderboard;
+use super::super::config::{SplineConfig, current_user_config};
 use super::super::data::GtiHandle;
+use super::super::data::position_leaderboard;
 use super::super::data::{parse_spline_data, parse_spline_sequence};
 use super::super::format::pubkey_trader_short;
 use super::super::i18n::strings;
@@ -23,7 +23,7 @@ use super::super::state::{
 use super::super::trading::{InputMode, OrderInfo, TopPositionEntry, TradingSide};
 use super::super::tx::TxContext;
 use super::redraw::{redraw_tui, redraw_tui_force};
-use super::{tasks, FEED_REDRAW_MIN_INTERVAL};
+use super::{FEED_REDRAW_MIN_INTERVAL, tasks};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_spline_account_update(

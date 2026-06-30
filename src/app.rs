@@ -12,12 +12,12 @@ use phoenix_rise::types::exchange::ExchangeMarketConfig;
 use phoenix_rise::types::market::{MarketStatsUpdate, MarketStatus};
 use tracing::warn;
 
-use crate::tui::math::pct_change_24h;
 pub use crate::tui::MarketInfo;
+use crate::tui::math::pct_change_24h;
 use crate::tui::{
-    build_spline_config, compute_price_decimals, establish_rpc_with_fallback, restore_terminal,
-    setup_terminal, spawn_splash, spawn_spline_poller, MarketListUpdate, MarketStatUpdate,
-    SplineConfig,
+    MarketListUpdate, MarketStatUpdate, SplineConfig, build_spline_config, compute_price_decimals,
+    establish_rpc_with_fallback, restore_terminal, setup_terminal, spawn_splash,
+    spawn_spline_poller,
 };
 
 const MARKETS_POLL_INTERVAL: Duration = Duration::from_secs(60);

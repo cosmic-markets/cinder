@@ -6,7 +6,7 @@ pub mod trader_index;
 
 pub use position_leaderboard::fetch_top_positions;
 pub use spline_book::{
-    parse_l2_book_from_market_account, parse_spline_data, parse_spline_sequence, L2Level,
-    ParsedSplineData,
+    L2Level, ParsedSplineData, parse_l2_book_from_market_account, parse_spline_data,
+    parse_spline_sequence,
 };
-pub use trader_index::{spawn_gti_loader, GtiCache, GtiHandle};
+pub use trader_index::{GtiCache, GtiHandle, spawn_gti_loader};

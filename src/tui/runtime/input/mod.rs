@@ -8,11 +8,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use phoenix_rise::api::PhoenixHttpClient;
 
 use super::super::config::{
-    default_wallet_path, resolve_wallet_modal_input, save_user_config, SplineConfig,
+    SplineConfig, default_wallet_path, resolve_wallet_modal_input, save_user_config,
 };
 use super::super::format::{fmt_size, truncate_balance};
 use super::super::i18n::strings;
-use super::super::math::{ui_size_to_num_base_lots, LotConversionError, MAX_UI_ORDER_SIZE_UNITS};
+use super::super::math::{LotConversionError, MAX_UI_ORDER_SIZE_UNITS, ui_size_to_num_base_lots};
 use super::super::state::{TradingState, TuiState};
 use super::super::trading::{InputMode, OrderKind, PendingAction, TradingSide};
 use super::wallet::{connect_wallet_with_keypair, disconnect_wallet};

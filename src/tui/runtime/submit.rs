@@ -8,8 +8,8 @@ use super::super::math::ui_size_to_num_base_lots;
 use super::super::state::{TuiState, TxStatusMsg};
 use super::super::trading::{OrderKind, PendingAction, TradingSide};
 use super::super::tx::{
-    submit_cancel_orders, submit_close_all_positions, submit_funds_transfer, submit_limit_order,
-    submit_market_order, submit_stop_market_order, CancelOrderEntry, ClosePositionEntry,
+    CancelOrderEntry, ClosePositionEntry, submit_cancel_orders, submit_close_all_positions,
+    submit_funds_transfer, submit_limit_order, submit_market_order, submit_stop_market_order,
 };
 use super::input::num_base_lots_for_close;
 

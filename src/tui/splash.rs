@@ -6,12 +6,12 @@ use std::io::Stdout;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ratatui::Terminal;
 use tokio::sync::oneshot;
 
 use super::i18n::strings;

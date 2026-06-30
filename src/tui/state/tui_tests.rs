@@ -2,8 +2,8 @@
 
 use solana_pubkey::Pubkey as PhoenixPubkey;
 
-use super::super::super::data::spline_book::SplineRow;
 use super::super::super::data::ParsedSplineData;
+use super::super::super::data::spline_book::SplineRow;
 use super::super::super::format::pubkey_trader_prefix;
 use super::super::super::trading::{OrderInfo, OrderKind, TradingSide};
 use super::*;
@@ -128,11 +128,12 @@ fn rebuild_merged_book_omits_clob_when_show_clob_is_false() {
     s.clob_bids = vec![(100.5, 1.0, "Z".to_string())];
     s.rebuild_merged_book("BTC", false, None, 2);
     assert_eq!(s.merged_book.bid_rows.len(), 1);
-    assert!(s
-        .merged_book
-        .bid_rows
-        .iter()
-        .all(|r| r.traders.iter().all(|(t, _)| t != "Z")));
+    assert!(
+        s.merged_book
+            .bid_rows
+            .iter()
+            .all(|r| r.traders.iter().all(|(t, _)| t != "Z"))
+    );
 }
 
 #[test]

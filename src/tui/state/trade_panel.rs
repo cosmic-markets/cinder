@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use solana_keypair::Keypair;
 
-use super::super::config::{current_user_config, UserConfig};
+use super::super::config::{UserConfig, current_user_config};
 use super::super::trading::{InputMode, OrderKind, PositionInfo, TradingSide};
 use super::super::tx::{TraderMirror, TxContext};
 use super::make_status_timestamp;

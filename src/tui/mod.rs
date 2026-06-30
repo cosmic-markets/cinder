@@ -24,10 +24,10 @@ mod tx;
 mod ui;
 
 pub use config::{
-    build_spline_config, compute_price_decimals, establish_rpc_with_fallback, SplineConfig,
+    SplineConfig, build_spline_config, compute_price_decimals, establish_rpc_with_fallback,
 };
 pub use runtime::spawn_spline_poller;
 pub use splash::spawn as spawn_splash;
 pub use state::{MarketInfo, MarketListUpdate, MarketStatUpdate};
-pub use terminal::{cleanup_terminal, restore_terminal, setup_terminal, TuiTerminal};
+pub use terminal::{TuiTerminal, cleanup_terminal, restore_terminal, setup_terminal};
 pub use tx::spawn_auto_priority_fee_refresh;

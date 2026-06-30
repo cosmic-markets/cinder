@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use tracing::warn;
 
 use phoenix_eternal_types::quantities::{SignedBaseLots, SignedQuoteLots};
-use phoenix_eternal_types::{program_ids, ActiveTraderBufferTree};
+use phoenix_eternal_types::{ActiveTraderBufferTree, program_ids};
 
 use super::super::config::SplineConfig;
 use super::super::data::GtiCache;

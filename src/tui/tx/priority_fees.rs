@@ -27,7 +27,7 @@ use solana_pubkey::Pubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tracing::warn;
 
-use crate::tui::config::{rpc_http_url_from_env, DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS};
+use crate::tui::config::{DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS, rpc_http_url_from_env};
 
 /// How often the background task refreshes the cached auto fee.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(10);

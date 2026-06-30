@@ -4,7 +4,7 @@ use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Paragraph};
-use ratatui::{symbols, Frame};
+use ratatui::{Frame, symbols};
 
 use super::super::format::{fmt_price, fmt_size};
 use super::super::i18n::strings;
@@ -78,11 +78,13 @@ pub(super) fn render_price_chart(
         .map(|(_, m)| (m.x, m.price))
         .collect();
 
-    let mut datasets = vec![Dataset::default()
-        .marker(symbols::Marker::Braille)
-        .graph_type(GraphType::Line)
-        .style(Style::default().fg(Color::Cyan))
-        .data(chart_data)];
+    let mut datasets = vec![
+        Dataset::default()
+            .marker(symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Cyan))
+            .data(chart_data),
+    ];
 
     if !order_markers.is_empty() {
         datasets.push(

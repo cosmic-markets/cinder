@@ -1,10 +1,10 @@
 //! Status tray and funds panel widgets.
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::Frame;
 
 use super::super::format::{fmt_balance, fmt_price};
 use super::super::i18n::strings;

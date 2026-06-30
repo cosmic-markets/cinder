@@ -10,10 +10,10 @@ use super::super::config::SplineConfig;
 use super::super::i18n::strings;
 use super::super::state::TuiState;
 use super::super::tx::TxContext;
+use super::Channels;
 use super::tasks::{
     spawn_initial_connect_flow, spawn_trader_orders_ws, spawn_tx_context_task, spawn_wallet_wss,
 };
-use super::Channels;
 
 pub(super) struct WalletHandles {
     pub wallet_wss: tokio::task::JoinHandle<()>,

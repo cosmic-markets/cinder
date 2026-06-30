@@ -1,11 +1,11 @@
 //! Order-book table rendering (ask side, bid side, spread row).
 
 use phoenix_rise::types::market::MarketStatsUpdate;
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
-use ratatui::Frame;
 
 use super::super::config::SplineConfig;
 use super::super::constants::{ASK_BORDER, BID_BORDER, FIRE_ORANGE, TOP_N};

@@ -17,11 +17,11 @@ use std::time::Duration;
 
 use chrono::Utc;
 use futures_util::StreamExt;
+use phoenix_eternal_types::MarketEvent;
 use phoenix_eternal_types::events::{
-    parse_events_from_inner_instructions_with_context, InnerInstructionContext,
+    InnerInstructionContext, parse_events_from_inner_instructions_with_context,
 };
 use phoenix_eternal_types::program_ids::PHOENIX_ETERNAL_PROGRAM_ID;
-use phoenix_eternal_types::MarketEvent;
 use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
@@ -36,8 +36,8 @@ use solana_transaction_status_client_types::{
     EncodedTransaction, UiInnerInstructions, UiInstruction, UiLoadedAddresses, UiMessage,
     UiTransactionEncoding,
 };
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Semaphore;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
 
 use super::super::super::config::SplineConfig;
@@ -294,11 +294,7 @@ async fn backfill_inner(
                 .lock()
                 .unwrap_or_else(|p| p.into_inner())
                 .remember(sig.clone());
-            if new {
-                Some(sig)
-            } else {
-                None
-            }
+            if new { Some(sig) } else { None }
         })
         .take(BACKFILL_TX_FETCH_LIMIT)
         .collect();
@@ -661,10 +657,12 @@ mod tests {
     #[test]
     fn parse_position_side_log_rejects_unrelated_lines() {
         assert!(parse_position_side_log("Program log: instruction Liquidate").is_none());
-        assert!(parse_position_side_log(
-            "Program log: Position side for trader [1, 2] on asset 0: Long"
-        )
-        .is_none());
+        assert!(
+            parse_position_side_log(
+                "Program log: Position side for trader [1, 2] on asset 0: Long"
+            )
+            .is_none()
+        );
     }
 
     #[test]

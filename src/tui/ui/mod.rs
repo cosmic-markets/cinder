@@ -1,9 +1,9 @@
 //! Ratatui widgets for the SOL spline TUI.
 
 use phoenix_rise::types::market::MarketStatsUpdate;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::Color;
-use ratatui::Frame;
 use solana_signer::Signer;
 
 use super::config::SplineConfig;

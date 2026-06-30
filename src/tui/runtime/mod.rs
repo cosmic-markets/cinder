@@ -16,7 +16,7 @@ mod wallet;
 
 pub use event_loop::spawn_spline_poller;
 
-pub(in crate::tui::runtime) use channels::{new_channels, Channels, KeyAction, TxCtxMsg};
+pub(in crate::tui::runtime) use channels::{Channels, KeyAction, TxCtxMsg, new_channels};
 
 /// Full `terminal.draw` at most this often for stream + stats; state still
 /// updates every message. Increase (e.g. 150-250ms) if CPU is still high;

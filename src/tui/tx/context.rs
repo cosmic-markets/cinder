@@ -40,8 +40,8 @@ use solana_signer::Signer;
 use tracing::warn;
 
 use super::super::config::{
-    current_user_config, is_public_mainnet_rpc, rpc_http_url_from_env, ws_url_from_env,
-    DEFAULT_PUBLIC_SOLANA_RPC_URL,
+    DEFAULT_PUBLIC_SOLANA_RPC_URL, current_user_config, is_public_mainnet_rpc,
+    rpc_http_url_from_env, ws_url_from_env,
 };
 
 /// Derive the canonical spline-collection PDA from the market account.

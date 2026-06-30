@@ -244,8 +244,7 @@ pub static EN: Strings = Strings {
     tx_err_insufficient_funds: "Insufficient funds.",
     tx_err_insufficient_compute_units: "Insufficient compute units.",
     tx_err_computational_budget_exceeded: "Computational budget exceeded",
-    tx_err_program_failed_to_complete:
-        "ProgramFailedToComplete — verify your compute units / limit",
+    tx_err_program_failed_to_complete: "ProgramFailedToComplete — verify your compute units / limit",
     tx_err_failed_prefix: "Tx Failed: ",
     tx_flow_deposit: "deposit",
     tx_flow_withdraw: "withdraw",
@@ -294,16 +293,14 @@ pub static EN: Strings = Strings {
 
     referral_choice_title_prefix: "",
     referral_choice_title_suffix: " Registration",
-    referral_choice_intro:
-        "This wallet has no Phoenix account yet. Pick a referral to register with:",
+    referral_choice_intro: "This wallet has no Phoenix account yet. Pick a referral to register with:",
     referral_choice_cosmic: "Use COSMIC referral — 10% fee discount 🔥",
     referral_choice_cosmic_note: "Cinder earns a share of fees from COSMIC-referred wallets.",
     referral_choice_custom: "Enter a custom referral / invite code",
     referral_choice_skip: "Skip — continue without a referral",
     referral_choice_nav: "select",
     referral_choice_action: "choose",
-    referral_choice_sticky_note:
-        "Attribution is permanent on Phoenix's side and cannot be changed later.",
+    referral_choice_sticky_note: "Attribution is permanent on Phoenix's side and cannot be changed later.",
 
     twap: "TWAP",
     twap_order: "configure TWAP",
@@ -328,8 +325,7 @@ pub static EN: Strings = Strings {
     twap_err_size: "Size must be a positive number",
     twap_err_duration: "Total Time must be a positive duration",
     twap_err_too_short: "Total Time must be at least 1 minute",
-    twap_err_size_too_small:
-        "Each slice rounds to zero base lots \u{2014} shorten Total Time or increase size",
+    twap_err_size_too_small: "Each slice rounds to zero base lots \u{2014} shorten Total Time or increase size",
     twap_err_no_wallet: "Wallet not loaded \u{2014} press [w] to connect before starting a TWAP",
     twap_started: "🐦‍🔥 TWAP started",
     twap_completed: "🐦‍🔥 TWAP done",

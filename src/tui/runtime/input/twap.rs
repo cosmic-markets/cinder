@@ -3,13 +3,13 @@
 
 use crossterm::event::KeyCode;
 
-use super::super::super::config::{current_user_config, SplineConfig};
+use super::super::super::config::{SplineConfig, current_user_config};
 use super::super::super::i18n::strings;
-use super::super::super::math::{ui_size_to_num_base_lots, MAX_UI_ORDER_SIZE_UNITS};
+use super::super::super::math::{MAX_UI_ORDER_SIZE_UNITS, ui_size_to_num_base_lots};
 use super::super::super::state::{TuiState, TwapBot, TwapBotConfirm, TwapDraft};
 use super::super::super::trading::{InputMode, OrderKind, TradingSide};
-use super::super::twap_scheduler;
 use super::super::KeyAction;
+use super::super::twap_scheduler;
 
 /// Editor for the TWAP form. Field layout: 0 = market, 1 = side,
 /// 2 = total size, 3 = total time hours, 4 = total time minutes,

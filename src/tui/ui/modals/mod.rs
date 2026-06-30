@@ -2,11 +2,11 @@
 
 //! Modal dialogs: market selector, positions, orders, tx, config, quit.
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
-use ratatui::Frame;
 
 use super::super::constants::FIRE_ORANGE;
 use super::super::format::{fmt_compact, fmt_price, fmt_size};
