@@ -50,7 +50,7 @@ required-features = ["geyser"]
 [dependencies]
 anyhow = "1.0"
 borsh = { version = "1.5", features = ["derive"] }
-bytemuck = { version = "1.14", features = ["derive"] }
+bytemuck = { version = "1.21", features = ["derive"] }
 num-derive = "0.4"
 num-traits = "0.2"
 sha2 = "0.10"
@@ -62,21 +62,29 @@ solana-pubkey = { version = "~3.0", features = [
     "serde",
 ] }
 static_assertions = "1.1"
-tracing = "0.1"
+tracing = { version = "0.1", features = ["log"] }
 
 # CLI dependencies (optional)
 bs58 = { version = "0.5", optional = true }
 futures = { version = "0.3", optional = true }
-clap = { version = "4", features = ["derive"], optional = true }
+clap = { version = "4.5", features = ["derive"], optional = true }
 dirs-next = { version = "2.0", optional = true }
-serde = { version = "1", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5", optional = true }
-serde_json = { version = "1", optional = true }
+serde_json = { version = "1.0", optional = true }
 solana-account-decoder = { version = "~3.1", optional = true }
 solana-client = { version = "~3.1", optional = true }
 solana-sdk = { version = "~3.0", optional = true }
 solana-transaction-status = { version = "~3.1", optional = true }
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1.44", features = [
+    "sync",
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "test-util",
+    "net",
+    "signal",
+], optional = true }
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
 ], optional = true }
