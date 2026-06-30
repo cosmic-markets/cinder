@@ -115,7 +115,7 @@ async fn cmd_subscribe(
     grpc_url: &str,
     x_token: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use futures::{SinkExt, StreamExt};
+    use futures_util::{SinkExt, StreamExt};
     use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcClient};
     use yellowstone_grpc_proto::geyser::{
         subscribe_update::UpdateOneof, CommitmentLevel, SubscribeRequest,

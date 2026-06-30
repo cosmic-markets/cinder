@@ -20,7 +20,7 @@ cli = [
     "bs58",
     "clap",
     "dirs-next",
-    "futures",
+    "futures-util",
     "serde",
     "serde_json",
     "solana-account-decoder",
@@ -66,7 +66,7 @@ tracing = { version = "0.1", features = ["log"] }
 
 # CLI dependencies (optional)
 bs58 = { version = "0.5", optional = true }
-futures = { version = "0.3", optional = true }
+futures-util = { version = "0.3", optional = true }
 clap = { version = "4.5", features = ["derive"], optional = true }
 dirs-next = { version = "2.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -87,6 +87,7 @@ tokio = { version = "1.44", features = [
 ], optional = true }
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
+    "fmt",
 ], optional = true }
 
 [target.'cfg(unix)'.dependencies]
