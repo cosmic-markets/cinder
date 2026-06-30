@@ -14,7 +14,7 @@ use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_rpc_client_types::config::RpcAccountInfoConfig;
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
 use tokio::sync::watch;
 use tracing::warn;
 

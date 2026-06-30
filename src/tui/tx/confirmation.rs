@@ -9,8 +9,8 @@ use futures_util::StreamExt;
 use solana_commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_keypair::Keypair;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_rpc_client_types::config::{RpcSendTransactionConfig, RpcSignatureSubscribeConfig};
-use solana_rpc_client_types::response::{ProcessedSignatureResult, Response, RpcSignatureResult};
+use solana_rpc_client_api::config::{RpcSendTransactionConfig, RpcSignatureSubscribeConfig};
+use solana_rpc_client_api::response::{ProcessedSignatureResult, Response, RpcSignatureResult};
 use solana_signature::Signature;
 use solana_signer::Signer;
 
