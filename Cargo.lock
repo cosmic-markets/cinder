@@ -602,9 +602,9 @@ dependencies = [
 
 [[package]]
 name = "cosmic-phoenix-eternal-types"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "224abd8ced5c148ce3eb7de6e1e44258cf8c36ae864d28686ba1970512e1e771"
+checksum = "f7cd35d490d8c97bebf1b5696d6bcbc2bf0f097615d290c0a86e3322a2b75a55"
 dependencies = [
  "anyhow",
  "borsh",
