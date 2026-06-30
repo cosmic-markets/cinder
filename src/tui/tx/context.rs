@@ -58,15 +58,15 @@ fn derive_spline_collection(
 ) -> Result<solana_pubkey::Pubkey, solana_pubkey::ParsePubkeyError> {
     let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey)?;
     let (derived, _) = program_ids::get_spline_collection_address_default(&market_pk);
-    if let Ok(api_pk) = solana_pubkey::Pubkey::from_str(api_spline_pubkey) {
-        if api_pk != derived {
-            warn!(
-                api = %api_pk,
-                derived = %derived,
-                symbol = %symbol,
-                "spline pubkey mismatch; using derived address"
-            );
-        }
+    if let Ok(api_pk) = solana_pubkey::Pubkey::from_str(api_spline_pubkey)
+        && api_pk != derived
+    {
+        warn!(
+            api = %api_pk,
+            derived = %derived,
+            symbol = %symbol,
+            "spline pubkey mismatch; using derived address"
+        );
     }
     Ok(derived)
 }

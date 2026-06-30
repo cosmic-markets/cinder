@@ -257,10 +257,10 @@ where
         loop {
             refresh.notified().await;
             // Debounce: if the current cache was loaded very recently, skip this refresh.
-            if let Some(existing) = cache.read().await.as_ref() {
-                if existing.is_fresh_enough() {
-                    continue;
-                }
+            if let Some(existing) = cache.read().await.as_ref()
+                && existing.is_fresh_enough()
+            {
+                continue;
             }
             let url = rpc_url_fn();
             match fetch_cache(url).await {

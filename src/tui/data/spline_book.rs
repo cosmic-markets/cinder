@@ -428,10 +428,10 @@ where
             }
         }
     }
-    if let Some(t) = cur_ticks {
-        if prices_seen < max_prices {
-            flush(t, &mut cur_traders, &mut out);
-        }
+    if let Some(t) = cur_ticks
+        && prices_seen < max_prices
+    {
+        flush(t, &mut cur_traders, &mut out);
     }
     out
 }

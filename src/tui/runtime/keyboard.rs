@@ -111,24 +111,23 @@ pub(super) fn handle_key_press(
             // user has opted into bypassing the [Y/N] prompt, execute it
             // immediately. Skipping is gated to PlaceOrder; closes, cancels,
             // and transfers still require explicit confirmation.
-            if current_user_config().skip_order_confirmation {
-                if let InputMode::Confirming(PendingAction::PlaceOrder { .. }) =
+            if current_user_config().skip_order_confirmation
+                && let InputMode::Confirming(PendingAction::PlaceOrder { .. }) =
                     &state.trading.input_mode
-                {
-                    let pending = match &state.trading.input_mode {
-                        InputMode::Confirming(a) => a.clone(),
-                        _ => unreachable!(),
-                    };
-                    submit::execute_confirmed_action(
-                        &pending,
-                        state,
-                        cfg,
-                        configs,
-                        &channels.tx_status,
-                    );
-                    state.trading.input_mode = InputMode::Normal;
-                    return KeyAction::Redraw;
-                }
+            {
+                let pending = match &state.trading.input_mode {
+                    InputMode::Confirming(a) => a.clone(),
+                    _ => unreachable!(),
+                };
+                submit::execute_confirmed_action(
+                    &pending,
+                    state,
+                    cfg,
+                    configs,
+                    &channels.tx_status,
+                );
+                state.trading.input_mode = InputMode::Normal;
+                return KeyAction::Redraw;
             }
             action
         }

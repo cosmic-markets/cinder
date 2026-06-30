@@ -115,11 +115,9 @@ pub(in crate::tui::runtime) fn handle_editing_twap_key(
                 3..=5 => c != '.',
                 _ => true,
             };
-            if allow {
-                if let Some(buf) = field_buffer_mut(state) {
-                    buf.push(c);
-                    state.trading.twap_draft.error = None;
-                }
+            if allow && let Some(buf) = field_buffer_mut(state) {
+                buf.push(c);
+                state.trading.twap_draft.error = None;
             }
             KeyAction::Redraw
         }
@@ -348,17 +346,17 @@ pub(in crate::tui::runtime) fn handle_bots_view_key(
                 .bots
                 .get(state.twaps_view.selected_index)
                 .map(|b| b.symbol.clone());
-            if let Some(sym) = target {
-                if sym != cfg.symbol {
-                    state.trading.input_mode = InputMode::Normal;
-                    state.trading.set_status_title(format!(
-                        "{} {}\u{2026}",
-                        strings().st_switching_to,
-                        sym
-                    ));
-                    *pending_market_switch = Some(sym);
-                    return KeyAction::BreakInner;
-                }
+            if let Some(sym) = target
+                && sym != cfg.symbol
+            {
+                state.trading.input_mode = InputMode::Normal;
+                state.trading.set_status_title(format!(
+                    "{} {}\u{2026}",
+                    strings().st_switching_to,
+                    sym
+                ));
+                *pending_market_switch = Some(sym);
+                return KeyAction::BreakInner;
             }
             state.trading.input_mode = InputMode::Normal;
             KeyAction::Redraw

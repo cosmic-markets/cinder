@@ -80,10 +80,10 @@ pub(super) async fn handle_spline_account_update(
     state.last_slot = wss_slot;
     reconcile_active_position_mark(state);
 
-    if matches!(state.trading.input_mode, InputMode::ViewingPositions) {
-        if let Some(stats) = state.market_stats.as_ref() {
-            state.positions_view.apply_mark_price(stats);
-        }
+    if matches!(state.trading.input_mode, InputMode::ViewingPositions)
+        && let Some(stats) = state.market_stats.as_ref()
+    {
+        state.positions_view.apply_mark_price(stats);
     }
 
     // Bypass the redraw throttle on the first payload after a switch:
@@ -176,14 +176,14 @@ pub(super) fn handle_position_leaderboard_update(
         .map(|m| (m.symbol.clone(), m.price))
         .collect();
     for e in entries.iter_mut() {
-        if let Some(&mark) = marks.get(&e.symbol) {
-            if mark > 0.0 {
-                e.notional = e.size * mark;
-                e.unrealized_pnl = match e.side {
-                    TradingSide::Long => e.size * (mark - e.entry_price),
-                    TradingSide::Short => e.size * (e.entry_price - mark),
-                };
-            }
+        if let Some(&mark) = marks.get(&e.symbol)
+            && mark > 0.0
+        {
+            e.notional = e.size * mark;
+            e.unrealized_pnl = match e.side {
+                TradingSide::Long => e.size * (mark - e.entry_price),
+                TradingSide::Short => e.size * (e.entry_price - mark),
+            };
         }
     }
 
@@ -502,18 +502,17 @@ pub(super) fn handle_stat_update(
 }
 
 fn reconcile_active_position_mark(state: &mut TuiState) {
-    if let Some(pos) = &mut state.trading.position {
-        if let Some(mark) = state
+    if let Some(pos) = &mut state.trading.position
+        && let Some(mark) = state
             .market_stats
             .as_ref()
             .map(|s| s.mark_price)
             .filter(|m| *m > 0.0)
-        {
-            pos.notional = pos.size * mark;
-            pos.unrealized_pnl = match pos.side {
-                TradingSide::Long => pos.size * (mark - pos.entry_price),
-                TradingSide::Short => pos.size * (pos.entry_price - mark),
-            };
-        }
+    {
+        pos.notional = pos.size * mark;
+        pos.unrealized_pnl = match pos.side {
+            TradingSide::Long => pos.size * (mark - pos.entry_price),
+            TradingSide::Short => pos.size * (pos.entry_price - mark),
+        };
     }
 }

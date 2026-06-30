@@ -622,29 +622,29 @@ pub(in crate::tui::ui) fn render_bots_modal(
     // when no slice event has happened yet. The two-channel design keeps a
     // real failure detail visible across a brief reconnect window — a 1-Hz
     // defer update can't clobber it.
-    if detail_h > 0 {
-        if let Some(b) = view.bots.get(view.selected_index) {
-            let (text, color) = if !b.last_status.is_empty() {
-                let color = if b.slices_failed > 0 || b.slices_unconfirmed > 0 {
-                    Color::LightYellow
-                } else {
-                    Color::Gray
-                };
-                (b.last_status.clone(), color)
-            } else if let Some(reason) = b.defer_reason.as_deref() {
-                (reason.to_string(), Color::DarkGray)
+    if detail_h > 0
+        && let Some(b) = view.bots.get(view.selected_index)
+    {
+        let (text, color) = if !b.last_status.is_empty() {
+            let color = if b.slices_failed > 0 || b.slices_unconfirmed > 0 {
+                Color::LightYellow
             } else {
-                (String::new(), Color::DarkGray)
+                Color::Gray
             };
-            if !text.is_empty() {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        format!(" {}", text),
-                        Style::default().fg(color),
-                    ))),
-                    detail_area,
-                );
-            }
+            (b.last_status.clone(), color)
+        } else if let Some(reason) = b.defer_reason.as_deref() {
+            (reason.to_string(), Color::DarkGray)
+        } else {
+            (String::new(), Color::DarkGray)
+        };
+        if !text.is_empty() {
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    format!(" {}", text),
+                    Style::default().fg(color),
+                ))),
+                detail_area,
+            );
         }
     }
 

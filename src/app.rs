@@ -94,26 +94,25 @@ async fn subscribe_market_stats(
 
     for (sym, mut rx) in initial_rxs {
         let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if !left.is_zero() {
-            if let Ok(Some(PhoenixClientEvent::MarketUpdate { update, .. })) =
+        if !left.is_zero()
+            && let Ok(Some(PhoenixClientEvent::MarketUpdate { update, .. })) =
                 tokio::time::timeout(left, rx.recv()).await
-            {
-                snapshots.insert(
-                    sym.clone(),
-                    MarketSnapshot {
-                        price: update.mark_price,
-                        volume_24h: update.day_volume_usd,
-                        open_interest_usd: update.open_interest * update.mark_price,
-                        change_24h: compute_change(&update),
-                    },
-                );
-                // Also forward the captured update into the runtime channel so
-                // the TUI's per-symbol stats cache is hot before the first
-                // frame renders. Without this, the active market's header
-                // briefly shows "Waiting for market data…" until Phoenix's
-                // next periodic push (which can be several seconds out).
-                let _ = stat_tx.try_send(update);
-            }
+        {
+            snapshots.insert(
+                sym.clone(),
+                MarketSnapshot {
+                    price: update.mark_price,
+                    volume_24h: update.day_volume_usd,
+                    open_interest_usd: update.open_interest * update.mark_price,
+                    change_24h: compute_change(&update),
+                },
+            );
+            // Also forward the captured update into the runtime channel so
+            // the TUI's per-symbol stats cache is hot before the first
+            // frame renders. Without this, the active market's header
+            // briefly shows "Waiting for market data…" until Phoenix's
+            // next periodic push (which can be several seconds out).
+            let _ = stat_tx.try_send(update);
         }
         remaining_rxs.push((sym, rx));
     }

@@ -62,16 +62,16 @@ pub(in crate::tui::runtime) fn tick_twap_scheduler(
         // `paused_at` and `maybe_complete` will refuse to flip status while
         // Paused.
         let mut just_completed: Option<String> = None;
-        if let Some(bot) = state.twaps_view.bots.get_mut(i) {
-            if let Some((slice_number, outcome)) = bot.try_take_outcome() {
-                let completed = record_resolved_slice_outcome(bot, now, slice_number, outcome);
-                dispatched_any = true;
-                if completed {
-                    // Capture the formatted line now while we still have the
-                    // bot borrow — then drop the borrow before touching
-                    // `state.trading.set_status_title` below.
-                    just_completed = Some(format_completion_status(bot));
-                }
+        if let Some(bot) = state.twaps_view.bots.get_mut(i)
+            && let Some((slice_number, outcome)) = bot.try_take_outcome()
+        {
+            let completed = record_resolved_slice_outcome(bot, now, slice_number, outcome);
+            dispatched_any = true;
+            if completed {
+                // Capture the formatted line now while we still have the
+                // bot borrow — then drop the borrow before touching
+                // `state.trading.set_status_title` below.
+                just_completed = Some(format_completion_status(bot));
             }
         }
         if let Some(line) = just_completed {

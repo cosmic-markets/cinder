@@ -98,13 +98,13 @@ pub(in crate::tui::runtime) fn spawn_wallet_wss(
                 tokio::select! {
                     msg = usdc_stream.next() => {
                         let Some(resp) = msg else { break };
-                        if let Some(data) = resp.value.data.decode() {
-                            if data.len() >= 72 {
-                                let raw = u64::from_le_bytes(
-                                    data[64..72].try_into().unwrap_or_default(),
-                                );
-                                let _ = usdc_tx.send(raw as f64 / 1_000_000.0);
-                            }
+                        if let Some(data) = resp.value.data.decode()
+                            && data.len() >= 72
+                        {
+                            let raw = u64::from_le_bytes(
+                                data[64..72].try_into().unwrap_or_default(),
+                            );
+                            let _ = usdc_tx.send(raw as f64 / 1_000_000.0);
                         }
                     }
                     msg = sol_stream.next() => {

@@ -217,12 +217,12 @@ impl TradingState {
     pub fn record_ledger(&mut self, title: impl Into<String>, txid: impl Into<String>) {
         let title = title.into();
         let txid = txid.into();
-        if let Some(front) = self.ledger.front_mut() {
-            if front.txid == txid {
-                front.timestamp = make_status_timestamp();
-                front.title = title;
-                return;
-            }
+        if let Some(front) = self.ledger.front_mut()
+            && front.txid == txid
+        {
+            front.timestamp = make_status_timestamp();
+            front.title = title;
+            return;
         }
         self.ledger.push_front(LedgerEntry {
             timestamp: make_status_timestamp(),

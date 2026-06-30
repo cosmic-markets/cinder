@@ -257,18 +257,18 @@ fn render_trader_spans(
         if i > 0 {
             spans.push(Span::styled("/".to_string(), base_style));
         }
-        if let Some(prefix) = slot {
-            if let Some(c) = prefix.chars().next() {
-                let is_owner = iceberg_trader_prefix
-                    .map(|owner| *prefix == owner)
-                    .unwrap_or(false);
-                let style = if is_owner || highlight_all {
-                    iceberg_style
-                } else {
-                    base_style
-                };
-                spans.push(Span::styled(c.to_string(), style));
-            }
+        if let Some(prefix) = slot
+            && let Some(c) = prefix.chars().next()
+        {
+            let is_owner = iceberg_trader_prefix
+                .map(|owner| *prefix == owner)
+                .unwrap_or(false);
+            let style = if is_owner || highlight_all {
+                iceberg_style
+            } else {
+                base_style
+            };
+            spans.push(Span::styled(c.to_string(), style));
         }
     }
     spans

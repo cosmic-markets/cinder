@@ -196,24 +196,25 @@ pub async fn spawn_spline_poller(
                         }
 
                         event = events.next() => {
-                            if let Some(Ok(Event::Key(key))) = event {
-                                if key.kind == KeyEventKind::Press {
-                                    let action = handle_key_press(
-                                        &key,
-                                        &mut state,
-                                        &cfg,
-                                        &configs,
-                                        &channels,
-                                        &ws_url,
-                                        Arc::clone(&balance_http),
-                                        &mut wallet_wss_handle,
-                                        &mut blockhash_refresh_handle,
-                                        &mut balance_fetch_handle,
-                                        &mut trader_orders_handle,
-                                        &mut tx_ctx_task,
-                                        &mut awaiting_first_tx_ctx,
-                                        &mut pending_market_switch,
-                                    );
+                            if let Some(Ok(Event::Key(key))) = event
+                                && key.kind == KeyEventKind::Press
+                            {
+                                let action = handle_key_press(
+                                    &key,
+                                    &mut state,
+                                    &cfg,
+                                    &configs,
+                                    &channels,
+                                    &ws_url,
+                                    Arc::clone(&balance_http),
+                                    &mut wallet_wss_handle,
+                                    &mut blockhash_refresh_handle,
+                                    &mut balance_fetch_handle,
+                                    &mut trader_orders_handle,
+                                    &mut tx_ctx_task,
+                                    &mut awaiting_first_tx_ctx,
+                                    &mut pending_market_switch,
+                                );
                                     match action {
                                         KeyAction::Redraw => {
                                             redraw_tui_force(&mut terminal, &state, &cfg, &rpc_host);
@@ -261,7 +262,6 @@ pub async fn spawn_spline_poller(
                                     }
                                 }
                             }
-                        }
 
                         response = stream.next() => {
                             let Some(response) = response else {
@@ -546,8 +546,8 @@ pub async fn spawn_spline_poller(
                     break 'sub;
                 }
 
-                if let Some(new_symbol) = pending_market_switch.take() {
-                    if connection::handle_pending_market_switch(
+                if let Some(new_symbol) = pending_market_switch.take()
+                    && connection::handle_pending_market_switch(
                         new_symbol,
                         &configs,
                         &mut state,
@@ -556,9 +556,9 @@ pub async fn spawn_spline_poller(
                         &balance_http,
                         &channels,
                         &mut tx_ctx_task,
-                    ) {
-                        continue 'sub;
-                    }
+                    )
+                {
+                    continue 'sub;
                 }
 
                 connection::sleep_before_reconnect().await;
