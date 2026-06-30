@@ -7,6 +7,7 @@ WORKDIR /app
 #    reuses the `target/` cache layer instead of rebuilding from scratch
 #    (`cargo fetch` alone caches downloads but not compilation).
 COPY Cargo.toml Cargo.lock ./
+COPY crates/phoenix-eternal-types/ crates/phoenix-eternal-types/
 RUN mkdir -p src \
     && echo 'fn main() {}' > src/main.rs \
     && : > src/lib.rs \
@@ -14,7 +15,8 @@ RUN mkdir -p src \
     && rm -rf src target/release/deps/cinder-* target/release/deps/libcinder-* target/release/cinder target/release/.fingerprint/cinder-*
 
 # 2) Compile the real crate against the cached dependency graph (includes
-#    `cosmic-phoenix-eternal-types` from crates.io).
+#    vendored `crates/phoenix-eternal-types` on Solana SDK ~3.x).
+COPY crates/phoenix-eternal-types/ crates/phoenix-eternal-types/
 COPY src/ src/
 RUN cargo build --release --locked --offline
 

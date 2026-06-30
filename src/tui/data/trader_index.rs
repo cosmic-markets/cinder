@@ -20,7 +20,7 @@ use solana_account_decoder_client_types::{UiAccountEncoding, UiDataSliceConfig};
 use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey as PhoenixPubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_types::config::RpcAccountInfoConfig;
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
 use tokio::sync::{Notify, RwLock};
 use tracing::warn;
 

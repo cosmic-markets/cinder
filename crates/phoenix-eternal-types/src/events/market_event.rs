@@ -27,6 +27,7 @@ pub struct BasisPoints {
 
 #[repr(u8)]
 #[derive(Copy, Clone, BorshDeserialize, BorshSerialize, Debug, Default, PartialEq, Eq)]
+#[borsh(use_discriminant = true)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ValidationRule {
     #[default]

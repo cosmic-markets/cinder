@@ -25,7 +25,7 @@ use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_types::config::RpcAccountInfoConfig;
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
 use solana_signer::Signer;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
