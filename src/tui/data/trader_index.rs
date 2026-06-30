@@ -186,7 +186,7 @@ async fn fetch_authorities(
             }),
             min_context_slot: None,
         };
-        let resp = match client.get_multiple_accounts_with_config(&pks, cfg).await {
+        let resp = match client.get_multiple_ui_accounts_with_config(&pks, cfg).await {
             Ok(r) => r,
             Err(e) => {
                 warn!(error = %e, "getMultipleAccounts failed for trader batch; skipping");
@@ -196,7 +196,7 @@ async fn fetch_authorities(
         let accounts = resp.value;
         for ((addr, pda), acc) in pairs_aligned.iter().zip(accounts) {
             let Some(acc) = acc else { continue };
-            let data = acc.data.as_slice();
+            let Some(data) = acc.data.decode() else { continue };
             if data.len() < TRADER_AUTHORITY_END {
                 continue;
             }
