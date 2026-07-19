@@ -104,7 +104,10 @@ fn expand_region<F>(
     if region.start_offset >= region.end_offset {
         return;
     }
-    let unfilled_lots = region.total_size.saturating_sub(region.filled_size).as_inner();
+    let unfilled_lots = region
+        .total_size
+        .saturating_sub(region.filled_size)
+        .as_inner();
     let density = region.density.as_inner();
     if unfilled_lots == 0 || density == 0 {
         return;
