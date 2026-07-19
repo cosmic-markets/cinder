@@ -104,19 +104,20 @@ fn expand_region<F>(
     if region.start_offset >= region.end_offset {
         return;
     }
-    let unfilled_lots = region.total_size.saturating_sub(region.filled_size);
-    if unfilled_lots == 0 || region.density == 0 {
+    let unfilled_lots = region.total_size.saturating_sub(region.filled_size).as_inner();
+    let density = region.density.as_inner();
+    if unfilled_lots == 0 || density == 0 {
         return;
     }
     // Tag every emitted row with the region's full remaining depth so the
     // crossed-book trim heuristic can compare regions, not just front ticks.
     let region_remaining_units = base_lots_to_units(unfilled_lots, bld);
     let mut remaining = unfilled_lots;
-    for offset in (region.start_offset..region.end_offset).rev() {
+    for offset in (region.start_offset.as_inner()..region.end_offset.as_inner()).rev() {
         if remaining == 0 {
             break;
         }
-        let take = remaining.min(region.density);
+        let take = remaining.min(density);
         remaining -= take;
         out.push((
             trader,
@@ -188,8 +189,7 @@ pub fn parse_spline_data(
 
     for spline in collection.active_splines() {
         let trader = spline.trader;
-        let mid_ticks = spline.mid_price;
-        let mid = ticks_to_price(mid_ticks, tick_size, bld);
+        let mid = ticks_to_price(spline.mid_price.as_inner(), tick_size, bld);
         let last_updated_slot = spline.user_update_slot;
 
         // Skip exhausted regions: as a spline rolls, `bid_offset` advances past
@@ -204,8 +204,8 @@ pub fn parse_spline_data(
                 continue;
             }
             let price_at_offset = |offset| mid - ticks_to_price(offset, tick_size, bld);
-            if region.top_level_hidden_take_size > 0 {
-                bid_iceberg_markers.push((price_at_offset(region.end_offset), trader));
+            if region.top_level_hidden_take_size.as_inner() > 0 {
+                bid_iceberg_markers.push((price_at_offset(region.end_offset.as_inner()), trader));
             }
             expand_region(region, trader, bld, price_at_offset, &mut bid_rows);
         }
@@ -219,8 +219,8 @@ pub fn parse_spline_data(
                 continue;
             }
             let price_at_offset = |offset| mid + ticks_to_price(offset, tick_size, bld);
-            if region.top_level_hidden_take_size > 0 {
-                ask_iceberg_markers.push((price_at_offset(region.end_offset), trader));
+            if region.top_level_hidden_take_size.as_inner() > 0 {
+                ask_iceberg_markers.push((price_at_offset(region.end_offset.as_inner()), trader));
             }
             expand_region(region, trader, bld, price_at_offset, &mut ask_rows);
         }
@@ -288,7 +288,7 @@ fn dump_spline_collection_debug(collection: &SplineCollection, tick_size: u64, b
         if !spline.is_active {
             continue;
         }
-        let mid = ticks_to_price(spline.mid_price, tick_size, bld);
+        let mid = ticks_to_price(spline.mid_price.as_inner(), tick_size, bld);
         let trader_short: String = spline.trader.to_string().chars().take(8).collect();
         let _ = writeln!(
             s,
@@ -306,8 +306,8 @@ fn dump_spline_collection_debug(collection: &SplineCollection, tick_size: u64, b
         let bid_end = (spline.bid_num_regions as usize).min(spline.bid_regions.len());
         for (j, r) in spline.bid_regions.iter().enumerate().take(bid_end) {
             let active = j >= spline.bid_offset as usize;
-            let p_start = mid - ticks_to_price(r.start_offset, tick_size, bld);
-            let p_end = mid - ticks_to_price(r.end_offset, tick_size, bld);
+            let p_start = mid - ticks_to_price(r.start_offset.as_inner(), tick_size, bld);
+            let p_end = mid - ticks_to_price(r.end_offset.as_inner(), tick_size, bld);
             let _ = writeln!(
                 s,
                 "  bid[{j}]{} start_off={} end_off={} ${p_start:.6}..${p_end:.6} \
@@ -326,8 +326,8 @@ fn dump_spline_collection_debug(collection: &SplineCollection, tick_size: u64, b
         let ask_end = (spline.ask_num_regions as usize).min(spline.ask_regions.len());
         for (j, r) in spline.ask_regions.iter().enumerate().take(ask_end) {
             let active = j >= spline.ask_offset as usize;
-            let p_start = mid + ticks_to_price(r.start_offset, tick_size, bld);
-            let p_end = mid + ticks_to_price(r.end_offset, tick_size, bld);
+            let p_start = mid + ticks_to_price(r.start_offset.as_inner(), tick_size, bld);
+            let p_end = mid + ticks_to_price(r.end_offset.as_inner(), tick_size, bld);
             let _ = writeln!(
                 s,
                 "  ask[{j}]{} start_off={} end_off={} ${p_start:.6}..${p_end:.6} \
@@ -401,7 +401,7 @@ where
         if order.num_base_lots_remaining == 0 {
             continue;
         }
-        let ticks = order_id.price_in_ticks;
+        let ticks = order_id.price_in_ticks.as_inner();
         let trader_id = order.trader_position_id.trader_id.unwrap_or(0);
         let qty = base_lots_to_units(order.num_base_lots_remaining, bld);
 
@@ -494,6 +494,7 @@ pub fn parse_l2_book_from_market_account(
 mod tests {
     use super::*;
     use phoenix_rise::accounts::owned::TraderPositionId;
+    use phoenix_rise::math::Ticks;
     use solana_pubkey::Pubkey as PhoenixPubkey;
 
     fn resting(trader_id: u32, lots: u64) -> OrderbookRestingOrder {
@@ -520,7 +521,7 @@ mod tests {
 
     fn fifo(price_in_ticks: u64, order_sequence_number: u64) -> FifoOrderId {
         FifoOrderId {
-            price_in_ticks,
+            price_in_ticks: Ticks::new(price_in_ticks),
             order_sequence_number,
         }
     }

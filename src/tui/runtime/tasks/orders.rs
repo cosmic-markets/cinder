@@ -62,7 +62,7 @@ fn push_conditional_trigger_row(
         side: trigger_side_to_trading_side(trigger.trade_side),
         order_type: conditional_order_type(trigger.order_kind),
         price_usd: 0.0,
-        price_ticks: trigger.trigger_price,
+        price_ticks: trigger.trigger_price.as_inner(),
         size_remaining: size_lots as f64,
         initial_size: size_lots as f64,
         reduce_only: true,
@@ -84,7 +84,7 @@ fn conditional_order_rows(
         let Some(symbol) = asset_symbols.get(&order.asset_id) else {
             continue;
         };
-        let size_lots = order.fillable_size.max(order.max_size);
+        let size_lots = order.fillable_size.max(order.max_size).as_inner();
         let base_sequence = 1_000_000_000 + u64::from(order_index) * 2;
         push_conditional_trigger_row(
             &mut rows,

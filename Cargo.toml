@@ -31,7 +31,7 @@ futures-util            = "0.3"
 phoenix-eternal-types   = { version = "0.1.4", package = "cosmic-phoenix-eternal-types" }
 # Full off-chain SDK bundle (default features: api, ws, sdk, tx-builder).
 # Facade modules: phoenix_rise::{accounts, api, core, ix, math, types}.
-phoenix-rise            = { version = "=0.3.0", features = ["api", "ws", "sdk", "tx-builder"] }
+phoenix-rise            = { version = "=0.3.4", features = ["api", "ws", "sdk", "tx-builder"] }
 ratatui                 = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 rustls                  = { version = "0.23.41", default-features = false, features = ["ring", "std", "tls12"] }
 serde_json              = "1.0"

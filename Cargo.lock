@@ -2039,9 +2039,9 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "phoenix-rise"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c02bbd17914c812b9621097dbcab6ee13e03be2af85573d9cc8b281ec9fc076"
+checksum = "cf1ac25a6fb1b1cb7bf3e40701b73a2cd10af7e4c963d0582786e586e013bd2d"
 dependencies = [
  "phoenix-rise-accounts",
  "phoenix-rise-api",
@@ -2053,9 +2053,9 @@ dependencies = [
 
 [[package]]
 name = "phoenix-rise-accounts"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c25cc44f57651a362e7984b47acd1f50bf72b7106cabf9639f3fb2b4c2571002"
+checksum = "549b130422dfd976cef8d5f82394cbb5491d18355a77eaead7fa092b90844bdd"
 dependencies = [
  "borsh",
  "bs58",
@@ -2069,9 +2069,9 @@ dependencies = [
 
 [[package]]
 name = "phoenix-rise-api"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad0ab7eda4d89bd429abc67c4f5d51f5ef035846541005f26fe72e1d3d23a9fc"
+checksum = "0588032bd70614675285aa5f9a3618a986e546e89b1688c27d147d3ada663a61"
 dependencies = [
  "async-trait",
  "base64",
@@ -2097,6 +2097,7 @@ dependencies = [
  "solana-pubkey 3.0.0",
  "solana-rpc-client",
  "solana-rpc-client-api",
+ "solana-signature",
  "solana-signer",
  "solana-transaction",
  "solana-transaction-error",
@@ -2111,9 +2112,9 @@ dependencies = [
 
 [[package]]
 name = "phoenix-rise-core"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "680cf1d81949048ac7f1a98b8878c0667ce13d6ade402ec982e9a4ba70667080"
+checksum = "de9de86183bf89842c812e3340551f7a141ab11b5c5b74ae69a5d63b552d936e"
 dependencies = [
  "base64",
  "bytemuck",
@@ -2134,13 +2135,14 @@ dependencies = [
 
 [[package]]
 name = "phoenix-rise-ix"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9581b168bc81cffc3e4c2c25b0678b3e5a7fcf7090e9a97a3aa8581dd904c348"
+checksum = "5763f626c664f7420dd6c1fff63358a14421b4e2ccc20327c478d18cdada4ae6"
 dependencies = [
  "borsh",
  "bytemuck",
  "phoenix-rise-accounts",
+ "phoenix-rise-math",
  "sha2",
  "sha2-const-stable",
  "solana-instruction",
@@ -2150,16 +2152,16 @@ dependencies = [
 
 [[package]]
 name = "phoenix-rise-math"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a68c74b1bd9d5ca125021620f44752f8ef12348d981a6210ac41c432cb546f35"
+checksum = "0f6c10d1a8fd19901084fe96a17404e2946a0de9645ad788dc096fa986fed7a3"
 dependencies = [
  "borsh",
  "bytemuck",
  "fixed",
  "pastey 0.1.1",
- "rand 0.10.1",
  "rust_decimal",
+ "serde",
  "sha2-const-stable",
  "solana-pubkey 3.0.0",
  "thiserror 2.0.18",
@@ -2167,11 +2169,12 @@ dependencies = [
 
 [[package]]
 name = "phoenix-rise-types"
-version = "0.3.0"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fdce222fa3532e7aa1994944d089957192ddd71a265ed38b06ce1e5798f4b26"
+checksum = "ea8198ec7a3ff03a6a3476908e886e3ce8b92920d90e5677f2b970455dc78407"
 dependencies = [
  "chrono",
+ "phoenix-rise-math",
  "serde",
  "serde_json",
  "serde_with",
