@@ -11,17 +11,18 @@
 //! path. `trader_id` in `TraderPositionId` is the sokoban *node pointer* into
 //! the `GlobalTraderIndex` — the same u32 the cache is keyed by.
 
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::collections::HashMap;
-use tracing::warn;
 
 use phoenix_eternal_types::quantities::{SignedBaseLots, SignedQuoteLots};
 use phoenix_eternal_types::{ActiveTraderBufferTree, program_ids};
+use solana_commitment_config::CommitmentConfig;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
 use super::super::config::SplineConfig;
-use super::super::data::GtiCache;
+use super::super::constants::QUOTE_LOT_DECIMALS;
 use super::super::format::pubkey_trader_short;
 use super::super::trading::{TopPositionEntry, TradingSide};
+use super::{GtiCache, fetch_sokoban_arenas};
 
 const ATB_HEADER_SIZE: usize =
     std::mem::size_of::<phoenix_eternal_types::ActiveTraderBufferHeader>();
@@ -31,47 +32,10 @@ const ATB_HEADER_SIZE: usize =
 /// the GlobalTraderIndex. See `gti::NUM_ARENAS_OFFSET`.
 const ATB_NUM_ARENAS_OFFSET: usize = ATB_HEADER_SIZE + 4;
 
-/// Quote lots are in micro-USD (6 decimals) — same constant used throughout
-/// the math crate (see `MarketCalculator::quote_lot_decimals`).
-const QUOTE_DECIMALS: i32 = 6;
-
 /// Number of rows the modal shows. The fetch task still iterates every
 /// position in the buffer, but only the top-N by notional are kept. The modal
 /// scrolls when the popup can't render every row at the current terminal size.
 pub const TOP_N_POSITIONS: usize = 50;
-
-async fn fetch_atb_buffers(client: &RpcClient) -> Result<Vec<Vec<u8>>, String> {
-    let (header_key, _) = program_ids::get_active_trader_buffer_address_default(0);
-    let header_account = client
-        .get_account(&header_key)
-        .await
-        .map_err(|e| format!("fetch ATB header: {e}"))?;
-
-    if header_account.data.len() < ATB_NUM_ARENAS_OFFSET + 2 {
-        return Err("ATB header account too small for superblock".to_string());
-    }
-    let num_arenas = u16::from_le_bytes([
-        header_account.data[ATB_NUM_ARENAS_OFFSET],
-        header_account.data[ATB_NUM_ARENAS_OFFSET + 1],
-    ]);
-
-    let mut buffers: Vec<Vec<u8>> = Vec::with_capacity(num_arenas.max(1) as usize);
-    buffers.push(header_account.data);
-    for i in 1..num_arenas {
-        let (arena_key, _) = program_ids::get_active_trader_buffer_address_default(i);
-        match client.get_account(&arena_key).await {
-            Ok(acc) => buffers.push(acc.data),
-            Err(e) => {
-                // Stop early rather than inserting a misaligned buffer. The
-                // next refresh will try again; the top list just reflects
-                // fewer positions in the meantime.
-                warn!(arena = i, error = %e, "ATB arena fetch failed; truncating");
-                break;
-            }
-        }
-    }
-    Ok(buffers)
-}
 
 /// One raw position pulled out of the tree before symbol/mark-price resolution.
 /// Kept separate from [`TopPositionEntry`] so the decode step doesn't need to
@@ -130,27 +94,16 @@ fn to_entry(
 ) -> Option<TopPositionEntry> {
     let cfg = configs_by_asset.get(&raw.asset_id).copied()?;
 
-    // lots → base units: divide by 10^base_lot_decimals. Matches
-    // `MarketCalculator::signed_base_lots_to_units`.
-    let base_units_per_unit = 10f64.powi(cfg.base_lot_decimals as i32);
-    if base_units_per_unit <= 0.0 {
-        return None;
-    }
-    let size_signed = raw.base_lots as f64 / base_units_per_unit;
-    let size = size_signed.abs();
+    // lots → base units: divide by 10^base_lot_decimals.
+    let size = (raw.base_lots as f64 / 10f64.powi(cfg.base_lot_decimals as i32)).abs();
     if size < 1e-12 {
         return None;
     }
 
-    // virtual quote lots → USD: divide by 10^quote_decimals (= 6). The sign is
-    // the negative of the position sign (opening a long costs USD → virtual
-    // quote is negative for longs). Use absolute values to derive entry.
-    let virtual_quote_usd_abs = (raw.virtual_quote_lots as f64).abs() / 10f64.powi(QUOTE_DECIMALS);
-    let entry_price = if size > 0.0 {
-        virtual_quote_usd_abs / size
-    } else {
-        0.0
-    };
+    // virtual quote lots → USD: divide by 10^QUOTE_LOT_DECIMALS (= 6).
+    let virtual_quote_usd_abs =
+        (raw.virtual_quote_lots as f64).abs() / 10f64.powi(QUOTE_LOT_DECIMALS);
+    let entry_price = virtual_quote_usd_abs / size;
 
     let side = if raw.base_lots > 0 {
         TradingSide::Long
@@ -217,9 +170,14 @@ pub async fn fetch_top_positions(
     marks: &HashMap<String, f64>,
     gti: Option<&GtiCache>,
 ) -> Result<Vec<TopPositionEntry>, String> {
-    use solana_commitment_config::CommitmentConfig;
     let client = RpcClient::new_with_commitment(rpc_url.to_string(), CommitmentConfig::processed());
-    let buffers = fetch_atb_buffers(&client).await?;
+    let buffers = fetch_sokoban_arenas(
+        &client,
+        ATB_NUM_ARENAS_OFFSET,
+        "ATB",
+        program_ids::get_active_trader_buffer_address_default,
+    )
+    .await?;
     let raw = decode_positions(&buffers);
 
     let configs_by_asset: HashMap<u32, &SplineConfig> =

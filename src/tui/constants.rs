@@ -20,7 +20,7 @@ pub const ORDER_SIZE_PRESETS: &[f64] = &[
     10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1_000.0, 2_500.0, 5_000.0, 10_000.0, 25_000.0,
     50_000.0, 100_000.0,
 ];
-/// The default index in the preset list (0.1 SOL).
+/// The default index in the preset list (1.0 unit).
 pub const DEFAULT_SIZE_INDEX: usize = 12;
 
 /// Maximum length of a Phoenix referral code accepted by the custom-code

@@ -35,7 +35,6 @@ use super::{
 
 pub async fn spawn_spline_poller(
     terminal: TuiTerminal,
-    _ws: &Arc<phoenix_rise::api::PhoenixClient>,
     market_list: Vec<MarketInfo>,
     configs: std::collections::HashMap<String, SplineConfig>,
     mut market_rx: tokio::sync::mpsc::Receiver<MarketListUpdate>,
@@ -134,17 +133,14 @@ pub async fn spawn_spline_poller(
             .await
             {
                 Ok(Ok(c)) => c,
-                Ok(Err(e)) => {
-                    warn!(url = %ws_url, error = %e, "spline WSS connect failed; retry in 5s");
-                    if establish_rpc_with_fallback().await {
-                        ws_url = ws_url_from_env();
-                        rpc_host = ui::rpc_host_from_urlish(&rpc_http_url_from_env());
+                err => {
+                    match err {
+                        Ok(Err(e)) => {
+                            warn!(url = %ws_url, error = %e, "spline WSS connect failed; retry in 5s")
+                        }
+                        Err(_) => warn!(url = %ws_url, "spline WSS connect timed out; retry in 5s"),
+                        Ok(Ok(_)) => unreachable!(),
                     }
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
-                }
-                Err(_) => {
-                    warn!(url = %ws_url, "spline WSS connect timed out; retry in 5s");
                     if establish_rpc_with_fallback().await {
                         ws_url = ws_url_from_env();
                         rpc_host = ui::rpc_host_from_urlish(&rpc_http_url_from_env());

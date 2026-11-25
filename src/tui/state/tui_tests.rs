@@ -213,8 +213,8 @@ fn rebuild_merged_book_paints_iceberg_marker_on_outer_adjacent_row() {
     s.rebuild_merged_book("BTC", false, None, 2);
     let asks = &s.merged_book.ask_rows;
     let row = |p: f64| asks.iter().find(|r| (r.price - p).abs() < 1e-9).unwrap();
-    assert!(!row(80.01).has_hidden_fill);
-    assert!(row(80.02).has_hidden_fill);
+    assert!(row(80.01).iceberg_trader_prefix.is_none());
+    assert!(row(80.02).iceberg_trader_prefix.is_some());
     // Marker at $80.02 came from the spline owned by 0xA1, so the row picks
     // up that owner's prefix for blue-letter highlighting in the renderer.
     assert_eq!(

@@ -193,30 +193,34 @@ impl Default for UserConfig {
             rpc_url: String::new(),
             language: Language::default(),
             show_clob: true,
-            fanout_public_rpc: default_fanout_public_rpc_from_env(),
+            fanout_public_rpc: env_bool("CINDER_FANOUT_PUBLIC_RPC", true),
             compute_unit_price_micro_lamports: None,
             compute_unit_limit_per_position: None,
             wallet_path: String::new(),
-            skip_order_confirmation: default_skip_order_confirmation_from_env(),
-            skip_preflight: default_skip_preflight_from_env(),
+            skip_order_confirmation: env_bool("CINDER_SKIP_ORDER_CONFIRMATION", false),
+            skip_preflight: env_bool("CINDER_SKIP_PREFLIGHT", false),
         }
     }
 }
 
-/// Reads `CINDER_COMPUTE_UNIT_PRICE` (microlamports per CU). Returns `None`
-/// when the env var is unset, empty, or fails to parse as `u64`.
-fn compute_unit_price_from_env() -> Option<u64> {
-    env::var("CINDER_COMPUTE_UNIT_PRICE")
-        .ok()
-        .and_then(|s| s.trim().parse::<u64>().ok())
+/// Parse an optional typed value from an environment variable.
+fn env_parse<T: FromStr>(key: &str) -> Option<T> {
+    env::var(key).ok().and_then(|s| s.trim().parse::<T>().ok())
 }
 
-/// Reads `CINDER_COMPUTE_UNIT_LIMIT` (CUs per position). Returns `None` when
-/// the env var is unset, empty, or fails to parse as `u32`.
-fn compute_unit_limit_from_env() -> Option<u32> {
-    env::var("CINDER_COMPUTE_UNIT_LIMIT")
-        .ok()
-        .and_then(|s| s.trim().parse::<u32>().ok())
+/// Parse a boolean environment variable override, falling back to `default` when unset.
+fn env_bool(key: &str, default: bool) -> bool {
+    match env::var(key) {
+        Ok(v) => {
+            let norm = v.trim().to_ascii_lowercase();
+            if default {
+                !matches!(norm.as_str(), "0" | "false" | "off" | "no")
+            } else {
+                matches!(norm.as_str(), "1" | "true" | "on" | "yes")
+            }
+        }
+        Err(_) => default,
+    }
 }
 
 /// Resolved `SetComputeUnitPrice` value:
@@ -226,7 +230,7 @@ fn compute_unit_limit_from_env() -> Option<u32> {
 pub fn current_compute_unit_price_micro_lamports() -> u64 {
     current_user_config()
         .compute_unit_price_micro_lamports
-        .or_else(compute_unit_price_from_env)
+        .or_else(|| env_parse("CINDER_COMPUTE_UNIT_PRICE"))
         .or_else(super::tx::current_auto_priority_fee)
         .unwrap_or(DEFAULT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS)
 }
@@ -236,62 +240,16 @@ pub fn current_compute_unit_price_micro_lamports() -> u64 {
 pub fn current_compute_unit_limit_per_position() -> u32 {
     current_user_config()
         .compute_unit_limit_per_position
-        .or_else(compute_unit_limit_from_env)
+        .or_else(|| env_parse("CINDER_COMPUTE_UNIT_LIMIT"))
         .unwrap_or(DEFAULT_COMPUTE_UNIT_LIMIT_PER_POSITION)
-}
-
-/// Reads the env-var override for the public-RPC fan-out toggle.
-/// `CINDER_FANOUT_PUBLIC_RPC=0|false|off|no` disables; anything else (or unset)
-/// keeps the default `true`. The env var is only consulted as the seed for a
-/// fresh `UserConfig::default()`; once the user toggles it in the config modal,
-/// the persisted value wins.
-fn default_fanout_public_rpc_from_env() -> bool {
-    match env::var("CINDER_FANOUT_PUBLIC_RPC") {
-        Ok(v) => !matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "0" | "false" | "off" | "no"
-        ),
-        Err(_) => true,
-    }
-}
-
-/// Reads the env-var override for the place-order confirmation bypass.
-/// `CINDER_SKIP_ORDER_CONFIRMATION=1|true|on|yes` enables the bypass; anything
-/// else (or unset) keeps the default `false` (Y prompt required). The env var
-/// is only consulted as the seed for a fresh `UserConfig::default()`; once the
-/// user toggles it in the config modal, the persisted value wins.
-fn default_skip_order_confirmation_from_env() -> bool {
-    match env::var("CINDER_SKIP_ORDER_CONFIRMATION") {
-        Ok(v) => matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "on" | "yes"
-        ),
-        Err(_) => false,
-    }
-}
-
-/// Reads the env-var override for the RPC `skip_preflight` toggle.
-/// `CINDER_SKIP_PREFLIGHT=1|true|on|yes` enables; anything else (or unset)
-/// keeps the default `false`. The env var is only consulted as the seed for a
-/// fresh `UserConfig::default()`; once the user toggles it in the config
-/// modal, the persisted value wins.
-fn default_skip_preflight_from_env() -> bool {
-    match env::var("CINDER_SKIP_PREFLIGHT") {
-        Ok(v) => matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "on" | "yes"
-        ),
-        Err(_) => false,
-    }
 }
 
 /// Candidate wallet paths in priority order: `phoenix.json` next to the
 /// binary, then `PHX_WALLET_PATH` / `KEYPAIR_PATH`, then the standard
 /// Solana CLI location. The first path that exists and decodes is used.
 fn wallet_path_candidates() -> Vec<String> {
-    let home = env::var("USERPROFILE").unwrap_or_else(|_| env::var("HOME").unwrap_or_default());
     let env_path = env::var("PHX_WALLET_PATH").or_else(|_| env::var("KEYPAIR_PATH"));
-    let solana_default = std::path::PathBuf::from(home)
+    let solana_default = std::path::PathBuf::from(home_dir())
         .join(".config")
         .join("solana")
         .join("id.json")
@@ -334,29 +292,7 @@ pub fn default_wallet_path() -> String {
 /// a missing file (e.g. unset Docker volume) falls through to base58 decoding
 /// and can panic on `/`.
 fn looks_like_filesystem_path(s: &str) -> bool {
-    if s.starts_with('/') {
-        return true;
-    }
-    if s.starts_with("./") || s.starts_with("../") {
-        return true;
-    }
-    if s.contains('/') {
-        return true;
-    }
-    if s.contains('\\') {
-        return true;
-    }
-    let mut chars = s.chars();
-    let Some(letter) = chars.next() else {
-        return false;
-    };
-    let Some(':') = chars.next() else {
-        return false;
-    };
-    if !letter.is_ascii_alphabetic() {
-        return false;
-    }
-    matches!(chars.next(), Some('/' | '\\'))
+    s.contains('/') || s.contains('\\')
 }
 
 /// Resolves the "Load wallet" field: JSON `[…]` bytes, path to a keypair file
@@ -450,7 +386,7 @@ fn load_user_config_from_disk() -> UserConfig {
         fanout_public_rpc: v
             .get("fanout_public_rpc")
             .and_then(|x| x.as_bool())
-            .unwrap_or_else(default_fanout_public_rpc_from_env),
+            .unwrap_or_else(|| env_bool("CINDER_FANOUT_PUBLIC_RPC", true)),
         compute_unit_price_micro_lamports: v
             .get("compute_unit_price_micro_lamports")
             .and_then(|x| x.as_u64()),
@@ -466,11 +402,11 @@ fn load_user_config_from_disk() -> UserConfig {
         skip_order_confirmation: v
             .get("skip_order_confirmation")
             .and_then(|x| x.as_bool())
-            .unwrap_or_else(default_skip_order_confirmation_from_env),
+            .unwrap_or_else(|| env_bool("CINDER_SKIP_ORDER_CONFIRMATION", false)),
         skip_preflight: v
             .get("skip_preflight")
             .and_then(|x| x.as_bool())
-            .unwrap_or_else(default_skip_preflight_from_env),
+            .unwrap_or_else(|| env_bool("CINDER_SKIP_PREFLIGHT", false)),
     }
 }
 
@@ -600,7 +536,8 @@ pub fn http_rpc_url_to_ws(http: &str) -> String {
 /// Derive the number of decimal places to display for prices from tick_size and
 /// base_lot_decimals.
 pub fn compute_price_decimals(tick_size: u64, base_lots_decimals: i8) -> usize {
-    let min_price_step = tick_size as f64 * 10_f64.powi(base_lots_decimals as i32) / 10_f64.powi(6); // QUOTE_LOT_DECIMALS = 6
+    let min_price_step = tick_size as f64 * 10_f64.powi(base_lots_decimals as i32)
+        / 10_f64.powi(super::constants::QUOTE_LOT_DECIMALS);
     if min_price_step > 0.0 {
         let raw = (-min_price_step.log10()).ceil().max(0.0);
         // Clamp to a displayable range; pathological tick sizes (e.g. tick_size=1,
@@ -802,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_price_decimals_returns_zero_when_step_is_invalid() {
+    fn compute_price_decimals_falls_back_to_two_when_step_is_invalid() {
         assert_eq!(compute_price_decimals(0, 0), 2);
     }
 

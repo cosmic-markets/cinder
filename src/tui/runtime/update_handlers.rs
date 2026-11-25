@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::io::Stdout;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -179,11 +178,10 @@ pub(super) fn handle_position_leaderboard_update(
         if let Some(&mark) = marks.get(&e.symbol)
             && mark > 0.0
         {
-            e.notional = e.size * mark;
-            e.unrealized_pnl = match e.side {
-                TradingSide::Long => e.size * (mark - e.entry_price),
-                TradingSide::Short => e.size * (e.entry_price - mark),
-            };
+            let (notional, pnl) =
+                crate::tui::trading::position_notional_and_pnl(e.size, e.entry_price, mark, e.side);
+            e.notional = notional;
+            e.unrealized_pnl = pnl;
         }
     }
 
@@ -232,31 +230,17 @@ fn merge_wallet_positions_into_leaderboard(
     state: &TuiState,
     marks: &HashMap<String, f64>,
 ) {
-    let user_authority = state
-        .trading
-        .keypair
-        .as_ref()
-        .map(|kp| kp.pubkey().to_string());
-    let Some(auth_str) = user_authority else {
+    let Some(authority) = state.trading.keypair.as_ref().map(|kp| kp.pubkey()) else {
         return;
     };
-
-    let user_display = solana_pubkey::Pubkey::from_str(&auth_str)
-        .ok()
-        .map(|pk| pubkey_trader_short(&pk))
-        .unwrap_or_else(|| auth_str.clone());
+    let auth_str = authority.to_string();
+    let user_display = pubkey_trader_short(&authority);
     entries.retain(|e| e.trader.as_deref() != Some(auth_str.as_str()));
 
     for p in &state.positions_view.positions {
         let mark = marks.get(&p.symbol).copied().unwrap_or(0.0);
         let (notional, pnl) = if mark > 0.0 {
-            (
-                p.size * mark,
-                match p.side {
-                    TradingSide::Long => p.size * (mark - p.entry_price),
-                    TradingSide::Short => p.size * (p.entry_price - mark),
-                },
-            )
+            crate::tui::trading::position_notional_and_pnl(p.size, p.entry_price, mark, p.side)
         } else {
             (p.notional, p.unrealized_pnl)
         };
@@ -314,11 +298,7 @@ pub(super) fn handle_tx_context_update(
     if !state.trading.wallet_loaded || sym != cfg.symbol {
         return;
     }
-    let current_wallet = state
-        .trading
-        .keypair
-        .as_ref()
-        .and_then(|k| solana_pubkey::Pubkey::from_str(&k.pubkey().to_string()).ok());
+    let current_wallet = state.trading.keypair.as_ref().map(|k| k.pubkey());
     if current_wallet != Some(wallet) {
         return;
     }

@@ -294,7 +294,7 @@ pub(super) fn cleanup_tasks(
     restore_terminal(terminal);
 }
 
-fn abort_handle(handle: &mut Option<tokio::task::JoinHandle<()>>) {
+pub(super) fn abort_handle(handle: &mut Option<tokio::task::JoinHandle<()>>) {
     if let Some(h) = handle.take() {
         h.abort();
     }

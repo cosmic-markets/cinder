@@ -1,7 +1,5 @@
 //! Keyboard input handlers grouped by input mode.
 
-//! Keyboard input handlers for each input mode.
-
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};

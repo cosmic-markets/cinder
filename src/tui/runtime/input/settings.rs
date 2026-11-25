@@ -2,89 +2,65 @@
 
 use super::*;
 
-fn toggle_show_clob(trading: &mut TradingState) -> KeyAction {
-    let prev = trading.config.show_clob;
-    trading.config.show_clob = !prev;
+/// Flip a boolean setting in `trading.config`, persist it (rolling back on error),
+/// and return `on_success` when saved.
+fn toggle_bool_config(
+    trading: &mut TradingState,
+    field: impl Fn(&mut crate::tui::config::UserConfig) -> &mut bool,
+    status_prefix: &'static str,
+    on_success: KeyAction,
+) -> KeyAction {
+    let prev = *field(&mut trading.config);
+    *field(&mut trading.config) = !prev;
     match save_user_config(&trading.config) {
         Ok(()) => {
             let s = strings();
-            let state = if trading.config.show_clob {
-                "On"
-            } else {
-                "Off"
-            };
-            trading.set_status_title(format!("{} {}", s.st_clob_set, state));
-            KeyAction::ToggleClob
+            let state = if !prev { s.on } else { s.off };
+            trading.set_status_title(format!("{status_prefix} {state}"));
+            on_success
         }
         Err(e) => {
-            trading.config.show_clob = prev;
-            trading.set_status_title(format!("{} {}", strings().st_failed_save, e));
+            *field(&mut trading.config) = prev;
+            trading.set_status_title(format!("{} {e}", strings().st_failed_save));
             KeyAction::Redraw
         }
     }
 }
 
+fn toggle_show_clob(trading: &mut TradingState) -> KeyAction {
+    toggle_bool_config(
+        trading,
+        |c| &mut c.show_clob,
+        strings().st_clob_set,
+        KeyAction::ToggleClob,
+    )
+}
+
 fn toggle_fanout_public_rpc(trading: &mut TradingState) -> KeyAction {
-    let prev = trading.config.fanout_public_rpc;
-    trading.config.fanout_public_rpc = !prev;
-    match save_user_config(&trading.config) {
-        Ok(()) => {
-            let s = strings();
-            let state = if trading.config.fanout_public_rpc {
-                s.on
-            } else {
-                s.off
-            };
-            trading.set_status_title(format!("{} {}", s.st_fanout_set, state));
-        }
-        Err(e) => {
-            trading.config.fanout_public_rpc = prev;
-            trading.set_status_title(format!("{} {}", strings().st_failed_save, e));
-        }
-    }
-    KeyAction::Redraw
+    toggle_bool_config(
+        trading,
+        |c| &mut c.fanout_public_rpc,
+        strings().st_fanout_set,
+        KeyAction::Redraw,
+    )
 }
 
 fn toggle_skip_order_confirmation(trading: &mut TradingState) -> KeyAction {
-    let prev = trading.config.skip_order_confirmation;
-    trading.config.skip_order_confirmation = !prev;
-    match save_user_config(&trading.config) {
-        Ok(()) => {
-            let s = strings();
-            let state = if trading.config.skip_order_confirmation {
-                s.on
-            } else {
-                s.off
-            };
-            trading.set_status_title(format!("{} {}", s.st_skip_order_confirmation_set, state));
-        }
-        Err(e) => {
-            trading.config.skip_order_confirmation = prev;
-            trading.set_status_title(format!("{} {}", strings().st_failed_save, e));
-        }
-    }
-    KeyAction::Redraw
+    toggle_bool_config(
+        trading,
+        |c| &mut c.skip_order_confirmation,
+        strings().st_skip_order_confirmation_set,
+        KeyAction::Redraw,
+    )
 }
 
 fn toggle_skip_preflight(trading: &mut TradingState) -> KeyAction {
-    let prev = trading.config.skip_preflight;
-    trading.config.skip_preflight = !prev;
-    match save_user_config(&trading.config) {
-        Ok(()) => {
-            let s = strings();
-            let state = if trading.config.skip_preflight {
-                s.on
-            } else {
-                s.off
-            };
-            trading.set_status_title(format!("{} {}", s.st_skip_preflight_set, state));
-        }
-        Err(e) => {
-            trading.config.skip_preflight = prev;
-            trading.set_status_title(format!("{} {}", strings().st_failed_save, e));
-        }
-    }
-    KeyAction::Redraw
+    toggle_bool_config(
+        trading,
+        |c| &mut c.skip_preflight,
+        strings().st_skip_preflight_set,
+        KeyAction::Redraw,
+    )
 }
 
 /// Modal-level navigation for the config view (before entering edit mode).
@@ -182,47 +158,45 @@ const MAX_CU_PRICE_DIGITS: usize = 8;
 /// largest value that still fits in `u32` (max 4_294_967_295).
 const MAX_CU_LIMIT_DIGITS: usize = 10;
 
-/// Text editor for the `SetComputeUnitPrice` override (microlamports per CU).
-/// Empty + Enter clears the override and falls back to env / default.
-pub(in crate::tui::runtime) fn handle_editing_compute_unit_price(
+/// Shared numeric editor for optional `UserConfig` compute-unit overrides.
+fn handle_editing_cu_field<T>(
     code: KeyCode,
     trading: &mut TradingState,
-) -> KeyAction {
+    max_digits: usize,
+    set_status_prefix: &'static str,
+    field: impl Fn(&mut crate::tui::config::UserConfig) -> &mut Option<T>,
+    parse: impl Fn(&str) -> Option<T>,
+) -> KeyAction
+where
+    T: Copy + std::fmt::Display,
+{
     match code {
         KeyCode::Enter => {
             let trimmed = trading.input_buffer.trim();
             let s = strings();
-            let prev = trading.config.compute_unit_price_micro_lamports;
+            let prev = *field(&mut trading.config);
             if trimmed.is_empty() {
-                trading.config.compute_unit_price_micro_lamports = None;
+                *field(&mut trading.config) = None;
                 match save_user_config(&trading.config) {
                     Ok(()) => trading.set_status_title(s.st_cu_cleared),
                     Err(e) => {
-                        trading.config.compute_unit_price_micro_lamports = prev;
-                        trading.set_status_title(format!("{} {}", s.st_failed_save, e));
+                        *field(&mut trading.config) = prev;
+                        trading.set_status_title(format!("{} {e}", s.st_failed_save));
                     }
                 }
                 trading.input_mode = InputMode::ViewingConfig;
-                trading.input_buffer.clear();
-                return KeyAction::Redraw;
-            }
-            match trimmed.parse::<u64>() {
-                Ok(val) => {
-                    trading.config.compute_unit_price_micro_lamports = Some(val);
-                    match save_user_config(&trading.config) {
-                        Ok(()) => {
-                            trading.set_status_title(format!("{} {}", s.st_cu_price_set, val))
-                        }
-                        Err(e) => {
-                            trading.config.compute_unit_price_micro_lamports = prev;
-                            trading.set_status_title(format!("{} {}", s.st_failed_save, e));
-                        }
+            } else if let Some(val) = parse(trimmed) {
+                *field(&mut trading.config) = Some(val);
+                match save_user_config(&trading.config) {
+                    Ok(()) => trading.set_status_title(format!("{set_status_prefix} {val}")),
+                    Err(e) => {
+                        *field(&mut trading.config) = prev;
+                        trading.set_status_title(format!("{} {e}", s.st_failed_save));
                     }
-                    trading.input_mode = InputMode::ViewingConfig;
                 }
-                Err(_) => {
-                    trading.set_status_title(s.st_cu_invalid);
-                }
+                trading.input_mode = InputMode::ViewingConfig;
+            } else {
+                trading.set_status_title(s.st_cu_invalid);
             }
             trading.input_buffer.clear();
             KeyAction::Redraw
@@ -237,7 +211,7 @@ pub(in crate::tui::runtime) fn handle_editing_compute_unit_price(
             KeyAction::Redraw
         }
         KeyCode::Char(c) if c.is_ascii_digit() => {
-            if trading.input_buffer.len() < MAX_CU_PRICE_DIGITS {
+            if trading.input_buffer.len() < max_digits {
                 trading.input_buffer.push(c);
                 KeyAction::Redraw
             } else {
@@ -248,71 +222,34 @@ pub(in crate::tui::runtime) fn handle_editing_compute_unit_price(
     }
 }
 
-/// Text editor for the `SetComputeUnitLimit` per-position override (CUs per
-/// trader position). Empty + Enter clears the override and falls back to env
-/// / default.
+/// Text editor for the `SetComputeUnitPrice` override (microlamports per CU).
+pub(in crate::tui::runtime) fn handle_editing_compute_unit_price(
+    code: KeyCode,
+    trading: &mut TradingState,
+) -> KeyAction {
+    handle_editing_cu_field(
+        code,
+        trading,
+        MAX_CU_PRICE_DIGITS,
+        strings().st_cu_price_set,
+        |c| &mut c.compute_unit_price_micro_lamports,
+        |s| s.parse::<u64>().ok(),
+    )
+}
+
+/// Text editor for the `SetComputeUnitLimit` per-position override.
 pub(in crate::tui::runtime) fn handle_editing_compute_unit_limit(
     code: KeyCode,
     trading: &mut TradingState,
 ) -> KeyAction {
-    match code {
-        KeyCode::Enter => {
-            let trimmed = trading.input_buffer.trim();
-            let s = strings();
-            let prev = trading.config.compute_unit_limit_per_position;
-            if trimmed.is_empty() {
-                trading.config.compute_unit_limit_per_position = None;
-                match save_user_config(&trading.config) {
-                    Ok(()) => trading.set_status_title(s.st_cu_cleared),
-                    Err(e) => {
-                        trading.config.compute_unit_limit_per_position = prev;
-                        trading.set_status_title(format!("{} {}", s.st_failed_save, e));
-                    }
-                }
-                trading.input_mode = InputMode::ViewingConfig;
-                trading.input_buffer.clear();
-                return KeyAction::Redraw;
-            }
-            match trimmed.parse::<u32>() {
-                Ok(val) if val > 0 => {
-                    trading.config.compute_unit_limit_per_position = Some(val);
-                    match save_user_config(&trading.config) {
-                        Ok(()) => {
-                            trading.set_status_title(format!("{} {}", s.st_cu_limit_set, val))
-                        }
-                        Err(e) => {
-                            trading.config.compute_unit_limit_per_position = prev;
-                            trading.set_status_title(format!("{} {}", s.st_failed_save, e));
-                        }
-                    }
-                    trading.input_mode = InputMode::ViewingConfig;
-                }
-                _ => {
-                    trading.set_status_title(s.st_cu_invalid);
-                }
-            }
-            trading.input_buffer.clear();
-            KeyAction::Redraw
-        }
-        KeyCode::Esc => {
-            trading.input_mode = InputMode::ViewingConfig;
-            trading.input_buffer.clear();
-            KeyAction::Redraw
-        }
-        KeyCode::Backspace => {
-            trading.input_buffer.pop();
-            KeyAction::Redraw
-        }
-        KeyCode::Char(c) if c.is_ascii_digit() => {
-            if trading.input_buffer.len() < MAX_CU_LIMIT_DIGITS {
-                trading.input_buffer.push(c);
-                KeyAction::Redraw
-            } else {
-                KeyAction::Nothing
-            }
-        }
-        _ => KeyAction::Nothing,
-    }
+    handle_editing_cu_field(
+        code,
+        trading,
+        MAX_CU_LIMIT_DIGITS,
+        strings().st_cu_limit_set,
+        |c| &mut c.compute_unit_limit_per_position,
+        |s| s.parse::<u32>().ok().filter(|&v| v > 0),
+    )
 }
 
 /// Ledger modal — arrow keys scroll; Enter copies the selected txid to the

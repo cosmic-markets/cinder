@@ -10,13 +10,11 @@ use super::super::data::ParsedSplineData;
 use super::super::format::pubkey_trader_prefix;
 use super::book::{BookRow, ClobLevel, MergedBook, RowSource};
 use super::liquidation_feed_view::LiquidationFeedView;
-use super::markers::{OrderChartMarker, TradeMarker};
 use super::market::{MarketInfo, MarketSelector};
-use super::orders_view::OrdersView;
-use super::position_leaderboard_view::TopPositionsView;
-use super::positions_view::PositionsView;
+use super::messages::{OrderChartMarker, TradeMarker};
 use super::trade_panel::TradingState;
 use super::twap_bots_view::TwapsView;
+use super::views::{OrdersView, PositionsView, TopPositionsView};
 
 pub struct TuiState {
     pub price_history: VecDeque<f64>,
@@ -390,15 +388,22 @@ impl TuiState {
 /// computed as `mid - ticks_to_price(offset)`, which can differ in the last
 /// ULP from the same tick reached directly via `ticks_to_price`, so a CLOB
 /// and a spline quote at the same tick would otherwise render as two rows.
+/// Quantize a display price to an integer tick key at `price_decimals` so
+/// spline and CLOB quotes at the same tick collide cleanly despite ULP drift.
+#[inline]
+fn price_tick_key(price: f64, price_decimals: usize) -> i64 {
+    (price * 10_f64.powi(price_decimals as i32)).round() as i64
+}
+
+/// Group raw quotes by display price tick and sort best-first (`is_bid` desc, ask asc).
 fn group_by_price(
     raw: Vec<(f64, f64, String, RowSource)>,
     is_bid: bool,
     price_decimals: usize,
 ) -> Vec<BookRow> {
-    let scale = 10_f64.powi(price_decimals as i32);
     let mut by_price: Vec<(i64, BookRow)> = Vec::new();
     for (price, size, trader, source) in raw {
-        let key = (price * scale).round() as i64;
+        let key = price_tick_key(price, price_decimals);
         match by_price.iter_mut().find(|(k, _)| *k == key) {
             Some((_, row)) => {
                 row.size += size;
@@ -411,7 +416,6 @@ fn group_by_price(
                         price,
                         size,
                         traders: vec![(trader, source)],
-                        has_hidden_fill: false,
                         iceberg_trader_prefix: None,
                     },
                 ));
@@ -464,13 +468,11 @@ fn compute_merge_uncross_skip(
     ask_rows: &[BookRow],
     price_decimals: usize,
 ) -> (usize, usize) {
-    let scale = 10_f64.powi(price_decimals as i32);
-    let key = |p: f64| (p * scale).round() as i64;
     let mut bid_skip = 0usize;
     let mut ask_skip = 0usize;
     while let (Some(b), Some(a)) = (bid_rows.get(bid_skip), ask_rows.get(ask_skip)) {
-        let bk = key(b.price);
-        let ak = key(a.price);
+        let bk = price_tick_key(b.price, price_decimals);
+        let ak = price_tick_key(a.price, price_decimals);
         if bk < ak {
             break;
         }
@@ -495,31 +497,19 @@ fn is_single_trader_spline_lock(b: &BookRow, a: &BookRow) -> bool {
     matches!(b_src, RowSource::Spline) && matches!(a_src, RowSource::Spline) && b_trader == a_trader
 }
 
-/// Sets `has_hidden_fill` (and `iceberg_trader_prefix`) on each row whose
-/// price matches one of the supplied markers. Marker prices are computed at
-/// `price_at_offset(end_offset)` for each spline region with a hidden iceberg,
-/// which is one tick further from mid than the region's worst visible tick.
-/// They typically coincide with the next-outer region's worst tick; markers
-/// with no matching row are silently dropped.
-///
-/// Matching uses integer tick keys (rounded to `price_decimals`) so spline
-/// prices computed from different mid values still collide cleanly with the
-/// row prices produced by `group_by_price`.
+/// Sets `iceberg_trader_prefix` on each row whose price matches one of the supplied markers.
 fn apply_iceberg_markers(rows: &mut [BookRow], markers: &[(f64, String)], price_decimals: usize) {
     if markers.is_empty() {
         return;
     }
-    let scale = 10_f64.powi(price_decimals as i32);
-    let key_of = |p: f64| (p * scale).round() as i64;
     for (price, trader_prefix) in markers {
-        let key = key_of(*price);
-        if let Some(row) = rows.iter_mut().find(|r| key_of(r.price) == key) {
-            row.has_hidden_fill = true;
-            // First marker wins on collisions — if two splines project icebergs
-            // onto the same row we keep the earlier owner rather than overwriting.
-            if row.iceberg_trader_prefix.is_none() {
-                row.iceberg_trader_prefix = Some(trader_prefix.clone());
-            }
+        let key = price_tick_key(*price, price_decimals);
+        if let Some(row) = rows
+            .iter_mut()
+            .find(|r| price_tick_key(r.price, price_decimals) == key)
+            && row.iceberg_trader_prefix.is_none()
+        {
+            row.iceberg_trader_prefix = Some(trader_prefix.clone());
         }
     }
 }

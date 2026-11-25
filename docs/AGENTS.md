@@ -11,20 +11,16 @@ This file is the technical map. Use it before reading code so you know which cra
 | Question | Answer |
 | --- | --- |
 | Binary entry | `src/main.rs` → `cinder::run()` (`src/lib.rs`, `src/app.rs`) |
-| Library crate name | `cinder` (single binary `cinder`, `publish = false`) |
-| Workspace members | `.` and `crates/phoenix-eternal-types` |
+| Library crate name | `cinder` (single binary `cinder`, package `cosmic-cinder`) |
 | Rust edition / MSRV | `2024`, `rust-version = "1.96"` |
-| Async runtime | `tokio` (multi-thread, `macros`, `time`, `sync`, `signal`) |
-| TUI stack | `ratatui` 0.30 + `crossterm` 0.29 (event-stream feature) |
-| TLS / WSS | `rustls` 0.23 with the `ring` provider — required by `solana-pubsub-client` ≥ 2.3 (no aws-lc-rs) |
-| Solana wire stack | Pinned `=2.3.13` for `solana-rpc-client`, `solana-pubsub-client`, `solana-rpc-client-types`, `solana-account-decoder-client-types`, `solana-transaction-status-client-types` so HTTP RPC and WSS resolve to one `solana-commitment-config` graph |
-| Phoenix SDK | `phoenix-rise = 0.2.0` with features `["api", "ws", "sdk", "tx-builder"]` — facade over split crates (`phoenix_rise::{accounts, api, core, ix, math, types}`) |
-| Vendored on-chain types | `phoenix-eternal-types` (Trader / Spline / GTI / inner-instruction event decoder) |
-| Persisted user config | `~/.config/phoenix-cinder/config.json` — `rpc_url`, `language` (`en`/`cn`), `show_clob` |
+| Async runtime | `tokio` (multi-thread, `macros`, `time`, `sync`, `net`, `signal`) |
+| TUI stack | `ratatui` 0.30 + `crossterm` 0.29 (`event-stream`) |
+| TLS / WSS | `rustls` 0.23 with the `ring` provider (no aws-lc-rs) |
+| Solana wire stack | Solana SDK `~3.0` / `~3.1` / `~3.2` (`solana-rpc-client`, `solana-pubsub-client`, etc.) |
+| Phoenix SDK | `phoenix-rise = "=0.3.4"` with `["api", "ws", "sdk", "tx-builder"]` + `cosmic-phoenix-eternal-types = "0.1.4"` from crates.io |
+| Persisted user config | `~/.config/phoenix-cinder/config.json` — `rpc_url`, `language` (`en`/`cn`/`ru`/`es`), `show_clob`, `fanout_public_rpc`, `skip_order_confirmation`, `skip_preflight`, CU overrides |
 | Config defaults RPC fallback | `https://api.mainnet-beta.solana.com` (with a warn log) |
 | Wallet path resolution | `phoenix.json` (cwd) → `PHX_WALLET_PATH` / `KEYPAIR_PATH` → `~/.config/solana/id.json` (first that exists) |
-| Pre-commit hooks | `lefthook.yml` runs `cargo fmt --all --check` and the strict clippy command |
-| Mise tasks | `mise run fmt | clippy | test | release-check` (release-check chains all three) |
 
 ---
 

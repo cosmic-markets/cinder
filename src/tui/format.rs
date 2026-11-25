@@ -77,20 +77,24 @@ pub fn fmt_time_since_secs(elapsed_secs: i64) -> String {
     }
 }
 
+/// Abbreviate a string to its first 4 and last 4 characters separated by `sep`.
+fn truncate_4_4(s: &str, sep: &str) -> String {
+    if s.len() <= 8 {
+        s.to_string()
+    } else {
+        format!("{}{sep}{}", &s[..4], &s[s.len() - 4..])
+    }
+}
+
+/// First 4 characters of a base58 pubkey (used in tight order-book columns).
 pub fn pubkey_trader_prefix(trader: &PhoenixPubkey) -> String {
     let s = trader.to_string();
     s[..4.min(s.len())].to_owned()
 }
 
-/// 4+4 abbreviated pubkey for wider columns: `ABCD\u{2026}WXYZ`. Falls back to
-/// the full string if the pubkey is somehow shorter than 8 chars (which it
-/// won't be — base58 pubkeys are always 32 bytes / 43–44 chars).
+/// 4+4 abbreviated pubkey for wider columns: `ABCD…WXYZ`.
 pub fn pubkey_trader_short(trader: &PhoenixPubkey) -> String {
-    let s = trader.to_string();
-    if s.len() <= 8 {
-        return s;
-    }
-    format!("{}\u{2026}{}", &s[..4], &s[s.len() - 4..])
+    truncate_4_4(&trader.to_string(), "\u{2026}")
 }
 
 /// Truncate toward zero to 2 dp so the UI never shows more USDC than on-chain
@@ -99,16 +103,14 @@ pub fn truncate_balance(v: f64) -> f64 {
     (v * 100.0).floor() / 100.0
 }
 
+/// Format a USDC balance truncated to 2 decimal places.
 pub fn fmt_balance(v: f64) -> String {
     format!("{:.2}", truncate_balance(v))
 }
 
+/// 4+4 abbreviated pubkey using ASCII ellipsis: `ABCD...WXYZ`.
 pub fn truncate_pubkey(pk: &str) -> String {
-    if pk.len() <= 8 {
-        pk.to_string()
-    } else {
-        format!("{}...{}", &pk[..4], &pk[pk.len() - 4..])
-    }
+    truncate_4_4(pk, "...")
 }
 
 #[cfg(test)]

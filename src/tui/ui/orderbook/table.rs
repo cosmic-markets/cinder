@@ -341,7 +341,7 @@ fn build_row<'a>(
         Cell::from(Line::from(trader_spans).alignment(Alignment::Right))
     };
 
-    let marker_cell = if row.has_hidden_fill {
+    let marker_cell = if row.iceberg_trader_prefix.is_some() {
         Cell::from(Line::from("\u{1F9CA}").alignment(Alignment::Right))
     } else {
         Cell::from("")

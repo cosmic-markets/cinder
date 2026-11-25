@@ -8,7 +8,6 @@
 //! skipping entirely. Skip / Esc just closes the modal — Phoenix account
 //! creation is handled separately on Phoenix's side.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use phoenix_rise::api::PhoenixHttpClient;
@@ -191,17 +190,7 @@ fn spawn_referral_activation(
 ) {
     tokio::spawn(async move {
         let s = strings();
-        let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
-            Ok(pk) => pk,
-            Err(e) => {
-                warn!(error = %e, "failed to convert wallet pubkey for referral activation");
-                let _ = tx_status.send(TxStatusMsg::SetStatus {
-                    title: s.tx_registration_failed.to_string(),
-                    detail: format!("{}", e),
-                });
-                return;
-            }
-        };
+        let authority = kp.pubkey();
         match http
             .invite()
             .activate_referral(&authority, &referral_code)

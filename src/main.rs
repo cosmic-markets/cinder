@@ -27,9 +27,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => tracing::Level::INFO,
     };
 
-    // Route tracing output to a sink so it doesn't corrupt the TUI or create
-    // arbitrary files. RPC errors are still written manually to error_logs.txt
-    // by tx.rs
+    // Route tracing output to a sink so it doesn't corrupt the TUI.
+    // Transaction errors are logged separately by `tui::tx::error`.
     tracing_subscriber::fmt()
         .with_writer(std::io::sink)
         .with_max_level(level)

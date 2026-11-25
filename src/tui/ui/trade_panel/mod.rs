@@ -1,6 +1,5 @@
 //! Trading panel widget (order side/type/size, position summary).
 
-use phoenix_rise::types::market::MarketStatsUpdate;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
@@ -17,14 +16,16 @@ mod layout;
 mod order_entry;
 mod position;
 
+/// Shared left-column width keeping BUY/SELL aligned with Qty and Submit.
+pub(super) const LEFT_COL_W: u16 = 28;
+
+/// Render the 4-row trading panel (side/type, size/price, actions/confirm, position).
 pub(super) fn render_trading_panel(
     f: &mut Frame,
     area: ratatui::layout::Rect,
     trading: &TradingState,
     symbol: &str,
-    _market_stats: &Option<MarketStatsUpdate>,
     price_decimals: usize,
-    _market_pubkey: &str,
 ) {
     let rows = layout::render_panel_frame(f, area, trading, symbol);
     order_entry::render_order_entry(f, &rows, trading, symbol, price_decimals);

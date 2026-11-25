@@ -9,43 +9,25 @@ pub(super) fn render_panel_frame(
     symbol: &str,
 ) -> Vec<ratatui::layout::Rect> {
     let tp_s = strings();
-    let wallet_title_right = if trading.wallet_loaded {
-        Line::from(vec![
-            Span::styled(
-                format!(" {} ", tp_s.wallet),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                truncate_pubkey(&trading.wallet_label),
-                Style::default().fg(Color::White),
-            ),
-            Span::styled(
-                " [w] ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])
-        .alignment(Alignment::Right)
+    let wallet_text = if trading.wallet_loaded {
+        truncate_pubkey(&trading.wallet_label)
     } else {
-        Line::from(vec![
-            Span::styled(
-                format!(" {} ", tp_s.wallet),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                format!("{} ", tp_s.not_loaded),
-                Style::default().fg(Color::White),
-            ),
-            Span::styled(
-                "[w] ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])
-        .alignment(Alignment::Right)
+        tp_s.not_loaded.to_string()
     };
+    let wallet_title_right = Line::from(vec![
+        Span::styled(
+            format!(" {} ", tp_s.wallet),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(wallet_text, Style::default().fg(Color::White)),
+        Span::styled(
+            " [w] ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ])
+    .alignment(Alignment::Right);
 
     // Build the block with an optional bottom-left notional label when a position
     // exists.
@@ -139,10 +121,7 @@ pub(super) fn render_panel_frame(
     let stop_style = if is_stop { active_style } else { idle_style };
     let twap_style = if is_twap { active_style } else { idle_style };
 
-    // Two-column split: left column = side/qty, right column = type/price.
-    // Fixed left width keeps BUY aligned with Qty, and MARKET/LIMIT aligned with
-    // Price.
-    const LEFT_COL_W: u16 = 28;
+    // Fixed left width keeps BUY aligned with Qty, and MARKET/LIMIT aligned with Price.
     let row0_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(LEFT_COL_W), Constraint::Min(0)])

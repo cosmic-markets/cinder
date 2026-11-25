@@ -121,38 +121,25 @@ pub(in crate::tui::runtime) fn handle_editing_wallet_path(
                             }
                         }
                     }
-                    match connect_wallet_with_keypair(
+                    let handles = connect_wallet_with_keypair(
                         state, kp, cfg, configs, channels, ws_url, http,
-                    ) {
-                        Ok(handles) => {
-                            // Only replace existing handles AFTER the connect
-                            // succeeded — a failed connect must not tear down
-                            // a previously-loaded wallet's tasks.
-                            if let Some(h) = wallet_wss_handle.replace(handles.wallet_wss) {
-                                h.abort();
-                            }
-                            if let Some(h) = balance_fetch_handle.replace(handles.initial_balance) {
-                                h.abort();
-                            }
-                            if let Some(h) = trader_orders_handle.replace(handles.trader_orders) {
-                                h.abort();
-                            }
-                            if let Some(h) = tx_ctx_task.replace(handles.tx_ctx) {
-                                h.abort();
-                            }
-                            *awaiting_first_tx_ctx = true;
-                            state.trading.input_mode = InputMode::Normal;
-                            state.trading.wallet_path_buffer.clear();
-                            state.trading.wallet_path_error = None;
-                        }
-                        Err(msg) => {
-                            // Surface the failure inside the modal and keep
-                            // it open so the user can retry. Do NOT mutate
-                            // existing wallet handles or the previously-
-                            // loaded wallet's state.
-                            state.trading.wallet_path_error = Some(msg);
-                        }
+                    );
+                    if let Some(h) = wallet_wss_handle.replace(handles.wallet_wss) {
+                        h.abort();
                     }
+                    if let Some(h) = balance_fetch_handle.replace(handles.initial_balance) {
+                        h.abort();
+                    }
+                    if let Some(h) = trader_orders_handle.replace(handles.trader_orders) {
+                        h.abort();
+                    }
+                    if let Some(h) = tx_ctx_task.replace(handles.tx_ctx) {
+                        h.abort();
+                    }
+                    *awaiting_first_tx_ctx = true;
+                    state.trading.input_mode = InputMode::Normal;
+                    state.trading.wallet_path_buffer.clear();
+                    state.trading.wallet_path_error = None;
                 }
                 Err(e) => {
                     state.trading.wallet_path_error = Some(e);
@@ -233,88 +220,74 @@ pub(in crate::tui::runtime) fn handle_editing_size(
     }
 }
 
-pub(in crate::tui::runtime) fn handle_editing_deposit(
+/// Shared numeric editor for USDC deposit (`is_deposit = true`) and withdraw.
+fn handle_editing_transfer(
     code: KeyCode,
     trading: &mut TradingState,
+    is_deposit: bool,
 ) -> KeyAction {
+    let buf = if is_deposit {
+        &mut trading.deposit_buffer
+    } else {
+        &mut trading.withdraw_buffer
+    };
     match code {
         KeyCode::Enter => {
-            if let Ok(val) = parse_checked_usdc_amount(&trading.deposit_buffer) {
-                trading.input_mode =
-                    InputMode::Confirming(PendingAction::DepositFunds { amount: val });
-                {
-                    let s = strings();
-                    trading.set_status_title(format!(
-                        "{} {} USDC? {}",
-                        s.st_confirm_deposit_st, val, s.st_yn
-                    ));
+            let parsed = parse_checked_usdc_amount(buf);
+            buf.clear();
+            let s = strings();
+            match parsed {
+                Ok(val) => {
+                    let (action, prefix) = if is_deposit {
+                        (
+                            PendingAction::DepositFunds { amount: val },
+                            s.st_confirm_deposit_st,
+                        )
+                    } else {
+                        (
+                            PendingAction::WithdrawFunds { amount: val },
+                            s.st_confirm_withdraw_st,
+                        )
+                    };
+                    trading.input_mode = InputMode::Confirming(action);
+                    trading.set_status_title(format!("{prefix} {val} USDC? {}", s.st_yn));
                 }
-            } else {
-                let detail = parse_checked_usdc_amount(&trading.deposit_buffer)
-                    .err()
-                    .unwrap_or("enter a number like 100.00");
-                trading.set_status_title(format!("{} ({})", strings().st_invalid_amount, detail));
-                trading.input_mode = InputMode::Normal;
+                Err(detail) => {
+                    trading.set_status_title(format!("{} ({detail})", s.st_invalid_amount));
+                    trading.input_mode = InputMode::Normal;
+                }
             }
-            trading.deposit_buffer.clear();
             KeyAction::Redraw
         }
         KeyCode::Esc => {
+            buf.clear();
             trading.input_mode = InputMode::Normal;
-            trading.deposit_buffer.clear();
             KeyAction::Redraw
         }
         KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
-            trading.deposit_buffer.push(c);
+            buf.push(c);
             KeyAction::Redraw
         }
         KeyCode::Backspace => {
-            trading.deposit_buffer.pop();
+            buf.pop();
             KeyAction::Redraw
         }
         _ => KeyAction::Nothing,
     }
 }
 
+/// Handle keyboard input while editing the USDC deposit amount.
+pub(in crate::tui::runtime) fn handle_editing_deposit(
+    code: KeyCode,
+    trading: &mut TradingState,
+) -> KeyAction {
+    handle_editing_transfer(code, trading, true)
+}
+
+/// Handle keyboard input while editing the USDC withdraw amount.
 pub(in crate::tui::runtime) fn handle_editing_withdraw(
     code: KeyCode,
     trading: &mut TradingState,
 ) -> KeyAction {
-    match code {
-        KeyCode::Enter => {
-            if let Ok(val) = parse_checked_usdc_amount(&trading.withdraw_buffer) {
-                trading.input_mode =
-                    InputMode::Confirming(PendingAction::WithdrawFunds { amount: val });
-                {
-                    let s = strings();
-                    trading.set_status_title(format!(
-                        "{} {} USDC? {}",
-                        s.st_confirm_withdraw_st, val, s.st_yn
-                    ));
-                }
-            } else {
-                let detail = parse_checked_usdc_amount(&trading.withdraw_buffer)
-                    .err()
-                    .unwrap_or("enter a number like 100.00");
-                trading.set_status_title(format!("{} ({})", strings().st_invalid_amount, detail));
-                trading.input_mode = InputMode::Normal;
-            }
-            trading.withdraw_buffer.clear();
-            KeyAction::Redraw
-        }
-        KeyCode::Esc => {
-            trading.input_mode = InputMode::Normal;
-            trading.withdraw_buffer.clear();
-            KeyAction::Redraw
-        }
-        KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
-            trading.withdraw_buffer.push(c);
-            KeyAction::Redraw
-        }
-        KeyCode::Backspace => {
-            trading.withdraw_buffer.pop();
-            KeyAction::Redraw
-        }
-        _ => KeyAction::Nothing,
-    }
+    handle_editing_transfer(code, trading, false)
 }

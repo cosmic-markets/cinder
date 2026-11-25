@@ -62,12 +62,8 @@ pub enum SliceOutcome {
 pub struct InFlightSlice {
     pub rx: oneshot::Receiver<SliceOutcome>,
     pub slice_number: u32,
-    /// Spawned tx-submit task. `abort()` cancels the task at its next await
-    /// point; tx that has already been broadcast cannot be unbroadcast, but
-    /// canceling during sign/build/etc. prevents wasted network traffic.
+    /// Spawned tx-submit task. `abort()` cancels the task at its next await point.
     pub task: tokio::task::JoinHandle<()>,
-    #[allow(dead_code)]
-    pub started_at: Instant,
 }
 
 impl InFlightSlice {
@@ -108,7 +104,6 @@ pub struct TwapBot {
     /// fills.
     pub slices_unconfirmed: u32,
     pub status: TwapStatus,
-    pub started_at: Instant,
     /// Wall-clock time the last slice was *dispatched* (NOT confirmed).
     /// Anchoring on dispatch keeps cadence near `slice_interval` even when
     /// confirmation latency is high — anchoring on confirm pushes every
@@ -175,7 +170,6 @@ impl TwapBot {
             slices_failed: 0,
             slices_unconfirmed: 0,
             status: TwapStatus::Running,
-            started_at: Instant::now(),
             last_slice_at: None,
             last_status: String::new(),
             defer_reason: None,
@@ -186,14 +180,12 @@ impl TwapBot {
     }
 
     /// True if the bot is in a state that consumes scheduler ticks.
-    pub fn is_active(&self) -> bool {
+    fn is_active(&self) -> bool {
         matches!(self.status, TwapStatus::Running)
     }
 
-    /// Total resolved slices (confirmed + failed + unconfirmed). Used by both
-    /// the slice-due predicate and the completion check so the two never
-    /// disagree on when the bot is done.
-    fn slices_resolved(&self) -> u32 {
+    /// Total resolved slices (confirmed + failed + unconfirmed).
+    pub fn slices_resolved(&self) -> u32 {
         self.slices_submitted + self.slices_failed + self.slices_unconfirmed
     }
 
@@ -319,7 +311,6 @@ impl TwapBot {
             rx,
             slice_number,
             task,
-            started_at: now,
         });
         self.last_slice_at = Some(now);
         // Clear any stale defer reason now that a slice is in flight.
@@ -402,9 +393,7 @@ impl TwapBot {
                 ),
             );
         }
-        if !self.status.is_terminal() || matches!(self.status, TwapStatus::Completed) {
-            self.status = TwapStatus::Stopped;
-        }
+        self.status = TwapStatus::Stopped;
         self.paused_at = None;
         self.defer_reason = None;
     }
@@ -425,7 +414,6 @@ impl TwapBot {
         self.slices_unconfirmed = 0;
         self.last_slice_at = None;
         self.status = TwapStatus::Running;
-        self.started_at = Instant::now();
         self.last_status.clear();
         self.defer_reason = None;
         self.paused_at = None;
@@ -466,23 +454,15 @@ impl TwapsView {
     }
 
     pub fn move_up(&mut self) {
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
-        }
+        super::move_list_up(&mut self.selected_index);
     }
 
     pub fn move_down(&mut self) {
-        if self.selected_index + 1 < self.bots.len() {
-            self.selected_index += 1;
-        }
+        super::move_list_down(&mut self.selected_index, self.bots.len());
     }
 
     pub fn clamp_index(&mut self) {
-        if !self.bots.is_empty() {
-            self.selected_index = self.selected_index.min(self.bots.len() - 1);
-        } else {
-            self.selected_index = 0;
-        }
+        super::clamp_list_index(&mut self.selected_index, self.bots.len());
     }
 
     pub fn selected_mut(&mut self) -> Option<&mut TwapBot> {

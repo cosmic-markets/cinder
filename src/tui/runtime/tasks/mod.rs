@@ -1,7 +1,5 @@
-//! Background task spawners grouped by stream or workload.
-
-//! Background task spawners: blockhash refresh, wallet WSS, balance fetch,
-//! trader orders WS, and the Phoenix L2 book RPC subscription.
+//! Background task spawners: wallet lifecycle, market snapshots, L2 book,
+//! trader orders WS, wallet WSS, and liquidation feed.
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -32,9 +30,9 @@ use tokio::sync::watch;
 use tracing::warn;
 
 use super::super::config::{SplineConfig, rpc_http_url_from_env};
-use super::super::data::GtiHandle;
-use super::super::data::fetch_top_positions;
-use super::super::data::{L2Level, parse_l2_book_from_market_account};
+use super::super::data::{
+    GtiHandle, L2Level, fetch_top_positions, parse_l2_book_from_market_account,
+};
 use super::super::format::pubkey_trader_prefix;
 use super::super::state::{
     BalanceUpdate, ClobLevel, L2BookStreamMsg, SplineBootstrapMsg, TxStatusMsg,
@@ -45,22 +43,16 @@ use super::super::trading::{
 use super::super::tx::TxContext;
 use super::{L2_SNAPSHOT_DEPTH, TxCtxMsg, WSS_RETRY_CAP, WSS_RETRY_INIT};
 
-mod balances;
-mod connect_flow;
 mod l2_book;
 mod liquidations;
+mod market;
 mod orders;
-mod position_leaderboard;
-mod spline_bootstrap;
-mod tx_context;
+mod wallet;
 mod wallet_stream;
 
-pub(in crate::tui::runtime) use balances::*;
-pub(in crate::tui::runtime) use connect_flow::*;
 pub(in crate::tui::runtime) use l2_book::*;
 pub(in crate::tui::runtime) use liquidations::*;
+pub(in crate::tui::runtime) use market::*;
 pub(in crate::tui::runtime) use orders::*;
-pub(in crate::tui::runtime) use position_leaderboard::*;
-pub(in crate::tui::runtime) use spline_bootstrap::*;
-pub(in crate::tui::runtime) use tx_context::*;
+pub(in crate::tui::runtime) use wallet::*;
 pub(in crate::tui::runtime) use wallet_stream::*;

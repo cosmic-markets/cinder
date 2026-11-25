@@ -87,38 +87,13 @@ impl GtiCache {
 
 /// Load raw GTI account buffers (header + overflow arenas).
 async fn fetch_gti_buffers(client: &RpcClient) -> Result<Vec<Vec<u8>>, String> {
-    let (header_key, _) = program_ids::get_global_trader_index_address_default(0);
-    let header_account = client
-        .get_account(&header_key)
-        .await
-        .map_err(|e| format!("fetch GTI header: {e}"))?;
-
-    if header_account.data.len() < NUM_ARENAS_OFFSET + 2 {
-        return Err("GTI header account too small for superblock".to_string());
-    }
-    // Superblock.num_arenas: u16 little-endian. Reading bytes directly avoids
-    // pulling `bytemuck` into this crate just for one field.
-    let num_arenas = u16::from_le_bytes([
-        header_account.data[NUM_ARENAS_OFFSET],
-        header_account.data[NUM_ARENAS_OFFSET + 1],
-    ]);
-
-    let mut buffers: Vec<Vec<u8>> = Vec::with_capacity(num_arenas.max(1) as usize);
-    buffers.push(header_account.data);
-    for i in 1..num_arenas {
-        let (arena_key, _) = program_ids::get_global_trader_index_address_default(i);
-        match client.get_account(&arena_key).await {
-            Ok(acc) => buffers.push(acc.data),
-            // Arena accounts are contiguous; a missing one means `num_arenas` is stale
-            // or the layout is malformed. Log and stop — later lookups will just miss
-            // and trigger another refresh.
-            Err(e) => {
-                warn!(arena = i, error = %e, "GTI arena fetch failed; truncating cache");
-                break;
-            }
-        }
-    }
-    Ok(buffers)
+    super::fetch_sokoban_arenas(
+        client,
+        NUM_ARENAS_OFFSET,
+        "GTI",
+        program_ids::get_global_trader_index_address_default,
+    )
+    .await
 }
 
 /// Walk the GTI tree and collect `(node_addr, trader_pda)` pairs. Panics inside

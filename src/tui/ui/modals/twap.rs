@@ -583,11 +583,7 @@ pub(in crate::tui::ui) fn render_bots_modal(
     let detail_area = ratatui::layout::Rect::new(inner.x, inner.y + table_h, inner.width, detail_h);
 
     let visible_slots = table_h.saturating_sub(1) as usize;
-    let scroll_offset = if view.selected_index >= visible_slots && visible_slots > 0 {
-        view.selected_index - visible_slots + 1
-    } else {
-        0
-    };
+    let scroll_offset = crate::tui::state::list_scroll_offset(view.selected_index, visible_slots);
 
     // Snap once per frame so all rows in this redraw share the same
     // reference clock — keeps the countdown column monotonic across rows.
@@ -698,7 +694,7 @@ pub(in crate::tui::ui) fn render_bots_modal(
 /// every resolved slice was confirmed, yellow when any failed or could not
 /// be confirmed.
 fn progress_span(b: &TwapBot) -> Span<'static> {
-    let resolved = b.slices_submitted + b.slices_failed + b.slices_unconfirmed;
+    let resolved = b.slices_resolved();
     let color = if b.slices_failed > 0 || b.slices_unconfirmed > 0 {
         Color::LightYellow
     } else {

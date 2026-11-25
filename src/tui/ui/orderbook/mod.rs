@@ -24,7 +24,6 @@ pub(super) fn render_orderbook(
     merged: &MergedBook,
     wss_slot: u64,
     market_stats: &Option<MarketStatsUpdate>,
-    _chart_data: &[(f64, f64)],
     user_trader_prefix: Option<&str>,
 ) {
     let data_symmetric =
@@ -54,13 +53,9 @@ pub(super) fn render_orderbook(
             Span::styled(cfg.symbol.as_str(), Style::default().fg(Color::White)),
         ];
         if let Some(stats) = market_stats {
-            let change_notional = stats.mark_price - stats.prev_day_mark_price;
-            let change_pct = if stats.prev_day_mark_price != 0.0 {
-                (change_notional / stats.prev_day_mark_price) * 100.0
-            } else {
-                0.0
-            };
-            let change_color = if change_notional >= 0.0 {
+            let change_pct =
+                crate::tui::math::pct_change_24h(stats.mark_price, stats.prev_day_mark_price);
+            let change_color = if stats.mark_price >= stats.prev_day_mark_price {
                 Color::LightGreen
             } else {
                 Color::LightRed

@@ -12,7 +12,7 @@
 #   RPC_URL        (optional) Solana JSON-RPC HTTP; forwarded when set; else the
 #                  binary uses SOLANA_RPC_URL or its built-in default (see config).
 #   RPC_WS_URL     (optional) WebSocket endpoint; derived from RPC_URL if unset
-#   RUST_LOG       (optional) tracing filter, e.g. "phoenix_sdk=warn,info"
+#   RUST_LOG       (optional) tracing level: trace|debug|info|warn|error
 # ---------------------------------------------------------------------------
 services:
   cinder:
@@ -31,8 +31,7 @@ services:
     # to silently hang trying to open a WSS to nowhere.
     environment:
       - RPC_URL
-      - RUST_LOG=${RUST_LOG:-phoenix_sdk=warn,info}
-      - CINDER_TRACING_STDERR=1
+      - RUST_LOG=${RUST_LOG:-info}
       - RPC_WS_URL
     # Interactive TUI: don't auto-restart when the user quits.
     restart: "no"

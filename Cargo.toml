@@ -24,7 +24,7 @@ path = "src/main.rs"
 [dependencies]
 arboard                 = { version = "3.6.1", default-features = false }
 bs58                    = "0.5"
-chrono                  = { version = "0.4", features = ["serde"] }
+chrono                  = "0.4"
 crossterm               = { version = "0.29.0", features = ["event-stream"] }
 dotenvy                 = "0.15.7"
 futures-util            = "0.3"
@@ -54,12 +54,11 @@ tokio                   = { version = "1.44", features = [
     "rt-multi-thread",
     "macros",
     "time",
-    "test-util",
     "net",
     "signal",
 ] }
 tracing                 = { version = "0.1", features = ["log"] }
-tracing-subscriber      = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber      = "0.3"
 
 [profile.release]
 # Size-focused defaults for production binaries.

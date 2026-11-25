@@ -9,33 +9,11 @@ use std::time::Duration;
 
 use phoenix_eternal_types::program_ids;
 use phoenix_rise::api::{PhoenixMetadata, Trader, TraderKey};
-
-/// Shared wallet `Trader` mirror with a hydration flag. Written by the
-/// trader-state WS task once it applies its first update; read by isolated-
-/// margin order builders so they can construct instructions locally without
-/// round-tripping through the Phoenix HTTP API.
-///
-/// Splitting `hydrated` from the `Trader` lets readers distinguish "wallet
-/// truly has no positions" from "WS hasn't delivered the first snapshot yet"
-/// — the latter must NOT be used to build orders because the missing
-/// subaccount state would cause the local builder to create a brand-new
-/// subaccount on top of an existing one.
-pub struct TraderMirror {
-    pub trader: Trader,
-    pub hydrated: bool,
-}
-
-impl TraderMirror {
-    pub fn empty(authority: solana_pubkey::Pubkey) -> Self {
-        Self {
-            trader: Trader::new(TraderKey::new(authority)),
-            hydrated: false,
-        }
-    }
-}
 use solana_commitment_config::CommitmentConfig;
 use solana_keypair::Keypair;
+use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_signer::Signer;
 use tracing::warn;
 
@@ -44,21 +22,36 @@ use super::super::config::{
     rpc_http_url_from_env, ws_url_from_env,
 };
 
-/// Derive the canonical spline-collection PDA from the market account.
-///
-/// The Phoenix HTTP metadata exposes a `spline_pubkey` field, but it can be
-/// stale or otherwise inconsistent with the on-chain PDA. The read/display
-/// path (`build_spline_config`) already prefers the derived address; signed
-/// transaction flows must do the same so account metas line up with what the
-/// program expects.
+/// Bound transaction preparation on slow/stalled RPCs.
+const BLOCKHASH_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Shared wallet `Trader` mirror with a hydration flag so isolated-margin order
+/// builders never build against an un-hydrated empty `Trader`.
+pub struct TraderMirror {
+    pub trader: Trader,
+    pub hydrated: bool,
+}
+
+impl TraderMirror {
+    /// Construct an empty (un-hydrated) trader mirror for `authority`.
+    pub fn empty(authority: Pubkey) -> Self {
+        Self {
+            trader: Trader::new(TraderKey::new(authority)),
+            hydrated: false,
+        }
+    }
+}
+
+/// Derive the canonical spline-collection PDA from the market account,
+/// preferring the derived address over any stale API value.
 fn derive_spline_collection(
     symbol: &str,
     market_pubkey: &str,
     api_spline_pubkey: &str,
-) -> Result<solana_pubkey::Pubkey, solana_pubkey::ParsePubkeyError> {
-    let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey)?;
+) -> Result<Pubkey, solana_pubkey::ParsePubkeyError> {
+    let market_pk = Pubkey::from_str(market_pubkey)?;
     let (derived, _) = program_ids::get_spline_collection_address_default(&market_pk);
-    if let Ok(api_pk) = solana_pubkey::Pubkey::from_str(api_spline_pubkey)
+    if let Ok(api_pk) = Pubkey::from_str(api_spline_pubkey)
         && api_pk != derived
     {
         warn!(
@@ -71,66 +64,70 @@ fn derive_spline_collection(
     Ok(derived)
 }
 
-/// Bound transaction preparation on slow/stalled RPCs. Without this, an empty
-/// warm blockhash pool can leave the UI stuck at "Broadcasting ..." forever.
-pub(super) const BLOCKHASH_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
-
-pub struct MarketAddrs {
-    pub perp_asset_map: solana_pubkey::Pubkey,
-    pub orderbook: solana_pubkey::Pubkey,
-    pub spline_collection: solana_pubkey::Pubkey,
-    pub global_trader_index: Vec<solana_pubkey::Pubkey>,
-    pub active_trader_buffer: Vec<solana_pubkey::Pubkey>,
+/// Parse all on-chain account addresses required to build instructions for `symbol`.
+fn build_market_addrs(metadata: &PhoenixMetadata, symbol: &str) -> Result<MarketAddrs, String> {
+    let keys = metadata.keys();
+    let market = metadata
+        .get_market(symbol)
+        .ok_or_else(|| format!("{symbol} market not found in exchange metadata"))?;
+    Ok(MarketAddrs {
+        perp_asset_map: Pubkey::from_str(&keys.perp_asset_map).map_err(|e| e.to_string())?,
+        orderbook: Pubkey::from_str(&market.market_pubkey).map_err(|e| e.to_string())?,
+        spline_collection: derive_spline_collection(
+            &market.symbol,
+            &market.market_pubkey,
+            &market.spline_pubkey,
+        )
+        .map_err(|e| e.to_string())?,
+        global_trader_index: keys
+            .global_trader_index
+            .iter()
+            .map(|s| Pubkey::from_str(s))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?,
+        active_trader_buffer: keys
+            .active_trader_buffer
+            .iter()
+            .map(|s| Pubkey::from_str(s))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?,
+    })
 }
 
+/// Resolved on-chain account addresses for a single Phoenix market.
+pub struct MarketAddrs {
+    pub perp_asset_map: Pubkey,
+    pub orderbook: Pubkey,
+    pub spline_collection: Pubkey,
+    pub global_trader_index: Vec<Pubkey>,
+    pub active_trader_buffer: Vec<Pubkey>,
+}
+
+/// Per-session transaction state shared across all outgoing submission tasks.
 pub struct TxContext {
-    pub rpc_client: solana_rpc_client::nonblocking::rpc_client::RpcClient,
+    pub rpc_client: RpcClient,
     /// Optional secondary RPC used purely for `send_transaction` fan-out.
-    /// Confirmation still listens exclusively on `rpc_client`. `None` when the
-    /// primary already targets the public mainnet-beta endpoint.
-    pub secondary_send_rpc: Option<Arc<solana_rpc_client::nonblocking::rpc_client::RpcClient>>,
-    /// Phoenix HTTP SDK client. Kept on the context as a connection-pool
-    /// holder even though signed-order construction now builds instructions
-    /// locally via `phoenix_rise::core::PhoenixTxBuilder`; future flows (e.g. metadata refresh,
-    /// account-info helpers) reuse this handle instead of opening a second.
-    #[allow(dead_code)]
-    pub http_client: Arc<phoenix_rise::api::PhoenixHttpClient>,
+    pub secondary_send_rpc: Option<Arc<RpcClient>>,
     pub metadata: PhoenixMetadata,
-    pub authority_v2: solana_pubkey::Pubkey,
-    pub trader_pda_v2: solana_pubkey::Pubkey,
+    pub authority_v2: Pubkey,
+    pub trader_pda_v2: Pubkey,
     pub market_addrs: MarketAddrs,
-    /// Symbol the `market_addrs` were built for. The non-isolated order
-    /// builders use `market_addrs.orderbook` etc. directly, so submissions
-    /// for a different symbol would target the wrong on-chain accounts.
-    /// Compared against the caller-supplied `symbol` at submit time.
+    /// Symbol the `market_addrs` were built for.
     pub active_symbol: String,
     pub blockhash_pool: tokio::sync::Mutex<VecDeque<[u8; 32]>>,
-    /// Cached WS URL for signature confirmations.
     pub(super) ws_url: String,
-    /// Shared WSS client for signature confirmations — all orders multiplex
-    /// through a single WebSocket instead of opening one per transaction.
     pub(super) sig_pubsub: tokio::sync::Mutex<Option<Arc<PubsubClient>>>,
-    /// Live mirror of the wallet's `Trader` state — written by the trader-state
-    /// WS subscription, read by isolated-margin order builders so they can
-    /// construct subaccount-aware instructions locally without round-tripping
-    /// through the Phoenix HTTP API. Starts empty and is hydrated by the WS
-    /// task on the first `TraderUpdate`. Readers must check
-    /// `TraderMirror::hydrated` before using the snapshot.
     pub shared_trader: Arc<RwLock<TraderMirror>>,
 }
 
 impl TxContext {
-    /// Initializes a new transaction context with RPC hooks and loaded static
-    /// margin configurations. Accepts an existing `PhoenixHttpClient` to
-    /// avoid opening a redundant SDK connection.
+    /// Initializes a new transaction context with RPC hooks and exchange metadata.
     pub async fn new(
         keypair: &Keypair,
         symbol: &str,
         http: Arc<phoenix_rise::api::PhoenixHttpClient>,
         shared_trader: Arc<RwLock<TraderMirror>>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-
         let rpc_url = rpc_http_url_from_env();
         let fanout_enabled = current_user_config().fanout_public_rpc;
         let secondary_send_rpc = if !fanout_enabled || is_public_mainnet_rpc(&rpc_url) {
@@ -145,38 +142,14 @@ impl TxContext {
 
         let exchange = http.exchange().get_exchange().await?;
         let metadata = PhoenixMetadata::new(exchange.into());
+        let market_addrs = build_market_addrs(&metadata, symbol)?;
 
-        let keys = metadata.keys();
-        let market = metadata
-            .get_market(symbol)
-            .ok_or_else(|| format!("{} market not found in exchange metadata", symbol))?;
-        let market_addrs = MarketAddrs {
-            perp_asset_map: solana_pubkey::Pubkey::from_str(&keys.perp_asset_map)?,
-            orderbook: solana_pubkey::Pubkey::from_str(&market.market_pubkey)?,
-            spline_collection: derive_spline_collection(
-                &market.symbol,
-                &market.market_pubkey,
-                &market.spline_pubkey,
-            )?,
-            global_trader_index: keys
-                .global_trader_index
-                .iter()
-                .map(|s| solana_pubkey::Pubkey::from_str(s))
-                .collect::<Result<Vec<_>, _>>()?,
-            active_trader_buffer: keys
-                .active_trader_buffer
-                .iter()
-                .map(|s| solana_pubkey::Pubkey::from_str(s))
-                .collect::<Result<Vec<_>, _>>()?,
-        };
-
-        let authority_v2 = solana_pubkey::Pubkey::from_str(&keypair.pubkey().to_string())?;
+        let authority_v2 = keypair.pubkey();
         let trader_pda_v2 = TraderKey::derive_pda(&authority_v2, 0, 0);
 
         Ok(Self {
             rpc_client,
             secondary_send_rpc,
-            http_client: http,
             metadata,
             authority_v2,
             trader_pda_v2,
@@ -189,32 +162,21 @@ impl TxContext {
         })
     }
 
-    /// Snapshot the shared `Trader` state under a short read lock if the WS
-    /// task has hydrated it. Returns `None` when the wallet is connected but
-    /// the trader-state WS hasn't delivered its first snapshot yet — order
-    /// builders must surface a "waiting for trader state" status rather than
-    /// build against an empty `Trader`, which would create a new isolated
-    /// subaccount on top of any existing one.
+    /// Snapshot the shared `Trader` state if the WS task has hydrated it.
     pub fn snapshot_trader(&self) -> Option<Trader> {
         let guard = match self.shared_trader.read() {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        if !guard.hydrated {
-            return None;
-        }
-        Some(guard.trader.clone())
+        guard.hydrated.then(|| guard.trader.clone())
     }
 
-    /// Construct an empty (un-hydrated) trader mirror keyed to the supplied
-    /// authority. Used as the initial value for the shared trader before the
-    /// WS subscription delivers its first snapshot.
-    pub fn empty_trader_mirror(authority: solana_pubkey::Pubkey) -> TraderMirror {
+    /// Construct an empty (un-hydrated) trader mirror for `authority`.
+    pub fn empty_trader_mirror(authority: Pubkey) -> TraderMirror {
         TraderMirror::empty(authority)
     }
 
-    /// Pushes the latest blockhash from the network into the rotating memory
-    /// pool.
+    /// Pushes the latest blockhash from the network into the rotating memory pool.
     pub async fn push_blockhash(&self) {
         if let Ok(Ok((bh, _))) = tokio::time::timeout(
             BLOCKHASH_FETCH_TIMEOUT,
@@ -234,10 +196,8 @@ impl TxContext {
         }
     }
 
-    /// Removes and returns the newest warm blockhash from the pool.
-    /// Each blockhash is consumed so it is never reused across transactions.
-    /// Using the newest entry maximises remaining validity (~150 blocks on
-    /// Solana). Falls back to an HTTP fetch if the pool is empty.
+    /// Removes and returns the newest warm blockhash from the pool, falling back
+    /// to an HTTP fetch if the pool is empty.
     pub async fn pop_blockhash(&self) -> Result<solana_hash::Hash, String> {
         let mut pool = self.blockhash_pool.lock().await;
         if let Some(bytes) = pool.pop_back() {
@@ -252,14 +212,16 @@ impl TxContext {
             .await
             .map_err(|_| "blockhash fetch timed out after 5s; check RPC health".to_string())?
             .map(|(hash, _)| hash)
-            .map_err(|e| format!("{}", e))
+            .map_err(|e| format!("{e}"))
         }
     }
 
-    pub fn trader_pda_for_subaccount(&self, subaccount_index: u8) -> solana_pubkey::Pubkey {
+    /// Derive the Phoenix trader PDA for `subaccount_index`.
+    pub fn trader_pda_for_subaccount(&self, subaccount_index: u8) -> Pubkey {
         TraderKey::derive_pda(&self.authority_v2, 0, subaccount_index)
     }
 
+    /// Returns whether `symbol` is an isolated-only market in exchange metadata.
     pub fn market_isolated_only(&self, symbol: &str) -> bool {
         self.metadata
             .get_market(symbol)
@@ -267,6 +229,7 @@ impl TxContext {
             .unwrap_or(false)
     }
 
+    /// Returns the first-tier max leverage for `symbol`, if known.
     pub fn max_leverage_for_symbol(&self, symbol: &str) -> Option<f64> {
         self.metadata
             .get_market(symbol)?
@@ -275,31 +238,9 @@ impl TxContext {
             .map(|tier| tier.max_leverage)
     }
 
+    /// Resolve on-chain account addresses for an arbitrary market `symbol`.
     pub fn market_addrs_for_symbol(&self, symbol: &str) -> Option<MarketAddrs> {
-        let keys = self.metadata.keys();
-        let market = self.metadata.get_market(symbol)?;
-        Some(MarketAddrs {
-            perp_asset_map: solana_pubkey::Pubkey::from_str(&keys.perp_asset_map).ok()?,
-            orderbook: solana_pubkey::Pubkey::from_str(&market.market_pubkey).ok()?,
-            spline_collection: derive_spline_collection(
-                &market.symbol,
-                &market.market_pubkey,
-                &market.spline_pubkey,
-            )
-            .ok()?,
-            global_trader_index: keys
-                .global_trader_index
-                .iter()
-                .map(|s| solana_pubkey::Pubkey::from_str(s))
-                .collect::<Result<Vec<_>, _>>()
-                .ok()?,
-            active_trader_buffer: keys
-                .active_trader_buffer
-                .iter()
-                .map(|s| solana_pubkey::Pubkey::from_str(s))
-                .collect::<Result<Vec<_>, _>>()
-                .ok()?,
-        })
+        build_market_addrs(&self.metadata, symbol).ok()
     }
 }
 
@@ -309,27 +250,21 @@ mod tests {
 
     #[test]
     fn derive_spline_collection_overrides_stale_api_value() {
-        // A real Phoenix market pubkey shape; the actual value just needs to
-        // parse and produce a deterministic PDA via find_program_address.
         let market_pubkey = "11111111111111111111111111111112";
-        let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey).unwrap();
+        let market_pk = Pubkey::from_str(market_pubkey).unwrap();
         let (canonical, _) = program_ids::get_spline_collection_address_default(&market_pk);
 
-        // Pretend the HTTP metadata reported a different (stale) pubkey.
-        let stale_api = solana_pubkey::Pubkey::new_unique().to_string();
+        let stale_api = Pubkey::new_unique().to_string();
         assert_ne!(stale_api, canonical.to_string());
 
         let resolved = derive_spline_collection("TEST-PERP", market_pubkey, &stale_api).unwrap();
-        assert_eq!(
-            resolved, canonical,
-            "write path must use the derived spline PDA, not the API-reported pubkey"
-        );
+        assert_eq!(resolved, canonical);
     }
 
     #[test]
     fn derive_spline_collection_returns_canonical_when_api_matches() {
         let market_pubkey = "11111111111111111111111111111112";
-        let market_pk = solana_pubkey::Pubkey::from_str(market_pubkey).unwrap();
+        let market_pk = Pubkey::from_str(market_pubkey).unwrap();
         let (canonical, _) = program_ids::get_spline_collection_address_default(&market_pk);
 
         let resolved =

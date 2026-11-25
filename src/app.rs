@@ -9,15 +9,14 @@ use phoenix_rise::api::{
     PhoenixSubscription, SubscriptionKey,
 };
 use phoenix_rise::types::exchange::ExchangeMarketConfig;
-use phoenix_rise::types::market::{MarketStatsUpdate, MarketStatus};
+use phoenix_rise::types::market::MarketStatus;
 use tracing::warn;
 
-pub use crate::tui::MarketInfo;
 use crate::tui::math::pct_change_24h;
 use crate::tui::{
-    MarketListUpdate, MarketStatUpdate, SplineConfig, build_spline_config, compute_price_decimals,
-    establish_rpc_with_fallback, restore_terminal, setup_terminal, spawn_splash,
-    spawn_spline_poller,
+    MarketInfo, MarketListUpdate, MarketStatUpdate, SplineConfig, build_spline_config,
+    compute_price_decimals, establish_rpc_with_fallback, restore_terminal, setup_terminal,
+    spawn_splash, spawn_spline_poller,
 };
 
 const MARKETS_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -29,10 +28,7 @@ struct MarketSnapshot {
     change_24h: f64,
 }
 
-fn compute_change(update: &MarketStatsUpdate) -> f64 {
-    pct_change_24h(update.mark_price, update.prev_day_mark_price)
-}
-
+/// Forward Phoenix market stat events from a subscription receiver into the bounded TUI channel.
 fn spawn_stat_forwarder(
     mut rx: tokio::sync::mpsc::UnboundedReceiver<PhoenixClientEvent>,
     tx: tokio::sync::mpsc::Sender<MarketStatUpdate>,
@@ -104,7 +100,7 @@ async fn subscribe_market_stats(
                     price: update.mark_price,
                     volume_24h: update.day_volume_usd,
                     open_interest_usd: update.open_interest * update.mark_price,
-                    change_24h: compute_change(&update),
+                    change_24h: pct_change_24h(update.mark_price, update.prev_day_mark_price),
                 },
             );
             // Also forward the captured update into the runtime channel so
@@ -124,6 +120,7 @@ async fn subscribe_market_stats(
     (snapshots, handles)
 }
 
+/// Returns whether an exchange market accepts orders in Cinder.
 fn tradable(m: &ExchangeMarketConfig) -> bool {
     matches!(
         m.market_status,
@@ -131,44 +128,38 @@ fn tradable(m: &ExchangeMarketConfig) -> bool {
     )
 }
 
+/// Build a [`MarketInfo`] from exchange metadata and an optional initial stats snapshot.
+fn market_info_from_config(
+    m: &ExchangeMarketConfig,
+    snapshot: Option<&MarketSnapshot>,
+) -> MarketInfo {
+    let max_leverage = m
+        .leverage_tiers
+        .first()
+        .map(|t| t.max_leverage)
+        .unwrap_or(1.0);
+    let price_decimals = compute_price_decimals(m.tick_size, m.base_lots_decimals);
+    MarketInfo {
+        symbol: m.symbol.clone(),
+        price: snapshot.map_or(0.0, |s| s.price),
+        volume_24h: snapshot.map_or(0.0, |s| s.volume_24h),
+        open_interest_usd: snapshot.map_or(0.0, |s| s.open_interest_usd),
+        max_leverage,
+        change_24h: snapshot.map_or(0.0, |s| s.change_24h),
+        price_decimals,
+        isolated_only: m.isolated_only,
+        price_flash: None,
+    }
+}
+
+/// Build and sort market metadata rows by 24h volume descending.
 fn build_market_infos(
     tradable_markets: &[&ExchangeMarketConfig],
     snapshots: &HashMap<String, MarketSnapshot>,
 ) -> Vec<MarketInfo> {
     let mut infos: Vec<MarketInfo> = tradable_markets
         .iter()
-        .map(|m| {
-            let max_leverage = m
-                .leverage_tiers
-                .first()
-                .map(|t| t.max_leverage)
-                .unwrap_or(1.0);
-            let price_decimals = compute_price_decimals(m.tick_size, m.base_lots_decimals);
-            snapshots.get(&m.symbol).map_or(
-                MarketInfo {
-                    symbol: m.symbol.clone(),
-                    price: 0.0,
-                    volume_24h: 0.0,
-                    open_interest_usd: 0.0,
-                    max_leverage,
-                    change_24h: 0.0,
-                    price_decimals,
-                    isolated_only: m.isolated_only,
-                    price_flash: None,
-                },
-                |snap| MarketInfo {
-                    symbol: m.symbol.clone(),
-                    price: snap.price,
-                    volume_24h: snap.volume_24h,
-                    open_interest_usd: snap.open_interest_usd,
-                    max_leverage,
-                    change_24h: snap.change_24h,
-                    price_decimals,
-                    isolated_only: m.isolated_only,
-                    price_flash: None,
-                },
-            )
-        })
+        .map(|m| market_info_from_config(m, snapshots.get(&m.symbol)))
         .collect();
 
     infos.sort_by(|a, b| {
@@ -283,7 +274,6 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let tui_task = spawn_spline_poller(
         terminal,
-        &ws,
         market_infos,
         spline_configs,
         market_rx,
@@ -293,7 +283,6 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
 
     let ws_poll = Arc::clone(&ws);
-    let stat_tx_poll = stat_tx.clone();
     tokio::spawn(async move {
         let mut known: HashSet<String> = symbols.into_iter().collect();
         let mut _poll_handles: Vec<PhoenixClientSubscriptionHandle> = Vec::new();
@@ -319,23 +308,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 known.insert(m.symbol.clone());
                 new_symbols.push(m.symbol.clone());
-
-                let max_leverage = m
-                    .leverage_tiers
-                    .first()
-                    .map(|t| t.max_leverage)
-                    .unwrap_or(1.0);
-                new_markets.push(MarketInfo {
-                    symbol: m.symbol.clone(),
-                    price: 0.0,
-                    volume_24h: 0.0,
-                    open_interest_usd: 0.0,
-                    max_leverage,
-                    change_24h: 0.0,
-                    price_decimals: compute_price_decimals(m.tick_size, m.base_lots_decimals),
-                    isolated_only: m.isolated_only,
-                    price_flash: None,
-                });
+                new_markets.push(market_info_from_config(m, None));
 
                 if let Ok(cfg) = build_spline_config(m) {
                     new_configs.insert(m.symbol.clone(), cfg);
@@ -346,7 +319,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let (_, new_handles) = subscribe_market_stats(
                     &ws_poll,
                     &new_symbols,
-                    &stat_tx_poll,
+                    &stat_tx,
                     Duration::from_secs(5),
                 )
                 .await;

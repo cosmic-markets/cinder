@@ -15,6 +15,7 @@ async fn fetch_trader_views(
         .map(|resp: TraderStateResponse| resp.traders)
 }
 
+/// Fetch the trader's collateral balance, active-market position, and full position list.
 pub async fn fetch_phoenix_balance_and_position(
     http: &PhoenixHttpClient,
     authority_v2: &solana_pubkey::Pubkey,
@@ -22,6 +23,7 @@ pub async fn fetch_phoenix_balance_and_position(
 ) -> (f64, Option<PositionInfo>, Vec<FullPositionInfo>) {
     match fetch_trader_views(http, authority_v2).await {
         Ok(traders) if !traders.is_empty() => {
+            // Prefer subaccount 0 (cross-margin) for the headline collateral balance.
             let bal = traders
                 .iter()
                 .find(|t| t.trader_subaccount_index == 0)
@@ -29,28 +31,7 @@ pub async fn fetch_phoenix_balance_and_position(
                 .map(|t| t.collateral_balance.ui.parse::<f64>().unwrap_or(0.0))
                 .unwrap_or(0.0);
 
-            let pos = traders.iter().find_map(|t| {
-                let collateral = t.collateral_balance.ui.parse::<f64>().unwrap_or(0.0);
-                t.positions
-                    .iter()
-                    .find(|p| p.symbol == symbol)
-                    .and_then(|p| {
-                        parse_position(p, collateral, t.trader_subaccount_index).map(|full| {
-                            PositionInfo {
-                                subaccount_index: full.subaccount_index,
-                                side: full.side,
-                                size: full.size,
-                                position_size_raw: full.position_size_raw,
-                                entry_price: full.entry_price,
-                                unrealized_pnl: full.unrealized_pnl,
-                                liquidation_price: full.liquidation_price,
-                                notional: full.notional,
-                                leverage: full.leverage,
-                            }
-                        })
-                    })
-            });
-
+            // Parse all open positions once, then derive the active-symbol view from them.
             let all_positions: Vec<FullPositionInfo> = traders
                 .iter()
                 .flat_map(|t| {
@@ -60,6 +41,11 @@ pub async fn fetch_phoenix_balance_and_position(
                     })
                 })
                 .collect();
+
+            let pos = all_positions
+                .iter()
+                .find(|p| p.symbol == symbol)
+                .map(PositionInfo::from);
 
             (bal, pos, all_positions)
         }

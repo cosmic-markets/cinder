@@ -3,9 +3,7 @@
 //! Owns the Solana account streams, ratatui rendering, trading state, and
 //! transaction submission wiring.
 
-// Preserved from the pre-split module surface (transmute-heavy Solana interop,
-// wide render API).
-#![allow(clippy::missing_transmute_annotations)]
+// Temporary allows while wide signatures are consolidated.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
@@ -14,7 +12,7 @@ mod constants;
 mod data;
 mod format;
 mod i18n;
-pub mod math;
+pub(crate) mod math;
 mod runtime;
 mod splash;
 mod state;

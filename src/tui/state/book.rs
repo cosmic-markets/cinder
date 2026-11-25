@@ -20,17 +20,8 @@ pub struct BookRow {
     pub price: f64,
     pub size: f64,
     pub traders: Vec<(String, RowSource)>,
-    /// True when this price level is one tick further from mid than the
-    /// worst visible tick of a spline region that carries a hidden iceberg
-    /// (`top_level_hidden_take_size > 0`) — i.e., the marker sits on the
-    /// adjacent outer row, signalling that the region behind/below it has
-    /// hidden depth. Surfaced as a 🧊 marker in the book view.
-    pub has_hidden_fill: bool,
-    /// Trader prefix (4-char) of the spline owning the hidden iceberg
-    /// projected onto this row. `None` when this row carries no marker.
-    /// Used by the renderer to color that trader's letter blue in the
-    /// Trader column. May not match any of `traders` if the iceberg's
-    /// owner isn't visibly quoting at this exact level.
+    /// Trader prefix (4-char) of the spline owning a hidden iceberg projected
+    /// onto this row (`Some` signals the 🧊 marker in the book view).
     pub iceberg_trader_prefix: Option<String>,
 }
 

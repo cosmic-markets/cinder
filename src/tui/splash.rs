@@ -2,12 +2,9 @@
 //! in flight. Owns the terminal for the duration of the animation and hands it
 //! back so the TUI can take over without leaving/re-entering the alt screen.
 
-use std::io::Stdout;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -15,6 +12,7 @@ use ratatui::widgets::Paragraph;
 use tokio::sync::oneshot;
 
 use super::i18n::strings;
+use super::terminal::TuiTerminal;
 
 const BANNER: &[&str] = &[
     " ██████╗██╗███╗   ██╗██████╗ ███████╗██████╗ ",
@@ -63,9 +61,10 @@ fn fire_color(t: f32, row: f32, col: f32) -> Color {
     Color::Rgb(r, g, b)
 }
 
+/// Build one animation frame of the CINDER splash banner and progress bar.
 fn build_frame(time: f32) -> Vec<Line<'static>> {
     let total = (BANNER.len() as f32 - 1.0).max(1.0);
-    let mut lines: Vec<Line<'static>> = Vec::with_capacity(BANNER.len() + 2);
+    let mut lines: Vec<Line<'static>> = Vec::with_capacity(BANNER.len() + 5);
     for (row_idx, row) in BANNER.iter().enumerate() {
         let row_p = row_idx as f32 / total;
         let mut spans: Vec<Span<'static>> = Vec::with_capacity(row.chars().count());
@@ -101,7 +100,7 @@ fn build_frame(time: f32) -> Vec<Line<'static>> {
     // asymptotically toward 100% (1 - exp(-t/τ)). Reads as steady forward
     // motion without ever falsely claiming "done".
     let banner_w = BANNER[0].chars().count();
-    let progress = 1.0 - (-time / 1.0).exp();
+    let progress = 1.0 - (-time).exp();
     let filled = (progress * banner_w as f32).round() as usize;
     let filled = filled.min(banner_w);
     let mut bar_spans: Vec<Span<'static>> = Vec::with_capacity(banner_w);
@@ -149,7 +148,8 @@ fn build_frame(time: f32) -> Vec<Line<'static>> {
     lines
 }
 
-fn draw_frame(terminal: &mut Terminal<CrosstermBackend<Stdout>>, time: f32) -> std::io::Result<()> {
+/// Render one centered splash frame onto the active terminal.
+fn draw_frame(terminal: &mut TuiTerminal, time: f32) -> std::io::Result<()> {
     let lines = build_frame(time);
     terminal.draw(|f| {
         let area = f.area();
@@ -170,9 +170,9 @@ fn draw_frame(terminal: &mut Terminal<CrosstermBackend<Stdout>>, time: f32) -> s
 /// dropped, then returns the terminal so the caller can hand it to the real
 /// TUI.
 pub fn spawn(
-    mut terminal: Terminal<CrosstermBackend<Stdout>>,
+    mut terminal: TuiTerminal,
     mut stop: oneshot::Receiver<()>,
-) -> tokio::task::JoinHandle<Terminal<CrosstermBackend<Stdout>>> {
+) -> tokio::task::JoinHandle<TuiTerminal> {
     tokio::task::spawn_blocking(move || {
         let _ = terminal.clear();
         let start = Instant::now();

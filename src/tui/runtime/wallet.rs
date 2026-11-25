@@ -34,7 +34,7 @@ pub(super) fn connect_wallet_with_keypair(
     channels: &Channels,
     ws_url: &str,
     http: Arc<PhoenixHttpClient>,
-) -> Result<WalletHandles, String> {
+) -> WalletHandles {
     use solana_signer::Signer;
     // Resolve the pubkey BEFORE mutating any state, so an early-failure
     // path doesn't tear down a previously-loaded wallet. The previous
@@ -116,14 +116,16 @@ pub(super) fn connect_wallet_with_keypair(
         Arc::clone(&shared_trader),
     );
 
-    Ok(WalletHandles {
+    WalletHandles {
         wallet_wss,
         initial_balance,
         trader_orders,
         tx_ctx,
-    })
+    }
 }
 
+/// Abort all wallet-scoped background tasks, settle any in-flight TWAP slices,
+/// and clear wallet-owned UI state.
 pub(super) fn disconnect_wallet(
     state: &mut TuiState,
     wallet_wss_handle: &mut Option<tokio::task::JoinHandle<()>>,
@@ -133,105 +135,29 @@ pub(super) fn disconnect_wallet(
     tx_ctx_task: &mut Option<tokio::task::JoinHandle<()>>,
     awaiting_first_tx_ctx: &mut bool,
 ) {
-    if let Some(h) = wallet_wss_handle.take() {
-        h.abort();
-    }
-    if let Some(h) = blockhash_refresh_handle.take() {
-        h.abort();
-    }
-    if let Some(h) = balance_fetch_handle.take() {
-        h.abort();
-    }
-    if let Some(h) = trader_orders_handle.take() {
-        h.abort();
-    }
-    if let Some(h) = tx_ctx_task.take() {
-        h.abort();
-    }
+    use super::connection::abort_handle;
+
+    abort_handle(wallet_wss_handle);
+    abort_handle(blockhash_refresh_handle);
+    abort_handle(balance_fetch_handle);
+    abort_handle(trader_orders_handle);
+    abort_handle(tx_ctx_task);
     *awaiting_first_tx_ctx = false;
-    // Bots are authority-bound now — the scheduler refuses to fire when
-    // `state.trading.keypair`'s pubkey doesn't match `bot.authority`. So
-    // they can stay Running across a disconnect; if the user reconnects
-    // the same wallet they resume firing, and if they connect a different
-    // wallet the scheduler defers with `twap_waiting_authority`. Cancel
-    // any in-flight broadcast though — the spawned task still holds the
-    // OLD keypair Arc and would happily land an order against the wallet
-    // the user just disconnected from.
-    //
-    // Before aborting, drain any outcome that the spawned task already
-    // pushed into the oneshot. The scheduler polls in_flight at 1Hz, so
-    // a slice that confirmed in the last second hasn't been recorded yet
-    // — if we just drop the receiver, the Confirmed signal is lost,
-    // `slices_submitted` stays stale, and on reconnect of the same wallet
-    // the scheduler dispatches the SAME slice number again, executing
-    // the slice twice on-chain.
+
+    // Drain any already-queued TWAP slice outcomes and abort in-flight tasks
+    // before dropping the old keypair so a same-wallet reconnect never replays.
     let now = std::time::Instant::now();
-    let slice_count_label = strings().twap_slice_word;
-    // Collect "TWAP done" lines to emit after the borrow ends. Disconnect
-    // can simultaneously settle multiple bots' final slices; the last line
-    // wins in `set_status_title`, which is acceptable — the bots-modal
-    // detail rows hold each bot's individual completion line.
     let mut completion_lines: Vec<String> = Vec::new();
     for bot in state.twaps_view.bots.iter_mut() {
-        if let Some((slice_number, outcome)) = bot.try_take_outcome() {
-            use crate::tui::state::SliceOutcome;
-            let slot_count = bot.slice_count;
-            let completed = match outcome {
-                SliceOutcome::Confirmed => bot.record_slice_confirmed(
-                    now,
-                    format!(
-                        "{} {}/{} (drained on disconnect)",
-                        slice_count_label, slice_number, slot_count
-                    ),
-                ),
-                SliceOutcome::Failed(detail) => bot.record_slice_failed(
-                    now,
-                    format!(
-                        "{} {}/{}: {}",
-                        slice_count_label, slice_number, slot_count, detail
-                    ),
-                ),
-                SliceOutcome::Unknown(detail) => bot.record_slice_unconfirmed(
-                    now,
-                    format!(
-                        "{} {}/{}: {}",
-                        slice_count_label, slice_number, slot_count, detail
-                    ),
-                ),
-            };
-            if completed {
-                completion_lines.push(super::twap_scheduler::format_completion_status(bot));
-            }
-        }
-        if let Some(in_flight) = bot.in_flight.take() {
-            // If a slice is still genuinely in flight (no outcome queued
-            // yet), record it as Unknown — the tx may still land on-chain
-            // even after `abort()` because abort only cancels at the next
-            // .await point. Marking Unknown advances next_slice_number so
-            // a same-wallet reconnect doesn't double-broadcast.
-            let slice_number = in_flight.slice_number;
-            let slice_count = bot.slice_count;
-            in_flight.task.abort();
-            let completed = bot.record_slice_unconfirmed(
-                now,
-                format!(
-                    "{} {}/{}: aborted on disconnect (may have landed)",
-                    slice_count_label, slice_number, slice_count
-                ),
-            );
-            if completed {
-                completion_lines.push(super::twap_scheduler::format_completion_status(bot));
-            }
+        if let Some(line) = super::twap_scheduler::settle_in_flight_for_interrupt(
+            bot,
+            now,
+            "aborted on disconnect (may have landed)",
+        ) {
+            completion_lines.push(line);
         }
         bot.defer_reason = Some(strings().twap_waiting_wallet.to_string());
     }
-    // Hold completion line(s) until after the disconnect status fires, so
-    // the "TWAP done" message wins the status frame — the user already
-    // knows they pressed disconnect, but the completion is fresh news.
-    // If more than one bot completed during the drain (rare — would need
-    // multiple bots with all-but-one slice already resolved at the moment
-    // of disconnect), the LAST completion's line is shown; per-bot rows
-    // in the bots modal keep the full per-bot completion text.
     let final_completion_line = completion_lines.into_iter().last();
     state.trading.wallet_loaded = false;
     state.trading.wallet_label.clear();

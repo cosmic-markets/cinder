@@ -1,6 +1,4 @@
-//! Modal dialogs grouped by screen.
-
-//! Modal dialogs: market selector, positions, orders, tx, config, quit.
+//! Modal dialogs: market selector, positions, orders, ledger, config, TWAP, referrals, and overlays.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
@@ -25,7 +23,6 @@ mod market_selector;
 mod orders;
 mod position_leaderboard;
 mod positions;
-mod quit;
 mod referral_choice;
 mod referral_code;
 mod twap;
@@ -39,7 +36,6 @@ pub(in crate::tui::ui) use market_selector::*;
 pub(in crate::tui::ui) use orders::*;
 pub(in crate::tui::ui) use position_leaderboard::*;
 pub(in crate::tui::ui) use positions::*;
-pub(in crate::tui::ui) use quit::*;
 pub(in crate::tui::ui) use referral_choice::*;
 pub(in crate::tui::ui) use referral_code::*;
 pub(in crate::tui::ui) use twap::*;

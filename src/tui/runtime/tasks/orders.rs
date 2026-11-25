@@ -253,13 +253,7 @@ pub(in crate::tui::runtime) fn spawn_trader_orders_ws(
     shared_trader: Arc<std::sync::RwLock<crate::tui::tx::TraderMirror>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let authority = match solana_pubkey::Pubkey::from_str(&kp.pubkey().to_string()) {
-            Ok(pk) => pk,
-            Err(e) => {
-                warn!(error = %e, "failed to convert wallet pubkey for trader WS");
-                return;
-            }
-        };
+        let authority = kp.pubkey();
 
         let mut backoff = WSS_RETRY_INIT;
         loop {

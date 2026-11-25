@@ -1,16 +1,14 @@
 //! Ratatui widgets for the SOL spline TUI.
 
-use phoenix_rise::types::market::MarketStatsUpdate;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 use solana_signer::Signer;
 
 use super::config::SplineConfig;
-use super::state::{
-    LiquidationFeedView, MarketSelector, MergedBook, OrderChartMarker, OrdersView, PositionsView,
-    TopPositionsView, TradeMarker, TradingState, TwapsView,
-};
+use super::constants::TOP_N;
+use super::state::TuiState;
 use super::trading::InputMode;
 
 mod chart;
@@ -23,7 +21,6 @@ const MODAL_BORDER: Color = Color::Rgb(80, 80, 140);
 const MODAL_HIGHLIGHT_BG: Color = Color::Rgb(50, 50, 100);
 
 /// Collapse a hostname down to `name.tld`, stripping any subdomains.
-/// e.g. `api.mainnet-beta.solana.com` → `solana.com`.
 fn registered_domain(host: &str) -> String {
     let domain = match host.rmatch_indices('.').nth(1) {
         Some((i, _)) => &host[i + 1..],
@@ -32,6 +29,7 @@ fn registered_domain(host: &str) -> String {
     domain.to_string()
 }
 
+/// Extract the hostname portion from an HTTP(S)/WS(S) URL or bare host string.
 pub fn rpc_host_from_urlish(input: &str) -> String {
     let without_scheme = input
         .split_once("://")
@@ -48,57 +46,56 @@ pub fn rpc_host_from_urlish(input: &str) -> String {
         .to_string()
 }
 
+/// True when `s` has the shape of a base58 Solana transaction signature.
 pub(super) fn is_tx_signature_like(s: &str) -> bool {
-    let len = s.len();
-    if !(80..=100).contains(&len) {
-        return false;
-    }
-    if s.contains(' ') {
-        return false;
-    }
-    s.chars().all(|c| c.is_ascii_alphanumeric())
+    (80..=100).contains(&s.len())
+        && !s.contains(' ')
+        && s.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
-pub fn render_frame(
-    f: &mut Frame,
-    chart_data: &[(f64, f64)],
-    y_min: f64,
-    y_max: f64,
-    cfg: &SplineConfig,
-    merged: &MergedBook,
-    wss_slot: u64,
-    market_stats: &Option<MarketStatsUpdate>,
-    chart_clock_hms: &str,
-    trading: &TradingState,
-    trade_markers: &[TradeMarker],
-    market_selector: &MarketSelector,
-    positions_view: &PositionsView,
-    orders_view: &OrdersView,
-    top_positions_view: &TopPositionsView,
-    liquidation_feed_view: &LiquidationFeedView,
-    twaps_view: &TwapsView,
-    order_chart_markers: &std::collections::HashMap<(String, u8, u64), OrderChartMarker>,
-    rpc_host: &str,
-    switching_to: &Option<String>,
-) {
-    use super::constants::TOP_N;
+/// Build a highlighted confirmation prompt line (`<msg>  [Y]/[N]`).
+pub(super) fn confirm_prompt_line(msg: String, bg: Color) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            msg,
+            Style::default()
+                .fg(Color::White)
+                .bg(bg)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            "[Y]",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("/", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "[N]",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+    ])
+}
 
+/// Render the entire TUI frame (order book, price chart, trade panel, funds, status tray, and active modal).
+pub fn render_frame(f: &mut Frame, state: &TuiState, cfg: &SplineConfig, rpc_host: &str) {
     let area = f.area();
+    let chart_data = state.chart_data();
+    let (y_min, y_max) = state.price_bounds();
+    let trading = &state.trading;
 
-    // Pre-compute the user's 4-char authority prefix so the book-table renderer can
-    // mark the user's own CLOB rows with the ">" arrow by comparing trader
-    // identity instead of price — which would be ambiguous when multiple
-    // traders quote the same tick.
+    // Pre-compute the user's 4-char authority prefix to highlight own CLOB rows.
     let user_trader_prefix: Option<String> = trading
         .keypair
         .as_ref()
         .map(|kp| kp.pubkey().to_string().chars().take(4).collect());
 
-    let fixed_below = 6 + 4; // actions row + status tray (two body lines for wrap)
+    let fixed_below = 6 + 4; // actions row + status tray
     let available_for_ob = area.height.saturating_sub(fixed_below);
 
-    let data_symmetric =
-        (merged.ask_rows.len().min(TOP_N) as u16).min(merged.bid_rows.len().min(TOP_N) as u16);
+    let data_symmetric = (state.merged_book.ask_rows.len().min(TOP_N) as u16)
+        .min(state.merged_book.bid_rows.len().min(TOP_N) as u16);
     let max_rows_per_side = available_for_ob.saturating_sub(4).saturating_sub(6) / 2;
     let symmetric_count = data_symmetric.min(max_rows_per_side).max(1);
 
@@ -122,10 +119,9 @@ pub fn render_frame(
         f,
         main_chunks[0],
         cfg,
-        merged,
-        wss_slot,
-        market_stats,
-        chart_data,
+        &state.merged_book,
+        state.last_slot,
+        &state.market_stats,
         user_trader_prefix.as_deref(),
     );
     chart::render_price_chart(
@@ -134,12 +130,12 @@ pub fn render_frame(
         chart_data,
         y_min,
         y_max,
-        trade_markers,
-        &orders_view.orders,
-        order_chart_markers,
+        &state.trade_markers,
+        &state.orders_view.orders,
+        &state.order_chart_markers,
         &cfg.symbol,
         cfg.price_decimals,
-        chart_clock_hms,
+        &state.chart_clock_hms,
     );
 
     let actions_row = Layout::default()
@@ -147,77 +143,73 @@ pub fn render_frame(
         .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
         .split(vert_chunks[1]);
 
-    trade_panel::render_trading_panel(
-        f,
-        actions_row[0],
-        trading,
-        &cfg.symbol,
-        market_stats,
-        cfg.price_decimals,
-        &cfg.market_pubkey,
-    );
-    status::render_funds_panel(f, actions_row[1], trading, positions_view, "USDC");
+    trade_panel::render_trading_panel(f, actions_row[0], trading, &cfg.symbol, cfg.price_decimals);
+    status::render_funds_panel(f, actions_row[1], trading, &state.positions_view);
     status::render_status_tray(f, vert_chunks[2], trading, rpc_host);
 
-    if trading.input_mode == InputMode::SelectingMarket {
-        modals::render_market_selector(f, area, market_selector, &cfg.symbol);
-    }
-
-    if trading.input_mode == InputMode::ViewingPositions {
-        modals::render_positions_modal(f, area, positions_view, &cfg.symbol, market_selector);
-    }
-
-    if trading.input_mode == InputMode::ViewingTopPositions {
-        modals::render_top_positions_modal(f, area, top_positions_view, market_selector);
-    }
-
-    if trading.input_mode == InputMode::ViewingLiquidations {
-        modals::render_liquidation_feed_modal(f, area, liquidation_feed_view);
-    }
-
-    if trading.input_mode == InputMode::EditingTwap {
-        modals::render_twap_modal(f, area, trading, &cfg.symbol);
-    }
-
-    if trading.input_mode == InputMode::ViewingBots {
-        modals::render_bots_modal(f, area, twaps_view, &cfg.symbol);
-    }
-
-    if trading.input_mode == InputMode::ViewingOrders {
-        modals::render_orders_modal(f, area, orders_view, &cfg.symbol);
-    }
-
-    if trading.input_mode == InputMode::ViewingLedger {
-        modals::render_ledger_modal(f, area, trading);
-    }
-
-    if trading.input_mode == InputMode::ConfirmQuit {
-        modals::render_quit_modal(f, area);
-    }
-
-    if matches!(
-        trading.input_mode,
+    match trading.input_mode {
+        InputMode::SelectingMarket => {
+            modals::render_market_selector(f, area, &state.market_selector, &cfg.symbol);
+        }
+        InputMode::ViewingPositions => {
+            modals::render_positions_modal(
+                f,
+                area,
+                &state.positions_view,
+                &cfg.symbol,
+                &state.market_selector,
+            );
+        }
+        InputMode::ViewingTopPositions => {
+            modals::render_top_positions_modal(
+                f,
+                area,
+                &state.top_positions_view,
+                &state.market_selector,
+            );
+        }
+        InputMode::ViewingLiquidations => {
+            modals::render_liquidation_feed_modal(f, area, &state.liquidation_feed_view);
+        }
+        InputMode::EditingTwap => {
+            modals::render_twap_modal(f, area, trading, &cfg.symbol);
+        }
+        InputMode::ViewingBots => {
+            modals::render_bots_modal(f, area, &state.twaps_view, &cfg.symbol);
+        }
+        InputMode::ViewingOrders => {
+            modals::render_orders_modal(f, area, &state.orders_view, &cfg.symbol);
+        }
+        InputMode::ViewingLedger => {
+            modals::render_ledger_modal(f, area, trading);
+        }
+        InputMode::ConfirmQuit => {
+            modals::render_quit_modal(f, area);
+        }
         InputMode::ViewingConfig
-            | InputMode::EditingRpcUrl
-            | InputMode::EditingComputeUnitPrice
-            | InputMode::EditingComputeUnitLimit
-    ) {
-        modals::render_config_modal(f, area, trading);
+        | InputMode::EditingRpcUrl
+        | InputMode::EditingComputeUnitPrice
+        | InputMode::EditingComputeUnitLimit => {
+            modals::render_config_modal(f, area, trading);
+        }
+        InputMode::EditingWalletPath => {
+            modals::render_wallet_path_modal(f, area, trading);
+        }
+        InputMode::ChoosingReferral => {
+            modals::render_referral_choice_modal(f, area, trading);
+        }
+        InputMode::EditingReferralCode => {
+            modals::render_referral_code_modal(f, area, trading);
+        }
+        InputMode::Normal
+        | InputMode::EditingSize
+        | InputMode::EditingPrice
+        | InputMode::EditingDeposit
+        | InputMode::EditingWithdraw
+        | InputMode::Confirming(_) => {}
     }
 
-    if trading.input_mode == InputMode::EditingWalletPath {
-        modals::render_wallet_path_modal(f, area, trading);
-    }
-
-    if trading.input_mode == InputMode::ChoosingReferral {
-        modals::render_referral_choice_modal(f, area, trading);
-    }
-
-    if trading.input_mode == InputMode::EditingReferralCode {
-        modals::render_referral_code_modal(f, area, trading);
-    }
-
-    if let Some(sym) = switching_to {
+    if let Some(sym) = &state.switching_to {
         modals::render_switching_modal(f, area, sym);
     }
 }

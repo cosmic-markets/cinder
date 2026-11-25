@@ -9,7 +9,7 @@ use super::super::config::{UserConfig, current_user_config};
 use super::super::trading::{InputMode, OrderKind, PositionInfo, TradingSide};
 use super::super::tx::{TraderMirror, TxContext};
 use super::make_status_timestamp;
-use super::markers::LedgerEntry;
+use super::messages::LedgerEntry;
 
 /// Maximum number of past actions retained in the Ledger modal. Entries are
 /// stored newest-first and older entries are evicted beyond this cap.
@@ -146,9 +146,7 @@ impl TwapDraft {
         }
     }
 
-    /// Step to the previous or next market in `markets` (wrapping). No-op if
-    /// the current market isn't in the list (shouldn't happen — the draft is
-    /// always seeded from the active market) or the list is empty.
+    /// Step to the previous or next market in `markets` (wrapping).
     pub fn cycle_market(&mut self, markets: &[String], step: i32) {
         if markets.is_empty() {
             return;
